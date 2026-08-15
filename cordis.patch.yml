@@ -1,0 +1,6 @@
+# Apply this patch after the target DSH profile has a subprocess provider and
+# the web-app client module roster. The row's inject declarations keep startup
+# dependency-ordered by services rather than list position.
+- insert:
+    - id: ui-git-graph
+      name: 'dsh-git-graph'

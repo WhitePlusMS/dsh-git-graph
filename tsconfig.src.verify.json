@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.verify.json",
+  "compilerOptions": {
+    "composite": false,
+    "types": ["node", "react"],
+    "typeRoots": [
+      "C:/Users/admin/Desktop/dsh-input-plus/node_modules/@types",
+      "C:/Users/admin/Desktop/dsh-input-plus/node_modules/.pnpm/@types+react@18.3.31/node_modules/@types"
+    ]
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}
