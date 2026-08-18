@@ -1,5 +1,6 @@
 # 依赖目录
 node_modules/
+.pnpm-store/
 
 # 编辑器和本地工作区配置
 .vscode/
