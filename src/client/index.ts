@@ -17,12 +17,21 @@ export function apply(ctx: ClientContext): void {
     id: 'git-graph',
     order: 20,
     label: 'Git Graph',
-      inject: sessionId => ({
-        read: async request => {
-          await remoteReady
-          const gitGraph = ctx.get('remote.gitGraph') as typeof ctx.remote.gitGraph
-          return gitGraph.read(sessionId, request)
-        },
-      }),
+    inject: sessionId => {
+      const remote = async () => {
+        await remoteReady
+        return ctx.get('remote.gitGraph') as typeof ctx.remote.gitGraph
+      }
+      return {
+        read: async request => (await remote()).read(sessionId, request),
+        readCommit: async request => (await remote()).readCommit(sessionId, request),
+        readFile: async request => (await remote()).readFile(sessionId, request),
+        readFileDiff: async request => (await remote()).readFileDiff(sessionId, request),
+        readWorkingTree: async () => (await remote()).readWorkingTree(sessionId, {}),
+        readWorkingTreeFile: async request => (await remote()).readWorkingTreeFile(sessionId, request),
+        compare: async request => (await remote()).compare(sessionId, request),
+        metadata: async () => (await remote()).metadata(sessionId, {}),
+      }
+    },
   }, GitGraphView))
 }
