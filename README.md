@@ -10,16 +10,25 @@ Git Graph for the DeepSeek Harness web interface. Open a dedicated `Git Graph` v
 - Commit topology with branch, merge, and parent relationships.
 - Local branch, remote branch, tag, and HEAD reference labels.
 - The clean or dirty working-tree state in the graph header.
-- Search for commit hashes, commit subjects, authors, email addresses, and reference names.
-- Filter commits by reference kind and choose whether to include all refs.
-- First-parent mode for viewing the mainline history more easily.
-- Select a commit from the graph node or commit list to open its details.
-- Copy the full commit hash from the details panel.
+- Full-range search across commit hashes, subjects, authors, email addresses, and reference names.
+- Branch-name glob filters (e.g. `main,release-*`), reference-kind filtering, and an option to include all refs.
+- Date, author-date, and topological commit ordering, plus a first-parent mode for the mainline history.
+- Selecting a commit expands its details **inline below the commit's row**: hash, author, committer, date, parents, signature status, and references, with a layout aligned to vscode-git-graph.
+- File changes in tree or list view: folder icons with compacted single-child folders, change-type colouring, and `(+added|−deleted)` stats.
+- Click a file to view its line-by-line diff with old/new line numbers and add/remove highlighting.
+- Expand the `Uncommitted Changes` row to inspect working-tree files and their per-file diffs.
+- Compare file changes between any two commits.
+- A metadata strip listing the repository's tags and stashes.
+- An in-results find bar with case sensitivity, regex, and previous/next navigation.
+- A display settings panel: date/author/hash columns, date format, and graph style, persisted per repository.
+- Keyboard support: `↑` / `↓` to move the selection, `Ctrl+F` to find, `Ctrl+Shift+F` for settings.
 - Refresh the current repository without creating a conversation message or tool trace entry.
 - Load more commits as needed, up to 500 commits.
 - Display an empty state instead of an error when the current directory is not a Git repository or the repository has no commits yet.
 
 The current release is read-only. It does not create, delete, rename, merge, rebase, push, pull, fetch, create tags, stash, or reset Git data.
+
+![Uncommitted changes list and per-file diff preview](docs/image2.png)
 
 ## Open Git Graph
 
@@ -29,7 +38,7 @@ The page reads the current session workspace. Refresh operations call the plugin
 
 ## Git data and path handling
 
-The Host reads Git metadata through fixed subprocess arguments without using a shell. It reads repository status, HEAD, and bounded commit history; the plugin does not open or upload file contents.
+The Host reads Git data through fixed subprocess arguments without using a shell. It reads repository status, HEAD, and bounded commit history, and loads commit details, file contents, file diffs, working-tree changes, and commit comparisons on demand.
 
 The model tool supports the following parameters:
 
@@ -38,18 +47,21 @@ git_graph({
   path?: string,          // Repository directory; defaults to the current session workspace
   max_commits?: number,   // 1..500, defaults to 100
   all?: boolean,          // Include all reachable refs, defaults to true
-  first_parent?: boolean  // Follow only the first parent, defaults to false
+  first_parent?: boolean, // Follow only the first parent, defaults to false
+  glob?: string[],        // Branch-name glob filters (OR); overrides --all when provided
+  search?: string,        // Full-range search: hash, subject, author, email, ref name, date
+  sort?: string           // Commit ordering: date, author-date, or topological; defaults to date
 })
 ```
 
-The provided path is used only as the Git subprocess working directory and is never interpolated into a shell command. If the path is not a Git repository, the page displays an empty state instead of a repository error. A Git repository with no commits is handled the same way.
+The provided path is used only as the Git subprocess working directory and is never interpolated into a shell command; file-read requests are validated to stay inside the repository. If the path is not a Git repository, the page displays an empty state instead of a repository error. A Git repository with no commits is handled the same way.
 
 ## Install or update
 
-Install version `v0.0.1` from GitHub:
+Install version `v0.0.2` from GitHub:
 
 ```powershell
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/archive/refs/tags/v0.0.1.tar.gz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/archive/refs/tags/v0.0.2.tar.gz
 ```
 
 Use the same command to update an existing installation. Restart `dsh web` after installation so the Host entry and browser client load the new version.

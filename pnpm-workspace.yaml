@@ -1,0 +1,3 @@
+# pnpm 11 的设置集中在此文件（package.json 的 pnpm 字段已不再读取）
+allowBuilds:
+  esbuild: true
