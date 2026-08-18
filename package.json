@@ -38,7 +38,7 @@
     }
   },
   "scripts": {
-    "test": "vitest run tests/client-bundle.test.ts tests/host-typert.test.ts tests/graph-layout.test.ts tests/git-parser.test.ts tests/git-loader.test.ts tests/git-command-format.test.ts",
+    "test": "vitest run tests/client-bundle.test.ts tests/host-typert.test.ts tests/graph-layout.test.ts tests/git-parser.test.ts tests/git-loader.test.ts tests/git-command-format.test.ts tests/git-data.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build": "node scripts/build.mjs",
     "bundle": "node scripts/build.mjs",
