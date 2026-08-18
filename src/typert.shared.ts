@@ -1,5 +1,5 @@
 import type { InvocationDescriptor, TypertSchema } from '@deepseek-ai/dsh-typert-protocol'
-import type { GitGraphCommit, GitGraphInput, GitGraphRef, GitGraphSnapshot } from './domain.ts'
+import type { GitGraphCommit, GitGraphDiffLine, GitGraphFileDiff, GitGraphInput, GitGraphRef, GitGraphRepoState, GitGraphSnapshot, GitGraphSort } from './domain.ts'
 import { MAX_COMMITS } from './domain.ts'
 
 export const TYPERT_PACKAGE = 'dsh-git-graph'
@@ -82,22 +82,34 @@ function parseCommit(value: unknown, path: string): GitGraphCommit {
 
 function parseInput(value: unknown): GitGraphInput {
   const object = objectAt(value, '$')
-  rejectUnknown(object, ['path', 'maxCommits', 'all', 'firstParent'], '$')
-  const result: { path?: string; maxCommits?: number; all?: boolean; firstParent?: boolean } = {}
+  rejectUnknown(object, ['path', 'maxCommits', 'all', 'firstParent', 'glob', 'search', 'sort'], '$')
+  const result: { path?: string; maxCommits?: number; all?: boolean; firstParent?: boolean; glob?: string[]; search?: string; sort?: GitGraphSort } = {}
   if (Object.hasOwn(object, 'path')) result.path = stringAt(object.path, '$.path')
   if (Object.hasOwn(object, 'maxCommits')) result.maxCommits = integerAt(object.maxCommits, '$.maxCommits', 1, MAX_COMMITS)
   if (Object.hasOwn(object, 'all')) result.all = booleanAt(object.all, '$.all')
   if (Object.hasOwn(object, 'firstParent')) result.firstParent = booleanAt(object.firstParent, '$.firstParent')
+  if (Object.hasOwn(object, 'glob')) {
+    result.glob = arrayAt(object.glob, '$.glob').map((item, index) => stringAt(item, `$.glob[${index}]`))
+  }
+  if (Object.hasOwn(object, 'search')) result.search = stringAt(object.search, '$.search')
+  if (Object.hasOwn(object, 'sort')) {
+    const sort = stringAt(object.sort, '$.sort')
+    if (sort !== 'date' && sort !== 'author-date' && sort !== 'topological') fail('$.sort', 'date, author-date, or topological')
+    result.sort = sort
+  }
   return result
 }
 
 function parseSnapshot(value: unknown): GitGraphSnapshot {
   const object = objectAt(value, '$')
-  rejectUnknown(object, ['path', 'branch', 'head', 'workingTree', 'commits'], '$')
+  rejectUnknown(object, ['path', 'state', 'branch', 'head', 'workingTree', 'commits', 'hasMore'], '$')
   const workingTree = objectAt(object.workingTree, '$.workingTree')
   rejectUnknown(workingTree, ['changed', 'summary'], '$.workingTree')
+  const state = stringAt(object.state, '$.state')
+  if (state !== 'not-git' && state !== 'empty' && state !== 'ready') fail('$.state', 'not-git, empty, or ready')
   return {
     path: stringAt(object.path, '$.path'),
+    state: state as GitGraphRepoState,
     branch: nullableStringAt(object.branch, '$.branch'),
     head: nullableStringAt(object.head, '$.head'),
     workingTree: {
@@ -105,6 +117,7 @@ function parseSnapshot(value: unknown): GitGraphSnapshot {
       summary: stringAt(workingTree.summary, '$.workingTree.summary'),
     },
     commits: arrayAt(object.commits, '$.commits').map((commit, index) => parseCommit(commit, `$.commits[${index}]`)),
+    hasMore: booleanAt(object.hasMore, '$.hasMore'),
   }
 }
 
@@ -113,19 +126,271 @@ export const gitGraphInputSchema: TypertSchema<GitGraphInput> = { parse: parseIn
 export const gitGraphSnapshotSchema: TypertSchema<GitGraphSnapshot> = { parse: parseSnapshot }
 const sessionIdSchema: TypertSchema<string> = { parse: value => stringAt(value, '$.agentId') }
 
+/* ------------------------------------------------------------------ *
+ * On-demand detail DTO schemas (strict, parse-only).
+ * ------------------------------------------------------------------ */
+
+const HASH_RE = /^[0-9a-f]{40}$/iu
+
+function hashStringAt(value: unknown, path: string): string {
+  const text = stringAt(value, path)
+  if (!HASH_RE.test(text)) fail(path, 'a full 40-char commit hash')
+  return text
+}
+
+/**
+ * Detect whether decoded blob text is unsafe to render as text. The Host has
+ * already classified the blob as text or binary via `isTextContent`
+ * (any NUL/U+FFFD byte means binary); this client-side guard is only a
+ * defense-in-depth echo of that decision. It must NOT reject ordinary UTF-8
+ * text — e.g. Chinese comments — which is why only NUL and the replacement
+ * character count as binary markers, not every non-ASCII code point.
+ */
+function isTextContentSafe(text: string): boolean {
+  return !text.includes('\u0000') && !text.includes('\uFFFD')
+}
+
+function parseFileChange(value: unknown, path: string): import('./domain.ts').GitGraphFileChange {
+  const object = objectAt(value, path)
+  rejectUnknown(object, ['type', 'oldPath', 'newPath', 'additions', 'deletions'], path)
+  const type = stringAt(object.type, `${path}.type`)
+  if (type !== 'A' && type !== 'M' && type !== 'D' && type !== 'R' && type !== 'U') {
+    fail(`${path}.type`, 'A, M, D, R, or U')
+  }
+  return {
+    type,
+    oldPath: stringAt(object.oldPath, `${path}.oldPath`),
+    newPath: stringAt(object.newPath, `${path}.newPath`),
+    additions: nullableIntAt(object.additions, `${path}.additions`),
+    deletions: nullableIntAt(object.deletions, `${path}.deletions`),
+  }
+}
+
+function nullableIntAt(value: unknown, path: string): number | null {
+  if (value === null) return null
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) fail(path, 'a non-negative integer or null')
+  return value
+}
+
+function parseSignature(value: unknown, path: string): import('./domain.ts').GitGraphSignature | null {
+  if (value === null) return null
+  const object = objectAt(value, path)
+  rejectUnknown(object, ['status', 'key', 'signer'], path)
+  const status = stringAt(object.status, `${path}.status`)
+  if (!/^[GUXRYEB]$/u.test(status)) fail(`${path}.status`, 'G, U, X, Y, R, E, or B')
+  return {
+    status: status as import('./domain.ts').GitGraphSignature['status'],
+    key: nullableStringAt(object.key, `${path}.key`),
+    signer: nullableStringAt(object.signer, `${path}.signer`),
+  }
+}
+
+function parseCommitDetails(value: unknown): import('./domain.ts').GitGraphCommitDetails {
+  const object = objectAt(value, '$')
+  rejectUnknown(object, ['hash', 'parents', 'author', 'authorEmail', 'committer', 'committerEmail', 'timestamps', 'signature', 'body', 'fileChanges'], '$')
+  const timestamps = objectAt(object.timestamps, '$.timestamps')
+  rejectUnknown(timestamps, ['authorDate', 'committerDate'], '$.timestamps')
+  return {
+    hash: stringAt(object.hash, '$.hash'),
+    parents: arrayAt(object.parents, '$.parents').map((parent, index) => stringAt(parent, `$.parents[${index}]`)),
+    author: stringAt(object.author, '$.author'),
+    authorEmail: stringAt(object.authorEmail, '$.authorEmail'),
+    committer: stringAt(object.committer, '$.committer'),
+    committerEmail: stringAt(object.committerEmail, '$.committerEmail'),
+    timestamps: {
+      authorDate: stringAt(timestamps.authorDate, '$.timestamps.authorDate'),
+      committerDate: stringAt(timestamps.committerDate, '$.timestamps.committerDate'),
+    },
+    signature: parseSignature(object.signature, '$.signature'),
+    body: stringAt(object.body, '$.body'),
+    fileChanges: arrayAt(object.fileChanges, '$.fileChanges').map((entry, index) => parseFileChange(entry, `$.fileChanges[${index}]`)),
+  }
+}
+
+function parseCommitRequest(value: unknown): import('./domain.ts').GitGraphCommitRequest {
+  const object = objectAt(value, '$')
+  rejectUnknown(object, ['hash'], '$')
+  return { hash: hashStringAt(object.hash, '$.hash') }
+}
+
+function parseFileRequest(value: unknown): import('./domain.ts').GitGraphFileRequest {
+  const object = objectAt(value, '$')
+  rejectUnknown(object, ['hash', 'path'], '$')
+  return { hash: hashStringAt(object.hash, '$.hash'), path: stringAt(object.path, '$.path') }
+}
+
+function parseCompareRequest(value: unknown): import('./domain.ts').GitGraphCompareRequest {
+  const object = objectAt(value, '$')
+  rejectUnknown(object, ['baseHash', 'targetHash'], '$')
+  return { baseHash: hashStringAt(object.baseHash, '$.baseHash'), targetHash: hashStringAt(object.targetHash, '$.targetHash') }
+}
+
+function parseFileContent(value: unknown): import('./domain.ts').GitGraphFileContent {
+  const object = objectAt(value, '$')
+  rejectUnknown(object, ['hash', 'path', 'kind', 'text', 'size', 'truncated'], '$')
+  const kind = stringAt(object.kind, '$.kind')
+  if (kind !== 'text' && kind !== 'binary') fail('$.kind', 'text or binary')
+  const text = object.text === null ? null : stringAt(object.text, '$.text')
+  if (kind === 'text' && text !== null && !isTextContentSafe(text)) fail('$.text', 'text content without binary control bytes')
+  return {
+    hash: stringAt(object.hash, '$.hash'),
+    path: stringAt(object.path, '$.path'),
+    kind,
+    text,
+    size: integerAt(object.size, '$.size', 0, Number.MAX_SAFE_INTEGER),
+    truncated: booleanAt(object.truncated, '$.truncated'),
+  }
+}
+
+function parseDiffLine(value: unknown, path: string): GitGraphDiffLine {
+  const object = objectAt(value, path)
+  rejectUnknown(object, ['type', 'content', 'oldLine', 'newLine'], path)
+  const type = stringAt(object.type, `${path}.type`)
+  if (type !== 'context' && type !== 'added' && type !== 'removed') fail(`${path}.type`, 'context, added, or removed')
+  return {
+    type,
+    content: stringAt(object.content, `${path}.content`),
+    oldLine: nullableIntAt(object.oldLine, `${path}.oldLine`),
+    newLine: nullableIntAt(object.newLine, `${path}.newLine`),
+  }
+}
+
+function parseFileDiff(value: unknown): GitGraphFileDiff {
+  const object = objectAt(value, '$')
+  rejectUnknown(object, ['hash', 'path', 'oldPath', 'status', 'additions', 'deletions', 'lines'], '$')
+  const status = stringAt(object.status, '$.status')
+  if (status !== 'A' && status !== 'M' && status !== 'D' && status !== 'R' && status !== 'U') fail('$.status', 'A, M, D, R, or U')
+  return {
+    hash: stringAt(object.hash, '$.hash'),
+    path: stringAt(object.path, '$.path'),
+    oldPath: stringAt(object.oldPath, '$.oldPath'),
+    status,
+    additions: integerAt(object.additions, '$.additions', 0, Number.MAX_SAFE_INTEGER),
+    deletions: integerAt(object.deletions, '$.deletions', 0, Number.MAX_SAFE_INTEGER),
+    lines: arrayAt(object.lines, '$.lines').map((entry, index) => parseDiffLine(entry, `$.lines[${index}]`)),
+  }
+}
+
+function parseWorkingTreeChanges(value: unknown): import('./domain.ts').GitGraphWorkingTreeChanges {
+  const object = objectAt(value, '$')
+  rejectUnknown(object, ['changes'], '$')
+  return {
+    changes: arrayAt(object.changes, '$.changes').map((entry, index) => parseFileChange(entry, `$.changes[${index}]`)),
+  }
+}
+
+function parseWorkingTreeFileRequest(value: unknown): import('./domain.ts').GitGraphWorkingTreeFileRequest {
+  const object = objectAt(value, '$')
+  rejectUnknown(object, ['path'], '$')
+  return { path: stringAt(object.path, '$.path') }
+}
+
+function parseCompareResult(value: unknown): import('./domain.ts').GitGraphCompareResult {
+  const object = objectAt(value, '$')
+  rejectUnknown(object, ['baseHash', 'targetHash', 'changes'], '$')
+  return {
+    baseHash: stringAt(object.baseHash, '$.baseHash'),
+    targetHash: stringAt(object.targetHash, '$.targetHash'),
+    changes: arrayAt(object.changes, '$.changes').map((entry, index) => parseFileChange(entry, `$.changes[${index}]`)),
+  }
+}
+
+export const gitGraphCommitRequestSchema: TypertSchema<import('./domain.ts').GitGraphCommitRequest> = { parse: parseCommitRequest }
+export const gitGraphCommitDetailsSchema: TypertSchema<import('./domain.ts').GitGraphCommitDetails> = { parse: parseCommitDetails }
+export const gitGraphFileRequestSchema: TypertSchema<import('./domain.ts').GitGraphFileRequest> = { parse: parseFileRequest }
+export const gitGraphFileContentSchema: TypertSchema<import('./domain.ts').GitGraphFileContent> = { parse: parseFileContent }
+export const gitGraphFileDiffSchema: TypertSchema<GitGraphFileDiff> = { parse: parseFileDiff }
+export const gitGraphWorkingTreeChangesSchema: TypertSchema<import('./domain.ts').GitGraphWorkingTreeChanges> = { parse: parseWorkingTreeChanges }
+export const gitGraphWorkingTreeFileRequestSchema: TypertSchema<import('./domain.ts').GitGraphWorkingTreeFileRequest> = { parse: parseWorkingTreeFileRequest }
+export const gitGraphCompareRequestSchema: TypertSchema<import('./domain.ts').GitGraphCompareRequest> = { parse: parseCompareRequest }
+export const gitGraphCompareResultSchema: TypertSchema<import('./domain.ts').GitGraphCompareResult> = { parse: parseCompareResult }
+
+/* ------------------------------------------------------------------ *
+ * Repository metadata (tags + stashes) for the on-demand view.
+ * ------------------------------------------------------------------ */
+
+function parseTagDetails(value: unknown, path: string): import('./domain.ts').GitGraphTagDetails | null {
+  if (value === null) return null
+  const object = objectAt(value, path)
+  rejectUnknown(object, ['objectHash', 'tagger', 'taggerEmail', 'taggerDate', 'message', 'signature'], path)
+  return {
+    objectHash: stringAt(object.objectHash, `${path}.objectHash`),
+    tagger: stringAt(object.tagger, `${path}.tagger`),
+    taggerEmail: stringAt(object.taggerEmail, `${path}.taggerEmail`),
+    taggerDate: stringAt(object.taggerDate, `${path}.taggerDate`),
+    message: stringAt(object.message, `${path}.message`),
+    signature: parseSignature(object.signature, `${path}.signature`),
+  }
+}
+
+function parseTag(value: unknown, path: string): import('./domain.ts').GitGraphTag {
+  const object = objectAt(value, path)
+  rejectUnknown(object, ['name', 'annotated', 'detail'], path)
+  const annotated = booleanAt(object.annotated, `${path}.annotated`)
+  return {
+    name: stringAt(object.name, `${path}.name`),
+    annotated,
+    detail: annotated ? parseTagDetails(object.detail, `${path}.detail`) : null,
+  }
+}
+
+function parseStash(value: unknown, path: string): import('./domain.ts').GitGraphStash {
+  const object = objectAt(value, path)
+  rejectUnknown(object, ['selector', 'hash', 'baseHash', 'untrackedFilesHash', 'author', 'email', 'date', 'message'], path)
+  return {
+    selector: stringAt(object.selector, `${path}.selector`),
+    hash: stringAt(object.hash, `${path}.hash`),
+    baseHash: stringAt(object.baseHash, `${path}.baseHash`),
+    untrackedFilesHash: nullableStringAt(object.untrackedFilesHash, `${path}.untrackedFilesHash`),
+    author: stringAt(object.author, `${path}.author`),
+    email: stringAt(object.email, `${path}.email`),
+    date: stringAt(object.date, `${path}.date`),
+    message: stringAt(object.message, `${path}.message`),
+  }
+}
+
+function parseMetadata(value: unknown): import('./domain.ts').GitGraphMetadata {
+  const object = objectAt(value, '$')
+  rejectUnknown(object, ['tags', 'stashes'], '$')
+  return {
+    tags: arrayAt(object.tags, '$.tags').map((entry, index) => parseTag(entry, `$.tags[${index}]`)),
+    stashes: arrayAt(object.stashes, '$.stashes').map((entry, index) => parseStash(entry, `$.stashes[${index}]`)),
+  }
+}
+
+function parseEmptyInput(_value: unknown): Record<string, never> {
+  const object = objectAt(_value, '$')
+  rejectUnknown(object, [], '$')
+  return {}
+}
+
+export const gitGraphMetadataSchema: TypertSchema<import('./domain.ts').GitGraphMetadata> = { parse: parseMetadata }
+export const gitGraphEmptyInputSchema: TypertSchema<Record<string, never>> = { parse: parseEmptyInput }
+
+/* ------------------------------------------------------------------ *
+ * Generic invocation builder shared by Host and Client faces.
+ * ------------------------------------------------------------------ */
+
 export interface GitGraphInvocationSchemas {
   readonly input: TypertSchema
-  readonly snapshot: TypertSchema
+  readonly result: TypertSchema
   readonly sessionId: TypertSchema
 }
 
+interface InvocationSpec {
+  readonly method: string
+  readonly inputSymbol: string
+  readonly resultSymbol: string
+  readonly schemas: GitGraphInvocationSchemas
+}
+
 /** Build the shared endpoint metadata with a face-specific schema runtime. */
-export function createGitGraphInvocation(schemas: GitGraphInvocationSchemas): InvocationDescriptor {
+export function createGitGraphInvocation(spec: InvocationSpec): InvocationDescriptor {
   return {
-    id: `${TYPERT_PACKAGE}#gitGraph/read`,
+    id: `${TYPERT_PACKAGE}#gitGraph/${spec.method}`,
     service: 'gitGraph',
     namespace: 'gitGraph',
-    method: 'read',
+    method: spec.method,
     invocation: { kind: 'direct' },
     cancellation: { parameter: 'signal' },
     scope: {
@@ -141,7 +406,7 @@ export function createGitGraphInvocation(schemas: GitGraphInvocationSchemas): In
         codec: {
           mode: 'strict',
           typeSymbol: SESSION_ID_TYPE,
-          schema: schemas.sessionId,
+          schema: spec.schemas.sessionId,
         },
       },
       {
@@ -150,24 +415,83 @@ export function createGitGraphInvocation(schemas: GitGraphInvocationSchemas): In
         source: 'json',
         codec: {
           mode: 'strict',
-          typeSymbol: `${TYPERT_PACKAGE}#GitGraphInput`,
-          schema: schemas.input,
+          typeSymbol: `${TYPERT_PACKAGE}#${spec.inputSymbol}`,
+          schema: spec.schemas.input,
         },
       },
     ],
     result: {
       mode: 'strict',
-      typeSymbol: `${TYPERT_PACKAGE}#GitGraphSnapshot`,
-      schema: schemas.snapshot,
+      typeSymbol: `${TYPERT_PACKAGE}#${spec.resultSymbol}`,
+      schema: spec.schemas.result,
     },
   }
 }
 
 /** Client descriptors use the local parse-only schemas to keep the bundle closed. */
 export const gitGraphInvocation = createGitGraphInvocation({
-  input: gitGraphInputSchema,
-  snapshot: gitGraphSnapshotSchema,
-  sessionId: sessionIdSchema,
+  method: 'read',
+  inputSymbol: 'GitGraphInput',
+  resultSymbol: 'GitGraphSnapshot',
+  schemas: { input: gitGraphInputSchema, result: gitGraphSnapshotSchema, sessionId: sessionIdSchema },
 })
 
-export const gitGraphDescriptors = [gitGraphInvocation] as const
+export const gitGraphReadCommitInvocation = createGitGraphInvocation({
+  method: 'readCommit',
+  inputSymbol: 'GitGraphCommitRequest',
+  resultSymbol: 'GitGraphCommitDetails',
+  schemas: { input: gitGraphCommitRequestSchema, result: gitGraphCommitDetailsSchema, sessionId: sessionIdSchema },
+})
+
+export const gitGraphFileInvocation = createGitGraphInvocation({
+  method: 'readFile',
+  inputSymbol: 'GitGraphFileRequest',
+  resultSymbol: 'GitGraphFileContent',
+  schemas: { input: gitGraphFileRequestSchema, result: gitGraphFileContentSchema, sessionId: sessionIdSchema },
+})
+
+export const gitGraphFileDiffInvocation = createGitGraphInvocation({
+  method: 'readFileDiff',
+  inputSymbol: 'GitGraphFileRequest',
+  resultSymbol: 'GitGraphFileDiff',
+  schemas: { input: gitGraphFileRequestSchema, result: gitGraphFileDiffSchema, sessionId: sessionIdSchema },
+})
+
+export const gitGraphWorkingTreeInvocation = createGitGraphInvocation({
+  method: 'readWorkingTree',
+  inputSymbol: 'GitGraphWorkingTreeRequest',
+  resultSymbol: 'GitGraphWorkingTreeChanges',
+  schemas: { input: gitGraphEmptyInputSchema, result: gitGraphWorkingTreeChangesSchema, sessionId: sessionIdSchema },
+})
+
+export const gitGraphWorkingTreeFileInvocation = createGitGraphInvocation({
+  method: 'readWorkingTreeFile',
+  inputSymbol: 'GitGraphWorkingTreeFileRequest',
+  resultSymbol: 'GitGraphFileDiff',
+  schemas: { input: gitGraphWorkingTreeFileRequestSchema, result: gitGraphFileDiffSchema, sessionId: sessionIdSchema },
+})
+
+export const gitGraphCompareInvocation = createGitGraphInvocation({
+  method: 'compare',
+  inputSymbol: 'GitGraphCompareRequest',
+  resultSymbol: 'GitGraphCompareResult',
+  schemas: { input: gitGraphCompareRequestSchema, result: gitGraphCompareResultSchema, sessionId: sessionIdSchema },
+})
+
+export const gitGraphMetadataInvocation = createGitGraphInvocation({
+  method: 'metadata',
+  inputSymbol: 'GitGraphMetadataRequest',
+  resultSymbol: 'GitGraphMetadata',
+  schemas: { input: gitGraphEmptyInputSchema, result: gitGraphMetadataSchema, sessionId: sessionIdSchema },
+})
+
+export const gitGraphDescriptors = [
+  gitGraphInvocation,
+  gitGraphReadCommitInvocation,
+  gitGraphFileInvocation,
+  gitGraphFileDiffInvocation,
+  gitGraphWorkingTreeInvocation,
+  gitGraphWorkingTreeFileInvocation,
+  gitGraphCompareInvocation,
+  gitGraphMetadataInvocation,
+] as const

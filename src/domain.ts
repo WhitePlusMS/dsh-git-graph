@@ -22,9 +22,20 @@ export interface GitGraphCommit {
   readonly isHead: boolean
 }
 
+/**
+ * Repository availability state. These three states must be distinguishable so
+ * a caller can tell "this directory is not a Git repository" apart from "this
+ * is a Git repository with no commits yet" apart from "history is readable".
+ * Git failures, cancellation and size overflows are reported through the
+ * transport error result, never collapsed into `empty`.
+ */
+export type GitGraphRepoState = 'not-git' | 'empty' | 'ready'
+
 /** The bounded, replayable result sent from the Host tool to the Client view. */
 export interface GitGraphSnapshot {
   readonly path: string
+  /** `not-git` | `empty` | `ready`. */
+  readonly state: GitGraphRepoState
   readonly branch: string | null
   readonly head: string | null
   readonly workingTree: {
@@ -32,7 +43,12 @@ export interface GitGraphSnapshot {
     readonly summary: string
   }
   readonly commits: GitGraphCommit[]
+  /** True when more commits exist beyond the requested page (Host uses maxCommits+1). */
+  readonly hasMore: boolean
 }
+
+/** How the Host orders the returned commit stream. */
+export type GitGraphSort = 'date' | 'author-date' | 'topological'
 
 /** The accepted tool input after schema validation and local bounds checks. */
 export interface GitGraphInput {
@@ -40,6 +56,11 @@ export interface GitGraphInput {
   readonly maxCommits?: number
   readonly all?: boolean
   readonly firstParent?: boolean
+  /** Branch-name glob filters (OR). Normalized by the Host. */
+  readonly glob?: string[]
+  /** Free-text search applied to hash, subject, author, email, ref name and date. */
+  readonly search?: string
+  readonly sort?: GitGraphSort
 }
 
 /* ------------------------------------------------------------------ *
@@ -157,3 +178,100 @@ export interface GitGraphWorkingTree {
 
 /** Upper bound for persisted graph metadata in one tool result. */
 export const MAX_COMMITS = 500
+
+/* ------------------------------------------------------------------ *
+ * On-demand detail protocol DTOs (readCommit / readFile / compare).
+ * These are loaded per request and never embedded in the graph snapshot.
+ * ------------------------------------------------------------------ */
+
+/** Request body for `gitGraph/readCommit`. */
+export interface GitGraphCommitRequest {
+  readonly hash: string
+}
+
+/** Content read from one version of a file. */
+export interface GitGraphFileContent {
+  readonly hash: string
+  readonly path: string
+  /** `text` when the bytes decoded cleanly, `binary` otherwise. */
+  readonly kind: 'text' | 'binary'
+  /** Decoded content; `null` for binary files. */
+  readonly text: string | null
+  /** Byte size of the raw blob. */
+  readonly size: number
+  /** True when the blob exceeded the configured per-file size cap. */
+  readonly truncated: boolean
+}
+
+/** Request body for `gitGraph/readFile`. */
+export interface GitGraphFileRequest {
+  readonly hash: string
+  readonly path: string
+}
+
+/** One rendered line inside a file diff hunk. */
+export interface GitGraphDiffLine {
+  readonly type: 'context' | 'added' | 'removed'
+  /** Line content without the leading +/-/space marker. */
+  readonly content: string
+  /** Line number in the base version (null for pure-added lines). */
+  readonly oldLine: number | null
+  /** Line number in the new version (null for pure-removed lines). */
+  readonly newLine: number | null
+}
+
+/**
+ * Per-file change inside a commit, rendered as added/deleted lines the way
+ * vscode-git-graph shows a file diff. The base is the commit's first parent
+ * (or the empty tree for a root commit), matching `loadCommitDetails`.
+ */
+export interface GitGraphFileDiff {
+  readonly hash: string
+  readonly path: string
+  readonly oldPath: string
+  readonly status: GitGraphFileChange['type']
+  readonly additions: number
+  readonly deletions: number
+  /** A context line where the file is entirely added/deleted has no head. */
+  readonly lines: GitGraphDiffLine[]
+}
+
+/** Request body for `gitGraph/readFileDiff`. */
+export interface GitGraphFileDiffRequest {
+  readonly hash: string
+  readonly path: string
+}
+
+/** The list of files changed in the working tree relative to HEAD (or empty tree). */
+export interface GitGraphWorkingTreeChanges {
+  readonly changes: GitGraphFileChange[]
+}
+
+/** Request body for `gitGraph/readWorkingTree` (the working directory is implicit). */
+export interface GitGraphWorkingTreeRequest {
+  readonly includeUntracked?: boolean
+}
+
+/** Request body for `gitGraph/readWorkingTreeFile`: diff one file vs the working tree. */
+export interface GitGraphWorkingTreeFileRequest {
+  readonly path: string
+}
+
+/** File-change comparison between two commits (left → right). */
+export interface GitGraphCompareResult {
+  readonly baseHash: string
+  readonly targetHash: string
+  readonly changes: GitGraphFileChange[]
+}
+
+/** Request body for `gitGraph/compare`. */
+export interface GitGraphCompareRequest {
+  readonly baseHash: string
+  readonly targetHash: string
+}
+
+/** Repository-level read-only metadata requested on demand (not per commit). */
+export interface GitGraphMetadata {
+  readonly tags: GitGraphTag[]
+  readonly stashes: GitGraphStash[]
+}

@@ -12,6 +12,7 @@ const GRAPH_OUTPUT_SCHEMA = {
   additionalProperties: false,
   properties: {
     path: { type: 'string', required: true },
+    state: { type: 'string', required: true, enum: ['not-git', 'empty', 'ready'] },
     branch: { oneOf: [{ type: 'string' }, { type: 'null' }], required: true },
     head: { oneOf: [{ type: 'string' }, { type: 'null' }], required: true },
     workingTree: {
@@ -52,13 +53,14 @@ const GRAPH_OUTPUT_SCHEMA = {
         },
       },
     },
+    hasMore: { type: 'boolean', required: true },
   },
 } as const
 
-function summaryText(value: { path: string; branch: string | null; head: string | null; workingTree: { summary: string }; commits: readonly { hash: string; subject: string; refs: readonly { name: string }[] }[] }): string {
+function summaryText(value: { path: string; state: string; branch: string | null; head: string | null; workingTree: { summary: string }; commits: readonly { hash: string; subject: string; refs: readonly { name: string }[] }[] }): string {
   const branch = value.branch === null ? 'detached/unknown' : value.branch
   const head = value.head === null ? 'no commits' : value.head.slice(0, 12)
-  const lines = [`Git graph: ${value.path}`, `branch=${branch}, head=${head}, ${value.workingTree.summary}`, `commits=${value.commits.length}`]
+  const lines = [`Git graph: ${value.path}`, `state=${value.state}, branch=${branch}, head=${head}, ${value.workingTree.summary}`, `commits=${value.commits.length}`]
   for (const commit of value.commits.slice(0, 8)) {
     const refs = commit.refs.length === 0 ? '' : ` [${commit.refs.map(ref => ref.name).join(', ')}]`
     lines.push(`${commit.hash.slice(0, 8)} ${commit.subject}${refs}`)
@@ -86,6 +88,9 @@ export function apply(ctx: Context): void {
       max_commits: { type: 'number', description: `Maximum commits to load, from 1 to ${MAX_COMMITS}. Defaults to 100.` },
       all: { type: 'boolean', description: 'Include all reachable refs. Defaults to true.' },
       first_parent: { type: 'boolean', description: 'Follow only first parents. Defaults to false.' },
+      glob: { type: 'array', description: 'Branch-name glob filters (OR); overrides --all when provided.', items: { type: 'string' } },
+      search: { type: 'string', description: 'Full-range free-text search across hash, subject, author, email, ref name and date.' },
+      sort: { type: 'string', description: 'Commit ordering: date, author-date, or topological. Defaults to date.', enum: ['date', 'author-date', 'topological'] },
     },
     output: {
       schema: GRAPH_OUTPUT_SCHEMA,
@@ -98,6 +103,9 @@ export function apply(ctx: Context): void {
       ...(args.max_commits === undefined ? {} : { maxCommits: args.max_commits }),
       ...(args.all === undefined ? {} : { all: args.all }),
       ...(args.first_parent === undefined ? {} : { firstParent: args.first_parent }),
+      ...(args.glob === undefined ? {} : { glob: args.glob }),
+      ...(args.search === undefined ? {} : { search: args.search }),
+      ...(args.sort === undefined ? {} : { sort: args.sort }),
     } satisfies GitGraphInput, exec),
     presentCall: args => ({
       card: 'generic',
