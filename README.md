@@ -8,7 +8,9 @@ Open the graph from the sidebar's start page, including in an empty session. No 
 
 ![Git Graph in the native DSH sidebar](docs/screenshots/dsh-0.2.0-light.jpg)
 
-## Features
+## Features of the published v0.1.0
+
+The list below and the v0.1.0 archive describe the published release. This checkout also contains completed, unpublished P0 display improvements; build a local package to use them, as described below.
 
 - A native `Git Graph` sidebar tab with a start-page entry and pane fullscreen.
 - Commit topology with branch, merge, and parent relationships.
@@ -98,6 +100,8 @@ dsh plugin --profile web remove dsh-git-graph
 Restart that profile after removal to unload the plugin from a running application. The CLI removes both the package dependency and its bundle entry. Use the same profile name that you installed into.
 
 ## Development
+
+The current checkout completes P0: resizable columns, synchronized compact/full rows and SVG, line/palette presets, folded reference labels with copy feedback, responsive details, collapsible messages, file statistics, hunk headings and long-line scrolling, scoped navigation, and working-tree refresh without losing the open file. Unverified tag signatures and reference classification are corrected. The local verification passed **88 automated tests and 56 browser checks**; see the [P0 report](docs/P0_TEST_REPORT.md). These changes have not been released under a new tag.
 
 ```powershell
 pnpm install --frozen-lockfile
