@@ -79,7 +79,9 @@ async function runGit(
   let handle: SubprocessHandle
   try {
     const spec: SubprocessSpawnSpec = {
-      argv: ['git', ...args],
+      // Read-only views must not refresh the index as an optional side effect;
+      // file names are literal pathspecs, even when they contain Git glob syntax.
+      argv: ['git', '--no-optional-locks', '--literal-pathspecs', ...args],
       cwd,
       stdio: {
         stdin: 'ignore',
@@ -117,27 +119,25 @@ async function runGit(
 function parseRefs(decorations: string): GitGraphRef[] {
   const refs: GitGraphRef[] = []
   for (const raw of decorations.split(',').map(item => item.trim()).filter(item => item.length > 0)) {
-    if (raw.startsWith('HEAD -> ')) {
-      refs.push({ kind: 'head', name: raw.slice('HEAD -> '.length) })
+    if (raw.startsWith('HEAD -> refs/heads/')) {
+      refs.push({ kind: 'head', name: raw.slice('HEAD -> refs/heads/'.length) })
       continue
     }
     if (raw === 'HEAD') {
-      refs.push({ kind: 'head', name: 'HEAD' })
+      // HEAD is represented by isHead, not by a fabricated local branch.
       continue
     }
-    if (raw.startsWith('tag: ')) {
-      refs.push({ kind: 'tag', name: raw.slice('tag: '.length) })
+    if (raw.startsWith('tag: refs/tags/')) {
+      refs.push({ kind: 'tag', name: raw.slice('tag: refs/tags/'.length) })
       continue
     }
-    if (raw.startsWith('remotes/')) {
-      refs.push({ kind: 'remote', name: raw.slice('remotes/'.length) })
+    if (raw.startsWith('refs/remotes/')) {
+      refs.push({ kind: 'remote', name: raw.slice('refs/remotes/'.length) })
       continue
     }
-    if (raw.includes('/')) {
-      refs.push({ kind: 'remote', name: raw })
-      continue
-    }
-    refs.push({ kind: 'head', name: raw })
+    if (raw.startsWith('refs/heads/')) refs.push({ kind: 'head', name: raw.slice('refs/heads/'.length) })
+    // Other namespaces (e.g. refs/stash) are not branch labels. The Git
+    // command supplies full decorations, so slash guessing is unnecessary.
   }
   return refs
 }
@@ -173,7 +173,7 @@ export function parseGitLog(text: string): GitGraphCommit[] {
       date,
       subject,
       refs,
-      isHead: refs.some(ref => ref.kind === 'head' && (ref.name === 'HEAD' || ref.name.length > 0)),
+      isHead: decorations.split(',').some(ref => ref.trim() === 'HEAD' || ref.trim().startsWith('HEAD -> ')),
     })
   }
   return commits
@@ -356,6 +356,7 @@ export async function loadGitGraph(
   const cap = validated.search.length > 0 ? SEARCH_CAP : validated.maxCommits + 1
   const logArgs = [
     'log',
+    '--decorate=full',
     ...refArgs,
     orderFlag,
     ...(validated.firstParent ? ['--first-parent'] : []),
@@ -655,8 +656,10 @@ export function parseAnnotatedTagDetail(text: string): GitGraphTagDetails {
     taggerEmail: (taggerEmail ?? '').trim(),
     taggerDate: taggerDate ?? '',
     message,
+    // for-each-ref returns signature text, not a verification result. Until
+    // verify-tag is explicitly run, neither validity nor a key id is known.
     signature: sigStatus !== undefined && sigStatus.trim().length > 0
-      ? { status: 'G', key: sigStatus.trim() || null, signer: null }
+      ? { status: 'E', key: null, signer: null }
       : null,
   }
 }
