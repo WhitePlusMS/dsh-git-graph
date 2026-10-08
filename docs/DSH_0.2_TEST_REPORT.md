@@ -75,9 +75,10 @@
 ```powershell
 pnpm install --frozen-lockfile
 pnpm run typecheck
-pnpm test
 pnpm pack --pack-destination .scratch/release
 ```
+
+仓库按原有规则忽略 `tests/`，因此新克隆不包含测试集。本次 78 项自动测试在作者保留测试目录的本地工作区通过；有该测试集时再额外执行 `pnpm test`，它不是安装插件所需步骤。
 
 在已构建的 DSH 源码根目录初始化隔离 profile，然后安装包：
 
