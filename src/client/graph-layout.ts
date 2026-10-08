@@ -36,6 +36,8 @@ export interface GraphEdge {
   readonly row: number
   readonly colour: number
   readonly lockedFirst: boolean
+  /** The parent lies outside the loaded/filtered rows; draw a continuation. */
+  readonly missingParent: boolean
 }
 
 export interface GraphNode {
@@ -75,13 +77,14 @@ function reservePoint(vertex: VertexState, lane: number, target: number, branch:
   vertex.connections[lane] = { target, branch }
 }
 
-function addEdge(branch: BranchState, from: Point, to: Point, lockedFirst: boolean): void {
+function addEdge(branch: BranchState, from: Point, to: Point, lockedFirst: boolean, missingParent = false): void {
   branch.edges.push({
     fromLane: from.lane,
     toLane: to.lane,
     row: from.row,
     colour: branch.colour,
     lockedFirst,
+    missingParent,
   })
 }
 
@@ -147,13 +150,20 @@ function determinePath(startAt: number, vertices: VertexState[], branches: Branc
   }
   reservePoint(vertex, lastPoint.lane, vertex.id, branch.colour)
 
+  // A root is an endpoint, even when another unrelated history follows it.
+  // Continuing its lane would suggest a parent relationship that does not exist.
+  if (parent === undefined) {
+    branchEnds[branch.colour] = startAt
+    return
+  }
+
   for (row = startAt + 1; row < vertices.length; row += 1) {
     const current = vertices[row]
     if (current === undefined) continue
     const currentPoint = parent === current.id && current.branch !== undefined
       ? pointOf(current)
       : nextPointOf(current)
-    addEdge(branch, lastPoint, currentPoint, lastPoint.lane < currentPoint.lane)
+    addEdge(branch, lastPoint, currentPoint, lastPoint.lane < currentPoint.lane, parent === NULL_VERTEX)
     reservePoint(current, currentPoint.lane, parent ?? NULL_VERTEX, branch.colour)
     lastPoint = currentPoint
 
