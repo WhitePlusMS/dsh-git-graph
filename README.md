@@ -1,38 +1,43 @@
 # `dsh-git-graph`
 
-Git Graph for the DeepSeek Harness web interface. Open a dedicated `Git Graph` view beside Chat and Trajectory to inspect the current workspace's Git history; refreshing the graph does not create a conversation message or write to the trajectory.
+[中文说明](README.zh.md)
 
-![Git Graph view in the DeepSeek Harness web interface](docs/image1.png)
+A read-only Git Graph in the native right sidebar of DeepSeek Harness Web. Version **0.1.0** targets **DSH 0.2.0-rc.2**, the official default release verified on 2026-10-08. DSH has not published a non-prerelease stable version yet.
+
+Open the graph from the sidebar's start page, including in an empty session. No API key or conversation message is needed to inspect the current session workspace.
+
+![Git Graph in the native DSH sidebar](docs/screenshots/dsh-0.2.0-light.jpg)
 
 ## Features
 
-- A dedicated `Git Graph` entry beside Chat and Trajectory.
+- A native `Git Graph` sidebar tab with a start-page entry and pane fullscreen.
 - Commit topology with branch, merge, and parent relationships.
 - Local branch, remote branch, tag, and HEAD reference labels.
 - The clean or dirty working-tree state in the graph header.
-- Full-range search across commit hashes, subjects, authors, email addresses, and reference names.
+- Search commit hashes, subjects, authors, emails, reference names, and dates beyond the initially loaded page. Search scans at most 2,000 commits in the selected history; the graph displays up to 500 results, initially 100.
 - Branch-name glob filters (e.g. `main,release-*`), reference-kind filtering, and an option to include all refs.
 - Date, author-date, and topological commit ordering, plus a first-parent mode for the mainline history.
 - Selecting a commit expands its details **inline below the commit's row**: hash, author, committer, date, parents, signature status, and references, with a layout aligned to vscode-git-graph.
 - File changes in tree or list view: folder icons with compacted single-child folders, change-type colouring, and `(+added|−deleted)` stats.
-- Click a file to view its line-by-line diff with old/new line numbers and add/remove highlighting.
-- Expand the `Uncommitted Changes` row to inspect working-tree files and their per-file diffs.
+- Click a file to view its line-by-line diff with old/new line numbers and add/remove highlighting, including deleted files, renames, root commits, and merges compared with their first parent. Binary changes are identified explicitly.
+- Expand the `Uncommitted Changes` row to inspect working-tree files and their per-file diffs, including staged files before the first commit.
 - Compare file changes between any two commits.
 - A metadata strip listing the repository's tags and stashes.
 - An in-results find bar with case sensitivity, regex, and previous/next navigation.
 - A display settings panel: date/author/hash columns, date format, and graph style, persisted per repository.
-- Keyboard support: `↑` / `↓` to move the selection, `Ctrl+F` to find, `Ctrl+Shift+F` for settings.
+- Keyboard controls while focus is inside the graph: `↑`/`↓` select, `H` jumps to HEAD, `Ctrl/Cmd+F` finds, and `Ctrl/Cmd+Shift+F` opens settings. Text inputs keep their normal editing keys.
+- Live Chinese/English localization, DSH light/dark themes, and narrow-screen scrolling.
 - Refresh the current repository without creating a conversation message or tool trace entry.
 - Load more commits as needed, up to 500 commits.
 - Display an empty state instead of an error when the current directory is not a Git repository or the repository has no commits yet.
 
 The current release is read-only. It does not create, delete, rename, merge, rebase, push, pull, fetch, create tags, stash, or reset Git data.
 
-![Uncommitted changes list and per-file diff preview](docs/image2.png)
+![Commit details and a line-by-line diff](docs/screenshots/dsh-0.2.0-diff.jpg)
 
 ## Open Git Graph
 
-After installing the plugin and restarting DSH Web, click `Git Graph` in the view switcher beside Chat and Trajectory.
+Install the package into your DSH Web profile and restart that profile. Select a workspace, open the native right sidebar, and select `Git Graph` from the sidebar's start page. Use the pane's fullscreen control when you need more space.
 
 The page reads the current session workspace. Refresh operations call the plugin's Typert Remote directly; they are not rendered as conversation tool cards and do not append refresh events to the trajectory.
 
@@ -40,7 +45,7 @@ The page reads the current session workspace. Refresh operations call the plugin
 
 The Host reads Git data through fixed subprocess arguments without using a shell. It reads repository status, HEAD, and bounded commit history, and loads commit details, file contents, file diffs, working-tree changes, and commit comparisons on demand.
 
-The model tool supports the following parameters:
+Browser queries are bound to the current session workspace and reject an arbitrary repository `path`. The separate model tool retains the following parameters:
 
 ```text
 git_graph({
@@ -49,7 +54,7 @@ git_graph({
   all?: boolean,          // Include all reachable refs, defaults to true
   first_parent?: boolean, // Follow only the first parent, defaults to false
   glob?: string[],        // Branch-name glob filters (OR); overrides --all when provided
-  search?: string,        // Full-range search: hash, subject, author, email, ref name, date
+  search?: string,        // Hash, subject, author, email, ref name, date; scan cap 2,000
   sort?: string           // Commit ordering: date, author-date, or topological; defaults to date
 })
 ```
@@ -58,13 +63,19 @@ The provided path is used only as the Git subprocess working directory and is ne
 
 ## Install or update
 
-Install version `v0.0.2` from GitHub:
+Build a local package from this checkout:
 
 ```powershell
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/archive/refs/tags/v0.0.2.tar.gz
+pnpm install --frozen-lockfile
+pnpm run typecheck
+pnpm test
+pnpm pack --pack-destination .scratch/release
+dsh plugin --profile web add ./.scratch/release/dsh-git-graph-0.1.0.tgz
 ```
 
-Use the same command to update an existing installation. Restart `dsh web` after installation so the Host entry and browser client load the new version.
+If you already have the `.tgz`, pass its path directly to `dsh plugin --profile web add`. Restart `dsh web` after installation so the Host and browser client use the new package. Replace `web` with your custom profile name when appropriate.
+
+This upgrade has not been published as a GitHub release or npm package. The new implementation does not retain old DSH API compatibility.
 
 ## Uninstall
 
@@ -83,7 +94,11 @@ pnpm test
 pnpm run build
 ```
 
-The build writes the standalone Host and browser artifacts to `lib/`. Profile installation uses these generated artifacts and does not require a Harness monorepo checkout.
+The build writes standalone Host and browser artifacts to `lib/`. Profile installation uses these artifacts and does not require a Harness monorepo checkout. The root TypeScript solution references separate Host, Client, and test programs. Client registration uses Cordis effects, typed locales, native sidebar services, and theme aliases from the target DSH release.
+
+The upgrade passed **78 automated tests and 48 real browser cases** against DSH built from its release source. See the [upgrade and test report](docs/DSH_0.2_TEST_REPORT.md) for evidence, reproduction steps, and coverage.
+
+![English interface using the DSH dark theme](docs/screenshots/dsh-0.2.0-dark.jpg)
 
 ## Reference and inspiration
 
