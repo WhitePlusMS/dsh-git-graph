@@ -2,34 +2,34 @@
 
 [中文说明](README.zh.md)
 
-A read-only Git Graph in the native right sidebar of DeepSeek Harness Web. Version **0.1.0** targets **DSH 0.2.0-rc.2**, the official default release verified on 2026-10-08. DSH has not published a non-prerelease stable version yet.
+A read-only Git Graph in the native right sidebar of DeepSeek Harness Web. Version **0.3.0** targets **DSH 0.2.0-rc.2**, the official default release verified on 2026-10-08. DSH has not published a non-prerelease stable version yet.
 
 Open the graph from the sidebar's start page, including in an empty session. No API key or conversation message is needed to inspect the current session workspace.
 
 ![Git Graph in the native DSH sidebar](docs/screenshots/dsh-0.2.0-light.jpg)
 
-## Features of the published v0.1.0
+## Features in v0.3.0
 
-The list below and the v0.1.0 archive describe the published release. This checkout also contains completed, unpublished P0 display improvements; build a local package to use them, as described below.
+This version includes the completed P0 display improvements, with **88 automated tests and 56 browser checks** recorded in the [P0 report](docs/P0_TEST_REPORT.md). The old v0.1.0 archive contains the earlier implementation.
 
 - A native `Git Graph` sidebar tab with a start-page entry and pane fullscreen.
-- Commit topology with branch, merge, and parent relationships.
-- Local branch, remote branch, tag, and HEAD reference labels.
+- Commit topology with branch, merge, and parent relationships; parents outside the loaded range use dashed edges.
+- Local branch, remote branch, tag, and HEAD reference labels, with current-branch priority, folded labels, full details, and copy feedback.
 - The clean or dirty working-tree state in the graph header.
 - Search commit hashes, subjects, authors, emails, reference names, and dates beyond the initially loaded page. Search scans at most 2,000 commits in the selected history; the graph displays up to 500 results, initially 100.
 - Local branch-name glob filters (e.g. `main,release-*`, combined with OR), reference-kind filtering, and an option to include all refs.
 - Date, author-date, and topological commit ordering, plus a first-parent mode for the mainline history.
-- Selecting a commit expands its details **inline below the commit's row**: hash, author, committer, date, parents, signature status, and references, with a layout aligned to vscode-git-graph.
-- File changes in tree or list view: folder icons with compacted single-child folders and change-type colouring. Text modifications and renames show `(+added|−deleted)` stats; added, deleted, and binary file rows omit these counts.
-- Click a file to view its line-by-line diff with old/new line numbers and add/remove highlighting, including deleted files, renames, root commits, and merges compared with their first parent. Binary changes are identified explicitly.
+- Selecting a commit expands its details **inline below the commit's row**: hash, author, committer, date, parents, signature status, and references, with a layout aligned to vscode-git-graph. Long messages can be folded; hashes, parent hashes, and paths can be copied with success or failure feedback.
+- File changes in tree or list view: folder icons with compacted single-child folders and change-type colouring. All available text counts show `(+added|−deleted)` stats, including additions and deletions; missing counts are labelled as unavailable. Renames show both paths.
+- Click a file to view its line-by-line diff with old/new line numbers, hunk headings, add/remove highlighting, and horizontal scrolling for long lines, including deleted files, renames, root commits, and merges compared with their first parent. Binary changes are identified explicitly.
 - Expand the `Uncommitted Changes` row to inspect working-tree files and their per-file diffs, including staged files before the first commit.
 - Compare file changes between two commits from the currently loaded query results.
-- A metadata strip listing the repository's tags and stashes.
+- A collapsible metadata strip listing the repository's tags and stashes. Tag signature text is not treated as proof of validity.
 - An in-results find bar with case sensitivity, regex, and previous/next navigation.
-- A display settings panel: date/author/hash columns, date format, and graph style, persisted per repository.
+- A display settings panel: resizable columns, date/author/hash visibility, date format, compact/full row density, curved/straight lines, and palette presets, persisted per repository.
 - Keyboard controls while focus is inside the graph: `Ctrl/Cmd+F` finds and `Ctrl/Cmd+Shift+F` toggles settings, including from text inputs. With find closed and its text cleared, `↑`/`↓` select visible commits and `H` selects HEAD if it is visible; these ordinary keys are not intercepted in inputs.
 - Live Chinese/English localization, DSH light/dark themes, and narrow-screen scrolling.
-- Refresh the current repository without creating a conversation message or tool trace entry.
+- Refresh the current repository and its metadata while keeping the open working-tree file, without creating a conversation message or tool trace entry.
 - Load more commits as needed, up to 500 commits.
 - Display an empty state instead of an error when the current directory is not a Git repository or the repository has no commits yet.
 
@@ -65,10 +65,10 @@ The model tool's path is used only as the Git subprocess working directory and i
 
 ## Install or update
 
-Prerequisites: DSH **0.2.0-rc.2** with the `dsh` CLI available, and Git available on the DSH Host. Install the versioned GitHub archive into the Web profile:
+Prerequisites: DSH **0.2.0-rc.2** with the `dsh` CLI available, and Git available on the DSH Host. Once the `v0.3.0` tag has been pushed to GitHub, install its archive into the Web profile. Until then, use the local package instructions below.
 
 ```powershell
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/archive/refs/tags/v0.1.0.tar.gz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/archive/refs/tags/v0.3.0.tar.gz
 dsh web
 ```
 
@@ -82,7 +82,7 @@ Alternatively, build a local package from this checkout:
 pnpm install --frozen-lockfile
 pnpm run typecheck
 pnpm pack --pack-destination .scratch/release
-dsh plugin --profile web add ./.scratch/release/dsh-git-graph-0.1.0.tgz
+dsh plugin --profile web add ./.scratch/release/dsh-git-graph-0.3.0.tgz
 ```
 
 If you already have the `.tgz`, pass its path directly to `dsh plugin --profile web add`. Restart `dsh web` after installation so the Host and browser client use the new package. Replace `web` with your custom profile name when appropriate.
@@ -101,7 +101,7 @@ Restart that profile after removal to unload the plugin from a running applicati
 
 ## Development
 
-The current checkout completes P0: resizable columns, synchronized compact/full rows and SVG, line/palette presets, folded reference labels with copy feedback, responsive details, collapsible messages, file statistics, hunk headings and long-line scrolling, scoped navigation, and working-tree refresh without losing the open file. Unverified tag signatures and reference classification are corrected. The local verification passed **88 automated tests and 56 browser checks**; see the [P0 report](docs/P0_TEST_REPORT.md). These changes have not been released under a new tag.
+Version 0.3.0 includes P0: resizable columns, synchronized compact/full rows and SVG, line/palette presets, folded reference labels with copy feedback, responsive details, collapsible messages, file statistics, hunk headings and long-line scrolling, scoped navigation, and working-tree refresh without losing the open file. Unverified tag signatures and reference classification are corrected. The local verification passed **88 automated tests and 56 browser checks**; see the [P0 report](docs/P0_TEST_REPORT.md).
 
 ```powershell
 pnpm install --frozen-lockfile

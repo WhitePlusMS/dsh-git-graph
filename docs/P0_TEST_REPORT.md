@@ -2,7 +2,7 @@
 
 日期：2026-10-08。范围为 DEVELOPMENT_PLAN.md 中 P0-00 至 P0-07，全部完成；P1–P4 尚未实施。
 
-本次是当前工作区的开发变更。插件 package version 保持 0.1.0，已发布的 GitHub v0.1.0 标签未改动；要使用本次改进，需要安装本地新包。未执行推送、打新标签或线上发布。
+本报告记录 v0.3.0 所含 P0 实现的本地验收。验收时测试包使用 0.1.0 版本号，旧 GitHub v0.1.0 标签保持不变；当前包版本为 0.3.0。验收数据不代表已经推送标签或完成线上发布。
 
 ## 实际改进
 
@@ -140,11 +140,11 @@
 pnpm run typecheck
 pnpm test
 pnpm pack --pack-destination .scratch/p0-release
-dsh plugin --profile web add ./.scratch/p0-release/dsh-git-graph-0.1.0.tgz
+dsh plugin --profile web add ./.scratch/p0-release/dsh-git-graph-0.3.0.tgz
 dsh web
 ```
 
-更改前停止目标 profile，安装后重启。已有 GitHub v0.1.0 安装命令仍对应旧标签；本次不自动发布新版本。
+更改前停止目标 profile，安装后重启。GitHub v0.1.0 安装命令仍对应旧实现；v0.3.0 归档需该标签推送至 GitHub 后才能安装。
 
 本地详细证据为 .scratch/p0-qa-results.json、p0-state-verification.json、p0-tests-final.txt 与隔离 session 记录。这些沿用忽略规则，公开复现时需自行创建夹具或使用实际仓库。
 
