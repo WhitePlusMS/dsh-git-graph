@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Git Graph",
+    "description": "Browse session Git history, file diffs and working-tree changes in the native sidebar. Read-only."
+  }
+}

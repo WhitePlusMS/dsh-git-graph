@@ -1,4 +1,4 @@
-/** Browser half: one independent Git Graph tab beside Chat and Trajectory. */
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client';
+/** Browser half: a session-bound Git Graph page in the native right sidebar. */
+import type { Context } from '@deepseek-ai/cordis';
 export declare const inject: string[];
-export declare function apply(ctx: ClientContext): void;
+export declare function apply(ctx: Context): void;

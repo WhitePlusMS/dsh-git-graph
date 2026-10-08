@@ -2,7 +2,7 @@
  * Host-side Git adapter. The only process seam is ctx.subprocess; no shell
  * interpolation is used, so a repository path never becomes command text.
  */
-import { resolve } from 'node:path'
+import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SubprocessHandle, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
@@ -375,8 +375,7 @@ export async function loadGitGraph(
     }
   }
   const parsed = parseGitLog(log.stdout)
-  const isHead = head === null ? (_commit: GitGraphCommit) => false : (commit: GitGraphCommit) => commit.hash === head
-  const allCommits = parsed.map(commit => isHead(commit) ? { ...commit, isHead: true } : commit)
+  const allCommits = parsed.map(commit => ({ ...commit, isHead: commit.hash === head }))
   const searched = validated.search.length === 0
     ? allCommits
     : allCommits.filter(commit => commitMatchesSearch(commit, validated.search))
@@ -505,22 +504,29 @@ export function parseDiffNameStatus(text: string): Array<{ readonly type: GitGra
 
 /** Parse `git diff-tree/diff --numstat -z` records: "add\tdel\tpath" (or old/new for renames). */
 export function parseDiffNumStat(text: string): Map<string, { readonly additions: number | null; readonly deletions: number | null }> {
-  // git numstat separates records with NUL; fields with TAB. For renames with -z,
-  // the format is "<add>\t<del>\t<oldPath>\t<newPath>" separated by NUL.
-  const records = text.split('\u0000').filter(t => t.length > 0)
+  // With -z a rename has an empty path field followed by old/new NUL tokens.
+  // Read only the first two TAB separators; a filename may itself contain TAB.
+  const records = text.split('\u0000')
   const map = new Map<string, { readonly additions: number | null; readonly deletions: number | null }>()
-  for (const record of records) {
-    const fields = record.split('\t')
-    if (fields.length < 3) continue
-    const additionsText = fields[0]
-    const deletionsText = fields[1]
-    const lastPath = fields[fields.length - 1]
-    if (lastPath === undefined) continue
-    const additions = additionsText === '-' || additionsText === undefined ? null : Number.parseInt(additionsText, 10)
-    const deletions = deletionsText === '-' || deletionsText === undefined ? null : Number.parseInt(deletionsText, 10)
-    const add = Number.isNaN(additions ?? NaN) ? null : additions
-    const del = Number.isNaN(deletions ?? NaN) ? null : deletions
-    map.set(lastPath, { additions: add, deletions: del })
+  let index = 0
+  while (index < records.length) {
+    const record = records[index++]
+    if (record === undefined || record.length === 0) continue
+    const fields = /^(-|\d+)\t(-|\d+)\t([\s\S]*)$/u.exec(record)
+    if (fields === null) throw new GitGraphError('Git numstat 记录格式不完整')
+    let path = fields[3] ?? ''
+    if (path.length === 0) {
+      const oldPath = records[index++]
+      const newPath = records[index++]
+      if (!oldPath || !newPath) throw new GitGraphError('Git numstat 重命名记录不完整')
+      path = newPath
+    }
+    const additions = fields[1] === '-' ? null : Number(fields[1])
+    const deletions = fields[2] === '-' ? null : Number(fields[2])
+    if ((additions !== null && !Number.isSafeInteger(additions)) || (deletions !== null && !Number.isSafeInteger(deletions))) {
+      throw new GitGraphError('Git numstat 行数超出安全整数范围')
+    }
+    map.set(path, { additions, deletions })
   }
   return map
 }
@@ -532,6 +538,7 @@ export function mergeFileChanges(
 ): GitGraphFileChange[] {
   return nameStatus.map(entry => {
     const stat = numStat.get(entry.newPath)
+    if (stat === undefined) throw new GitGraphError(`Git numstat 缺少文件记录：${entry.newPath}`)
     return {
       type: entry.type,
       oldPath: entry.oldPath,
@@ -556,14 +563,12 @@ export async function loadCommitDetails(
   const show = await runGit(ctx, cwd, ['-c', 'log.showSignature=false', 'show', '--quiet', hash, `--format=${DETAILS_FORMAT}`], signal)
   const details = parseCommitDetails(show.stdout)
 
-  // `git diff-tree <commit>` already compares the commit against its first
-  // parent (and, with --root, an empty tree for a root commit). Passing the
-  // commit hash directly yields exactly the changes this commit introduced.
-  const fromCommit = hash
-  const baseArgs = ['-c', 'log.showSignature=false']
-  // --no-commit-id suppresses the leading <commit> line that plain diff -z emits.
-  const nameArgs = [...baseArgs, 'diff-tree', '--name-status', '-r', '--root', '--no-commit-id', '--find-renames', '--diff-filter=AMDR', '-z', fromCommit]
-  const numArgs = [...baseArgs, 'diff-tree', '--numstat', '-r', '--root', '--no-commit-id', '--find-renames', '--diff-filter=AMDR', '-z', fromCommit]
+  // Explicitly compare merge commits to the first parent; single-commit
+  // diff-tree output otherwise omits merge changes. Root commits use --root.
+  const revisions = details.parents[0] === undefined ? ['--root', hash] : [details.parents[0], hash]
+  const common = ['-c', 'log.showSignature=false', 'diff-tree', '-r', '--no-commit-id', '--find-renames', '--diff-filter=AMDR', '-z']
+  const nameArgs = [...common, '--name-status', ...revisions]
+  const numArgs = [...common, '--numstat', ...revisions]
   const [nameResult, numResult] = await Promise.all([
     runGit(ctx, cwd, nameArgs, signal),
     runGit(ctx, cwd, numArgs, signal),
@@ -800,10 +805,11 @@ export function assertRepoRelativePath(path: string, cwd: string): void {
   const parts = path.split(/[/\\]+/u)
   if (parts.includes('..')) throw new GitGraphError('文件路径不能包含路径穿越')
   const resolved = resolve(cwd, path)
-  if (resolved !== cwd && !resolved.startsWith(`${cwd}${resolved.length > cwd.length ? '\\' : ''}`)) {
+  const within = relative(resolve(cwd), resolved)
+  if (within === '..' || within.startsWith(`..${sep}`) || isAbsolute(within)) {
     throw new GitGraphError('文件路径超出工作区范围')
   }
-  if (resolved === cwd) throw new GitGraphError('文件路径不能指向工作区本身')
+  if (within.length === 0) throw new GitGraphError('文件路径不能指向工作区本身')
 }
 
 /**
@@ -875,15 +881,17 @@ export function parseFileDiff(text: string): GitGraphDiffLine[] {
   const lines: GitGraphDiffLine[] = []
   let oldNo = 0
   let newNo = 0
+  let inHunk = false
   for (const rawLine of text.split(/\r?\n/u)) {
     if (rawLine.length === 0) continue
     const head = parseHunkHeader(rawLine)
     if (head !== null) {
+      inHunk = true
       oldNo = head.oldStart
       newNo = head.newStart
       continue
     }
-    if (rawLine.startsWith('+++') || rawLine.startsWith('---')) continue
+    if (!inHunk) continue
     const marker = rawLine[0]
     if (marker === '+') {
       lines.push({ type: 'added', content: rawLine.slice(1), oldLine: null, newLine: newNo })
@@ -915,35 +923,23 @@ export async function loadFileDiff(
 ): Promise<GitGraphFileDiff> {
   assertValidHash(request.hash)
   assertRepoRelativePath(request.path, cwd)
-  // Resolve the base revision: first parent, or the empty tree for a root
-  // commit (a root commit has nothing to compare against except nothing).
-  const parentResult = await runGit(ctx, cwd, ['rev-list', '--parents', '-n', '1', request.hash], signal)
-  const fields = parentResult.stdout.trim().split(/\s+/u)
-  const base = fields.length > 1 ? fields[1]! : EMPTY_TREE_HASH
-  let diff: GitCommandResult
-  try {
-    diff = await runGit(ctx, cwd, ['-c', 'log.showSignature=false', 'diff', '--no-color', '--no-ext-diff', '--unified=3', base, request.hash, '--', request.path], signal)
-  } catch (error: unknown) {
-    if (error instanceof GitGraphError && /no such file|does not exist|did not match any files?/iu.test(error.message)) {
-      throw new GitGraphError(`文件在提交中不存在：${request.path}`, { cause: error })
-    }
-    throw error
-  }
-  const numResult = await runGit(ctx, cwd, ['diff', '--numstat', base, request.hash, '--', request.path], signal)
-  const numFields = numResult.stdout.trim().split(/\s+/u)
-  const additions = Number.parseInt(numFields[0] ?? '0', 10)
-  const deletions = Number.parseInt(numFields[1] ?? '0', 10)
-  // Determine an observed status from the numstat shape: an absent added line
-  // count with a present deletions side means a pure deletion; a binary
-  // `-`-marked numstat also renders as a no-context change below.
-  const status: GitGraphFileChange['type'] = additions > 0 && deletions === 0 ? 'A' : additions === 0 && deletions > 0 ? 'D' : 'M'
+  const details = await loadCommitDetails(ctx, cwd, request.hash, signal)
+  const change = details.fileChanges.find(file => file.newPath === request.path || file.oldPath === request.path)
+  if (change === undefined) throw new GitGraphError(`文件在该提交中不存在或没有变更：${request.path}`)
+  const base = details.parents[0] ?? EMPTY_TREE_HASH
+  // Keep both rename paths in the pathspec so Git can recognize the rename.
+  const diff = await runGit(ctx, cwd, [
+    'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--find-renames', '--unified=3',
+    base, request.hash, '--', change.oldPath, change.newPath,
+  ], signal)
   return {
     hash: request.hash,
-    path: request.path,
-    oldPath: request.path,
-    status: status,
-    additions: Number.isNaN(additions) ? 0 : additions,
-    deletions: Number.isNaN(deletions) ? 0 : deletions,
+    path: change.newPath,
+    oldPath: change.oldPath,
+    status: change.type,
+    binary: change.additions === null || change.deletions === null,
+    additions: change.additions ?? 0,
+    deletions: change.deletions ?? 0,
     lines: parseFileDiff(diff.stdout),
   }
 }
@@ -962,19 +958,14 @@ export async function loadWorkingTreeChanges(
   cwd: string,
   signal: AbortSignal,
 ): Promise<GitGraphWorkingTreeChanges> {
-  const tracked: GitGraphFileChange[] = []
   const headResult = await runGit(ctx, cwd, ['rev-parse', '--verify', 'HEAD'], signal, [0, 1, 128])
-  const hasHead = headResult.exitCode === 0 && headResult.stdout.trim().length > 0
-  // In a no-HEAD repository the status inventory is all we can diff against an
-  // empty tree; tracked diffs are then driven purely from `git status`.
-  if (hasHead) {
-    const common = ['-c', 'log.showSignature=false', 'diff', 'HEAD', '--no-commit-id', '--find-renames', '--diff-filter=AMDR', '-z']
-    const [nameResult, numResult] = await Promise.all([
-      runGit(ctx, cwd, [...common, '--name-status'], signal),
-      runGit(ctx, cwd, [...common, '--numstat'], signal),
-    ])
-    tracked.push(...mergeFileChanges(parseDiffNameStatus(nameResult.stdout), parseDiffNumStat(numResult.stdout)))
-  }
+  const base = headResult.exitCode === 0 ? 'HEAD' : EMPTY_TREE_HASH
+  const common = ['diff', '--no-ext-diff', '--no-textconv', base, '--find-renames', '--diff-filter=AMDR', '-z']
+  const [nameResult, numResult] = await Promise.all([
+    runGit(ctx, cwd, [...common, '--name-status'], signal),
+    runGit(ctx, cwd, [...common, '--numstat'], signal),
+  ])
+  const tracked = mergeFileChanges(parseDiffNameStatus(nameResult.stdout), parseDiffNumStat(numResult.stdout))
   const statusResult = await runGit(ctx, cwd, ['status', '--porcelain', '--untracked-files=all', '-z'], signal)
   const { untracked } = parseWorkingTreeStatus(statusResult.stdout)
   const changes: GitGraphFileChange[] = [
@@ -996,38 +987,36 @@ export async function loadWorkingTreeFile(
   signal: AbortSignal,
 ): Promise<GitGraphFileDiff> {
   assertRepoRelativePath(request.path, cwd)
+  const { changes } = await loadWorkingTreeChanges(ctx, cwd, signal)
+  const change = changes.find(file => file.newPath === request.path || file.oldPath === request.path)
+  if (change === undefined) throw new GitGraphError(`文件在工作区不存在或没有变更：${request.path}`)
   const statusResult = await runGit(ctx, cwd, ['status', '--porcelain', '--untracked-files=all', '-z'], signal)
-  const { untracked } = parseWorkingTreeStatus(statusResult.stdout)
-  const isUntracked = untracked.includes(request.path)
-
+  const isUntracked = parseWorkingTreeStatus(statusResult.stdout).untracked.includes(request.path)
   let diff: GitCommandResult
-  let additions = 0
-  let deletions = 0
-  let status: GitGraphFileChange['type'] = isUntracked ? 'A' : 'M'
   if (isUntracked) {
-    // An untracked file has no HEAD side; diff it against the empty side.
-    // `--no-index` uses the unified long form and exits 1 when differences exist.
-    const absolute = resolve(cwd, request.path)
-    diff = await runGit(ctx, cwd, ['diff', '--no-index', '--no-color', '--no-ext-diff', '--unified=3', '/dev/null', absolute], signal, [0, 1])
-    additions = diff.stdout.split(/\r?\n/u).filter(line => line.startsWith('+') && !line.startsWith('+++')).length
+    diff = await runGit(ctx, cwd, [
+      'diff', '--no-index', '--no-color', '--no-ext-diff', '--no-textconv', '--unified=3',
+      '/dev/null', resolve(cwd, request.path),
+    ], signal, [0, 1])
   } else {
-    diff = await runGit(ctx, cwd, ['-c', 'log.showSignature=false', 'diff', '--no-color', '--no-ext-diff', '--unified=3', 'HEAD', '--', request.path], signal, [0, 1, 128])
-    const numResult = await runGit(ctx, cwd, ['diff', '--numstat', 'HEAD', '--', request.path], signal, [0, 1, 128])
-    const numFields = numResult.stdout.trim().split(/\s+/u)
-    const add = Number.parseInt(numFields[0] ?? '0', 10)
-    const del = Number.parseInt(numFields[1] ?? '0', 10)
-    additions = Number.isNaN(add) ? 0 : add
-    deletions = Number.isNaN(del) ? 0 : del
-    status = additions > 0 && deletions === 0 ? 'A' : additions === 0 && deletions > 0 ? 'D' : 'M'
+    const headResult = await runGit(ctx, cwd, ['rev-parse', '--verify', 'HEAD'], signal, [0, 1, 128])
+    const base = headResult.exitCode === 0 ? 'HEAD' : EMPTY_TREE_HASH
+    diff = await runGit(ctx, cwd, [
+      'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--find-renames', '--unified=3',
+      base, '--', change.oldPath, change.newPath,
+    ], signal)
   }
+  const lines = parseFileDiff(diff.stdout)
+  const binary = isUntracked ? /^Binary files /mu.test(diff.stdout) : change.additions === null || change.deletions === null
   return {
     hash: WORKTREE_HASH,
-    path: request.path,
-    oldPath: request.path,
-    status,
-    additions,
-    deletions,
-    lines: parseFileDiff(diff.stdout),
+    path: change.newPath,
+    oldPath: change.oldPath,
+    status: change.type,
+    binary,
+    additions: isUntracked ? lines.filter(line => line.type === 'added').length : change.additions ?? 0,
+    deletions: isUntracked ? 0 : change.deletions ?? 0,
+    lines,
   }
 }
 

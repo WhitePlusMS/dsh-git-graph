@@ -1,13 +1,15 @@
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { ConvViewProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import type { GitGraphCommit, GitGraphCommitDetails, GitGraphCompareRequest, GitGraphCompareResult, GitGraphFileChange, GitGraphFileContent, GitGraphFileDiff, GitGraphFileRequest, GitGraphInput, GitGraphMetadata, GitGraphRef, GitGraphSnapshot, GitGraphWorkingTreeChanges, GitGraphWorkingTreeFileRequest } from '../domain.ts'
+import type { GitGraphCommit, GitGraphCommitDetails, GitGraphCompareRequest, GitGraphCompareResult, GitGraphFileChange, GitGraphFileContent, GitGraphFileDiff, GitGraphFileRequest, GitGraphQuery, GitGraphMetadata, GitGraphRef, GitGraphSnapshot, GitGraphWorkingTreeChanges, GitGraphWorkingTreeFileRequest } from '../domain.ts'
 import { layoutGraph, type GraphLayout } from './graph-layout.ts'
 import { loadDisplaySettings, saveDisplaySettings, DEFAULT_DISPLAY_SETTINGS, type GitGraphDisplaySettings, type GraphDateFormat, type GraphStyle } from './settings.ts'
 import { css } from './styles.ts'
+import { NS, type GitGraphTranslate } from './locales.ts'
 
-interface GitGraphViewInjected {
-  readonly read: (request: GitGraphInput) => Promise<RemoteResult<GitGraphSnapshot>>
+export interface GitGraphViewInjected {
+  readonly read: (request: GitGraphQuery) => Promise<RemoteResult<GitGraphSnapshot>>
   readonly readCommit: (request: { hash: string }) => Promise<RemoteResult<GitGraphCommitDetails>>
   readonly readFile: (request: GitGraphFileRequest) => Promise<RemoteResult<GitGraphFileContent>>
   readonly readFileDiff: (request: GitGraphFileRequest) => Promise<RemoteResult<GitGraphFileDiff>>
@@ -17,11 +19,20 @@ interface GitGraphViewInjected {
   readonly metadata: () => Promise<RemoteResult<GitGraphMetadata>>
 }
 
-type Props = ConvViewProps & GitGraphViewInjected
+type Props = PropsRuntime<'sidebar.right.pane.tab'> & PropsLocale<typeof NS> & GitGraphViewInjected
 type RefFilter = 'all' | GitGraphRef['kind']
 
 const MAX_COMMITS = 500
 const PAGE_SIZE = 100
+
+/** Share the slot-owned translator with the nested detail and diff panels. */
+const TextContext = createContext<GitGraphTranslate | undefined>(undefined)
+
+function useText(): GitGraphTranslate {
+  const t = useContext(TextContext)
+  if (t === undefined) throw new Error('Git Graph locale provider is missing')
+  return t
+}
 
 function shortHash(hash: string): string {
   return hash.slice(0, 8)
@@ -45,8 +56,9 @@ function refMatches(commit: GitGraphCommit, filter: RefFilter): boolean {
 }
 
 function RefBadges({ refs }: { readonly refs: readonly GitGraphRef[] }) {
+  const t = useText()
   return refs.length === 0 ? null : (
-    <span className={css.refs} aria-label="References">
+    <span className={css.refs} aria-label={t('refs.aria')}>
       {refs.map(ref => (
         <span key={`${ref.kind}:${ref.name}`} className={css.ref} data-kind={ref.kind} title={ref.name}>
           <svg className={css.refIcon} viewBox="0 0 16 16" aria-hidden="true">
@@ -83,6 +95,7 @@ interface GraphSvgProps {
 }
 
 function GraphSvg({ layout, workingTreeChanged, selectedHash, gapAfterRow, gapHeight, onSelect }: GraphSvgProps) {
+  const t = useText()
   const rowHeight = 28
   const laneWidth = 16
   const graphPadding = 16
@@ -91,7 +104,7 @@ function GraphSvg({ layout, workingTreeChanged, selectedHash, gapAfterRow, gapHe
   const gap = gapAfterRow === undefined ? 0 : gapHeight
   const graphHeight = Math.max(rowHeight, (layout.nodes.length + rowOffset) * rowHeight) + gap
   const colours = ['#0085d9', '#d9008f', '#00a86b', '#d98500', '#7b4bc4', '#e138e8', '#00a7a0', '#dc5b23', '#6f24d6', '#b38b00']
-  const headNode = layout.nodes.find(node => node.commit.isHead) ?? layout.nodes[0]
+  const headNode = layout.nodes.find(node => node.commit.isHead)
   const pointX = (lane: number) => graphPadding + lane * laneWidth
   // Rows below the expanded row are pushed down so the graph keeps lining up
   // with the commit rows next to the inline details view.
@@ -117,7 +130,7 @@ function GraphSvg({ layout, workingTreeChanged, selectedHash, gapAfterRow, gapHe
       height={graphHeight}
       viewBox={`0 0 ${graphWidth} ${graphHeight}`}
       role="img"
-      aria-label="Git commit graph"
+      aria-label={t('graph.aria')}
     >
       {workingTreeChanged && headNode !== undefined && (
         <path
@@ -147,7 +160,7 @@ function GraphSvg({ layout, workingTreeChanged, selectedHash, gapAfterRow, gapHe
             role="button"
             tabIndex={0}
             aria-current={node.commit.isHead}
-            aria-label={`Select commit ${shortHash(node.commit.hash)} ${node.commit.subject}`}
+            aria-label={t('graph.selectCommit', { hash: shortHash(node.commit.hash), subject: node.commit.subject })}
             onClick={() => onSelect(node.commit.hash)}
             onKeyDown={event => {
               if (event.key === 'Enter' || event.key === ' ') {
@@ -158,7 +171,7 @@ function GraphSvg({ layout, workingTreeChanged, selectedHash, gapAfterRow, gapHe
           >
             <title>{`${shortHash(node.commit.hash)} ${node.commit.subject}`}</title>
             <circle className={css.graphHitArea} cx={x} cy={y} r={9} />
-            <circle cx={x} cy={y} r={selected ? 5.5 : 4} fill={node.commit.isHead ? 'var(--git-graph-bg, #282a36)' : colour} stroke={node.commit.isHead ? colour : 'var(--git-graph-bg, #282a36)'} />
+            <circle cx={x} cy={y} r={selected ? 5.5 : 4} fill={node.commit.isHead ? 'var(--git-graph-bg)' : colour} stroke={node.commit.isHead ? colour : 'var(--git-graph-bg)'} />
           </g>
         )
       })}
@@ -191,13 +204,14 @@ function CommitRow({ commit, selected, display, findActive, onSelect }: {
   readonly findActive: boolean
   readonly onSelect: () => void
 }) {
+  const t = useText()
   return (
     <button type="button" className={selected ? `${css.commit} ${css.commitSelected}` : css.commit} aria-pressed={selected} onClick={onSelect}>
       <span className={css.commitDescription}>
-        {commit.isHead && <span className={css.headDot} title="当前 HEAD" aria-label="当前 HEAD" />}
+        {commit.isHead && <span className={css.headDot} title={t('graph.head')} aria-label={t('graph.head')} />}
         <Avatar email={commit.email} name={commit.author} />
         <RefBadges refs={commit.refs} />
-        <span className={findActive ? css.findHighlight : css.subject}>{commit.subject || '(no subject)'}</span>
+        <span className={findActive ? css.findHighlight : css.subject}>{commit.subject || t('common.noSubject')}</span>
       </span>
       {display.showDate && <span className={css.commitDate} title={formatDate(commit.date)}>{formatDateValue(commit.date, display.dateFormat)}</span>}
       {display.showAuthor && <span className={css.commitAuthor} title={`${commit.author} <${commit.email}>`}>{commit.author}</span>}
@@ -231,7 +245,8 @@ function FolderGlyph({ open }: { readonly open: boolean }) {
 }
 
 function FileChangeStatus({ type }: { readonly type: GitGraphCommitDetails['fileChanges'][number]['type'] }) {
-  const label = type === 'A' ? '新增' : type === 'M' ? '修改' : type === 'D' ? '删除' : type === 'R' ? '重命名' : '冲突'
+  const t = useText()
+  const label = t(`file.status.${type}`)
   return <code className={`${css.hash} ${css.fileStatus}`} data-status={type} title={label}>{type}</code>
 }
 
@@ -295,18 +310,18 @@ function FileLeaf({ change, name, onOpenFile }: {
   readonly name: string
   readonly onOpenFile: (change: GitGraphFileChange) => void
 }) {
+  const t = useText()
   const textFile = change.additions !== null && change.additions !== undefined && change.deletions !== null && change.deletions !== undefined
   // Like vscode-git-graph, add/del stats are only shown for modified/renamed
   // text files; for added files every line is an addition anyway.
   const showStats = textFile && change.type !== 'A' && change.type !== 'D'
-  const diffPossible = change.type !== 'D'
   return (
     <li className={css.fileLeaf}>
       <button
         type="button"
-        className={diffPossible ? css.fileRecord : `${css.fileRecord} ${css.fileRecordDisabled}`}
-        title={diffPossible ? `查看 Diff · ${change.newPath}` : `文件已删除 · ${change.newPath}`}
-        onClick={() => { if (diffPossible) onOpenFile(change) }}
+        className={css.fileRecord}
+        title={t('file.openDiff', { path: change.newPath })}
+        onClick={() => onOpenFile(change)}
       >
         <FileGlyph />
         <span className={css.fileName} data-status={change.type}>{name}</span>
@@ -372,10 +387,11 @@ function ViewToggle({ view, onChange }: {
   readonly view: FileListKind
   readonly onChange: (view: FileListKind) => void
 }) {
+  const t = useText()
   return (
-    <span className={css.viewToggle} role="group" aria-label="切换视图">
-      <button type="button" className={view === 'list' ? `${css.viewToggleBtn} ${css.viewToggleActive}` : css.viewToggleBtn} onClick={() => onChange('list')}>列表</button>
-      <button type="button" className={view === 'tree' ? `${css.viewToggleBtn} ${css.viewToggleActive}` : css.viewToggleBtn} onClick={() => onChange('tree')}>树</button>
+    <span className={css.viewToggle} role="group" aria-label={t('file.viewMode')}>
+      <button type="button" className={view === 'list' ? `${css.viewToggleBtn} ${css.viewToggleActive}` : css.viewToggleBtn} onClick={() => onChange('list')}>{t('file.list')}</button>
+      <button type="button" className={view === 'tree' ? `${css.viewToggleBtn} ${css.viewToggleActive}` : css.viewToggleBtn} onClick={() => onChange('tree')}>{t('file.tree')}</button>
     </span>
   )
 }
@@ -398,6 +414,7 @@ function CommitDetails({ commit, readCommit, compareActive, onCompare, onOpenFil
   readonly onCompare: () => void
   readonly onOpenFile: (hash: string, path: string) => void
 }) {
+  const t = useText()
   const [copied, setCopied] = useState(false)
   const [details, setDetails] = useState<GitGraphCommitDetails>()
   const [detailsError, setDetailsError] = useState<string>()
@@ -420,7 +437,7 @@ function CommitDetails({ commit, readCommit, compareActive, onCompare, onOpenFil
     return () => { cancelled = true }
   }, [commit?.hash, readCommit])
 
-  if (commit === undefined) return <div className={css.emptyDetails}>选择一条提交查看详情</div>
+  if (commit === undefined) return <div className={css.emptyDetails}>{t('details.select')}</div>
 
   const copyHash = async () => {
     if (typeof navigator === 'undefined' || navigator.clipboard === undefined) return
@@ -433,38 +450,38 @@ function CommitDetails({ commit, readCommit, compareActive, onCompare, onOpenFil
   }
 
   const signatureText = details?.signature
-    ? `签名 ${details.signature.status}${details.signature.signer ? ` · ${details.signature.signer}` : ''}`
-    : '未签名'
+    ? `${t('details.signed', { status: details.signature.status })}${details.signature.signer ? ` · ${details.signature.signer}` : ''}`
+    : t('details.unsigned')
 
   return (
-    <aside className={css.detailsPanel} aria-label="Commit details">
+    <aside className={css.detailsPanel} aria-label={t('details.aria')}>
       <div className={css.detailsHeading}>
-        <strong>{commit.subject || '(no subject)'}</strong>
+        <strong>{commit.subject || t('common.noSubject')}</strong>
         <span className={css.detailsActions}>
           <button type="button" className={css.secondaryButton} onClick={() => void copyHash()}>
-            {copied ? '已复制' : '复制 Hash'}
+            {copied ? t('common.copied') : t('common.copyHash')}
           </button>
           <button type="button" className={css.secondaryButton} onClick={onCompare}>
-            {compareActive ? '关闭比较' : '比较提交…'}
+            {compareActive ? t('compare.close') : t('compare.open')}
           </button>
         </span>
       </div>
       <dl className={css.detailsList}>
         <dt>Hash</dt><dd className={css.mono}>{commit.hash}</dd>
-        <dt>作者</dt><dd>{commit.author} &lt;{commit.email}&gt;</dd>
-        <dt>时间</dt><dd>{formatDate(commit.date)}</dd>
+        <dt>{t('details.author')}</dt><dd>{commit.author} &lt;{commit.email}&gt;</dd>
+        <dt>{t('details.date')}</dt><dd>{formatDate(commit.date)}</dd>
         {details !== undefined && (
           <>
-            <dt>提交者</dt><dd>{details.committer} &lt;{details.committerEmail}&gt;</dd>
-            <dt>签名</dt><dd>{signatureText}</dd>
+            <dt>{t('details.committer')}</dt><dd>{details.committer} &lt;{details.committerEmail}&gt;</dd>
+            <dt>{t('details.signature')}</dt><dd>{signatureText}</dd>
           </>
         )}
-        <dt>父提交</dt><dd className={css.mono}>{commit.parents.length === 0 ? '(root)' : commit.parents.map(shortHash).join(', ')}</dd>
-        <dt>引用</dt><dd><RefBadges refs={commit.refs} /></dd>
+        <dt>{t('details.parents')}</dt><dd className={css.mono}>{commit.parents.length === 0 ? t('details.root') : commit.parents.map(shortHash).join(', ')}</dd>
+        <dt>{t('details.refs')}</dt><dd><RefBadges refs={commit.refs} /></dd>
       </dl>
 
-      {details === undefined && detailsError === undefined && <div className={css.pending}>正在读取提交详情…</div>}
-      {detailsError !== undefined && <div className={css.error} role="alert">读取详情失败：{detailsError}</div>}
+      {details === undefined && detailsError === undefined && <div className={css.pending}>{t('details.loading')}</div>}
+      {detailsError !== undefined && <div className={css.error} role="alert">{t('details.error', { message: detailsError })}</div>}
 
       {details !== undefined && details.body.length > 0 && (
         <pre className={css.detailBody}>{details.body}</pre>
@@ -473,7 +490,7 @@ function CommitDetails({ commit, readCommit, compareActive, onCompare, onOpenFil
       {details !== undefined && details.fileChanges.length > 0 && (
         <div className={css.fileChanges}>
           <div className={css.fileChangesHeaderRow}>
-            <span className={css.fileChangesTitle}>文件变更 ({details.fileChanges.length})</span>
+            <span className={css.fileChangesTitle}>{t('details.files', { count: details.fileChanges.length })}</span>
             <ViewToggle view={view} onChange={setView} />
           </div>
           <FileChangesView
@@ -488,19 +505,19 @@ function CommitDetails({ commit, readCommit, compareActive, onCompare, onOpenFil
 }
 
 function DiffStatusBadge({ status }: { readonly status: GitGraphFileDiff['status'] }) {
-  const label = status === 'A' ? '新增' : status === 'M' ? '修改' : status === 'D' ? '删除' : status === 'R' ? '重命名' : '冲突'
-  return <code className={`${css.hash} ${css.fileStatus}`} data-status={status} title={label}>{status}</code>
+  return <FileChangeStatus type={status} />
 }
 
 /** Shared line-by-line diff table used by commit and working-tree file views. */
 function DiffBody({ diff }: { readonly diff: GitGraphFileDiff }) {
+  const t = useText()
   return (
     <div className={css.diffViewer} data-diff-viewer>
       <div className={css.diffHeader} aria-hidden="true">
-        <span className={css.diffLineNo}>旧</span>
-        <span className={css.diffLineNo}>新</span>
+        <span className={css.diffLineNo}>{t('diff.old')}</span>
+        <span className={css.diffLineNo}>{t('diff.new')}</span>
         <span className={css.diffMarker} />
-        <span>内容</span>
+        <span>{t('diff.content')}</span>
       </div>
       <div className={css.diffBody}>
         {diff.lines.map((line, index) => (
@@ -522,6 +539,7 @@ function FileViewer({ hash, path, readFileDiff, onClose }: {
   readonly readFileDiff: GitGraphViewInjected['readFileDiff']
   readonly onClose: () => void
 }) {
+  const t = useText()
   const [diff, setDiff] = useState<GitGraphFileDiff>()
   const [error, setError] = useState<string>()
   const [copied, setCopied] = useState(false)
@@ -547,7 +565,7 @@ function FileViewer({ hash, path, readFileDiff, onClose }: {
   }
 
   const hasChange = diff !== undefined && diff.lines.some(line => line.type !== 'context')
-  const binaryLike = diff !== undefined && diff.lines.length === 0 && (diff.additions > 0 || diff.deletions > 0)
+  const binaryLike = diff?.binary === true
 
   return (
     <div className={css.fileViewer} data-file-viewer>
@@ -557,18 +575,18 @@ function FileViewer({ hash, path, readFileDiff, onClose }: {
           <span className={css.mono}>{path}</span>
         </span>
         <span className={css.fileViewerMeta}>
-          {diff !== undefined && `+${diff.additions} −${diff.deletions}`}
+          {diff !== undefined && !diff.binary && `+${diff.additions} −${diff.deletions}`}
         </span>
-        <button type="button" className={css.linkButton} onClick={() => void copyPath()}>{copied ? '已复制' : '复制路径'}</button>
-        <button type="button" className={css.secondaryButton} onClick={onClose}>关闭</button>
+        <button type="button" className={css.linkButton} onClick={() => void copyPath()}>{copied ? t('common.copied') : t('common.copyPath')}</button>
+        <button type="button" className={css.secondaryButton} onClick={onClose}>{t('common.close')}</button>
       </div>
-      {error !== undefined && <div className={css.error} role="alert">读取文件 Diff 失败：{error}</div>}
-      {diff === undefined && error === undefined && <div className={css.pending}>正在读取文件变更…</div>}
+      {error !== undefined && <div className={css.error} role="alert">{t('diff.error', { message: error })}</div>}
+      {diff === undefined && error === undefined && <div className={css.pending}>{t('diff.loading')}</div>}
       {diff !== undefined && !hasChange && binaryLike && (
-        <div className={css.pending}>二进制文件变更，无法以文本 Diff 预览（+{diff.additions} −{diff.deletions}）</div>
+        <div className={css.pending}>{t('diff.binary')}</div>
       )}
       {diff !== undefined && !hasChange && !binaryLike && (
-        <div className={css.pending}>该提交在此文件上没有行级变更。</div>
+        <div className={css.pending}>{t('diff.noChanges')}</div>
       )}
       {diff !== undefined && hasChange && <DiffBody diff={diff} />}
     </div>
@@ -581,17 +599,18 @@ function WorkingTreeChangesPanel({ changes, error, onClose, onOpenFile }: {
   readonly onClose: () => void
   readonly onOpenFile: (path: string) => void
 }) {
+  const t = useText()
   const [view, setView] = useState<FileListKind>('tree')
   return (
     <div className={css.workingTreePanel} data-working-tree-panel>
       <div className={css.workingTreeHeader}>
-        <span className={css.fileViewerTitle}>未提交变更{changes !== undefined ? ` (${changes.changes.length})` : ''}</span>
+        <span className={css.fileViewerTitle}>{t('worktree.title')}{changes !== undefined ? ` (${changes.changes.length})` : ''}</span>
         <ViewToggle view={view} onChange={setView} />
-        <button type="button" className={css.secondaryButton} onClick={onClose}>关闭</button>
+        <button type="button" className={css.secondaryButton} onClick={onClose}>{t('common.close')}</button>
       </div>
-      {error !== undefined && <div className={css.error} role="alert">读取未提交变更失败：{error}</div>}
-      {changes === undefined && error === undefined && <div className={css.pending}>正在读取未提交变更…</div>}
-      {changes !== undefined && changes.changes.length === 0 && <div className={css.pending}>工作区没有未提交变更。</div>}
+      {error !== undefined && <div className={css.error} role="alert">{t('worktree.error', { message: error })}</div>}
+      {changes === undefined && error === undefined && <div className={css.pending}>{t('worktree.loading')}</div>}
+      {changes !== undefined && changes.changes.length === 0 && <div className={css.pending}>{t('worktree.empty')}</div>}
       {changes !== undefined && changes.changes.length > 0 && (
         <FileChangesView
           changes={changes.changes}
@@ -608,6 +627,7 @@ function WorkingTreeFileViewer({ path, readWorkingTreeFile, onClose }: {
   readonly readWorkingTreeFile: GitGraphViewInjected['readWorkingTreeFile']
   readonly onClose: () => void
 }) {
+  const t = useText()
   const [diff, setDiff] = useState<GitGraphFileDiff>()
   const [error, setError] = useState<string>()
   const [copied, setCopied] = useState(false)
@@ -633,7 +653,7 @@ function WorkingTreeFileViewer({ path, readWorkingTreeFile, onClose }: {
   }
 
   const hasChange = diff !== undefined && diff.lines.some(line => line.type !== 'context')
-  const binaryLike = diff !== undefined && diff.lines.length === 0 && (diff.additions > 0 || diff.deletions > 0)
+  const binaryLike = diff?.binary === true
 
   return (
     <div className={css.fileViewer} data-working-tree-file-viewer>
@@ -643,18 +663,18 @@ function WorkingTreeFileViewer({ path, readWorkingTreeFile, onClose }: {
           <span className={css.mono}>{path}</span>
         </span>
         <span className={css.fileViewerMeta}>
-          {diff !== undefined && `工作区 · +${diff.additions} −${diff.deletions}`}
+          {diff !== undefined && !diff.binary && `${t('worktree.label')} · +${diff.additions} −${diff.deletions}`}
         </span>
-        <button type="button" className={css.linkButton} onClick={() => void copyPath()}>{copied ? '已复制' : '复制路径'}</button>
-        <button type="button" className={css.secondaryButton} onClick={onClose}>关闭</button>
+        <button type="button" className={css.linkButton} onClick={() => void copyPath()}>{copied ? t('common.copied') : t('common.copyPath')}</button>
+        <button type="button" className={css.secondaryButton} onClick={onClose}>{t('common.close')}</button>
       </div>
-      {error !== undefined && <div className={css.error} role="alert">读取工作区文件 Diff 失败：{error}</div>}
-      {diff === undefined && error === undefined && <div className={css.pending}>正在读取工作区文件变更…</div>}
+      {error !== undefined && <div className={css.error} role="alert">{t('worktree.diffError', { message: error })}</div>}
+      {diff === undefined && error === undefined && <div className={css.pending}>{t('worktree.diffLoading')}</div>}
       {diff !== undefined && !hasChange && binaryLike && (
-        <div className={css.pending}>二进制文件变更，无法以文本 Diff 预览（+{diff.additions} −{diff.deletions}）</div>
+        <div className={css.pending}>{t('diff.binary')}</div>
       )}
       {diff !== undefined && !hasChange && !binaryLike && (
-        <div className={css.pending}>该文件在工作区没有行级变更。</div>
+        <div className={css.pending}>{t('worktree.noChanges')}</div>
       )}
       {diff !== undefined && hasChange && <DiffBody diff={diff} />}
     </div>
@@ -667,6 +687,7 @@ function ComparePanel({ targetHash, commits, compare, onClose }: {
   readonly compare: GitGraphViewInjected['compare']
   readonly onClose: () => void
 }) {
+  const t = useText()
   const [baseHash, setBaseHash] = useState<string>(commits[0]?.hash ?? '')
   const [result, setResult] = useState<GitGraphCompareResult>()
   const [error, setError] = useState<string>()
@@ -689,22 +710,22 @@ function ComparePanel({ targetHash, commits, compare, onClose }: {
   return (
     <div className={css.comparePanel} data-compare-panel>
       <div className={css.compareRow}>
-        <span className={css.fileViewerTitle}>提交比较</span>
-        <select className={`${css.select} ${css.selectWide}`} value={baseHash} onChange={event => setBaseHash(event.target.value)} aria-label="比较基准提交">
+        <span className={css.fileViewerTitle}>{t('compare.title')}</span>
+        <select className={`${css.select} ${css.selectWide}`} value={baseHash} onChange={event => setBaseHash(event.target.value)} aria-label={t('compare.base')}>
           {commits.map(commit => (
             <option key={commit.hash} value={commit.hash}>
-              {shortHash(commit.hash)} · {commit.subject || '(no subject)'}
+              {shortHash(commit.hash)} · {commit.subject || t('common.noSubject')}
             </option>
           ))}
         </select>
-        <button type="button" className={css.secondaryButton} onClick={onClose}>关闭</button>
+        <button type="button" className={css.secondaryButton} onClick={onClose}>{t('common.close')}</button>
       </div>
-      {baseHash === targetHash && <div className={css.compareHint}>请选择不同的基准提交。</div>}
-      {error !== undefined && <div className={css.error} role="alert">比较失败：{error}</div>}
+      {baseHash === targetHash && <div className={css.compareHint}>{t('compare.selectDifferent')}</div>}
+      {error !== undefined && <div className={css.error} role="alert">{t('compare.error', { message: error })}</div>}
       {result !== undefined && (
         <div className={css.fileChanges}>
-          <div className={css.fileChangesHeader}>变更文件 ({result.changes.length})</div>
-          {result.changes.length === 0 && <div className={css.compareHint}>两个提交之间没有文件变更。</div>}
+          <div className={css.fileChangesHeader}>{t('compare.files', { count: result.changes.length })}</div>
+          {result.changes.length === 0 && <div className={css.compareHint}>{t('compare.empty')}</div>}
           <ul className={css.fileChangesList}>
             {result.changes.map((change, index) => (
               <li key={`${change.type}-${change.oldPath}-${change.newPath}-${index}`} className={css.fileChange}>
@@ -732,16 +753,17 @@ function Avatar({ email, name }: { readonly email: string; readonly name: string
 }
 
 function MetadataStrip({ metadata }: { readonly metadata: GitGraphMetadata | undefined }) {
+  const t = useText()
   if (metadata === undefined || (metadata.tags.length === 0 && metadata.stashes.length === 0)) {
-    return <div className={css.metadataStrip}>无标签与暂存区条目</div>
+    return <div className={css.metadataStrip}>{t('metadata.empty')}</div>
   }
   return (
     <div className={css.metadataStrip}>
       {metadata.tags.length > 0 && (
         <div className={css.metadataGroup}>
-          <span className={css.metadataLabel}>标签</span>
+          <span className={css.metadataLabel}>{t('metadata.tags')}</span>
           {metadata.tags.map(tag => (
-            <span key={tag.name} className={css.metaTag} title={tag.annotated ? `${tag.detail?.objectHash ?? ''} · ${tag.detail?.tagger ?? ''}` : '轻量标签'}>
+            <span key={tag.name} className={css.metaTag} title={tag.annotated ? `${tag.detail?.objectHash ?? ''} · ${tag.detail?.tagger ?? ''}` : t('metadata.lightweight')}>
               {tag.name}{tag.annotated ? ' ⚑' : ''}
             </span>
           ))}
@@ -749,7 +771,7 @@ function MetadataStrip({ metadata }: { readonly metadata: GitGraphMetadata | und
       )}
       {metadata.stashes.length > 0 && (
         <div className={css.metadataGroup}>
-          <span className={css.metadataLabel}>暂存</span>
+          <span className={css.metadataLabel}>{t('metadata.stashes')}</span>
           {metadata.stashes.map(stash => (
             <span key={stash.selector} className={css.metaStash} title={`${stash.message} · ${stash.author}`}>
               {stash.selector}
@@ -766,30 +788,31 @@ function SettingsPanel({ settings, onChange, onClose }: {
   readonly onChange: (next: GitGraphDisplaySettings) => void
   readonly onClose: () => void
 }) {
+  const t = useText()
   const toggle = (key: 'showDate' | 'showAuthor' | 'showHash') => onChange({ ...settings, [key]: !settings[key] })
   return (
     <div className={css.settingsPanel} data-settings-panel>
-      <div className={css.settingsField}><label><input type="checkbox" checked={settings.showDate} onChange={() => toggle('showDate')} />显示日期列</label></div>
-      <div className={css.settingsField}><label><input type="checkbox" checked={settings.showAuthor} onChange={() => toggle('showAuthor')} />显示作者列</label></div>
-      <div className={css.settingsField}><label><input type="checkbox" checked={settings.showHash} onChange={() => toggle('showHash')} />显示 Hash 列</label></div>
+      <div className={css.settingsField}><label><input type="checkbox" checked={settings.showDate} onChange={() => toggle('showDate')} />{t('settings.showDate')}</label></div>
+      <div className={css.settingsField}><label><input type="checkbox" checked={settings.showAuthor} onChange={() => toggle('showAuthor')} />{t('settings.showAuthor')}</label></div>
+      <div className={css.settingsField}><label><input type="checkbox" checked={settings.showHash} onChange={() => toggle('showHash')} />{t('settings.showHash')}</label></div>
       <div className={css.settingsField}>
-        <label>日期格式
+        <label>{t('settings.dateFormat')}
           <select className={css.select} value={settings.dateFormat} onChange={event => onChange({ ...settings, dateFormat: event.target.value as GraphDateFormat })}>
-            <option value="short">简短</option>
-            <option value="full">完整</option>
-            <option value="local">本地（含周几）</option>
+            <option value="short">{t('settings.short')}</option>
+            <option value="full">{t('settings.full')}</option>
+            <option value="local">{t('settings.local')}</option>
           </select>
         </label>
       </div>
       <div className={css.settingsField}>
-        <label>图样式
+        <label>{t('settings.graphStyle')}
           <select className={css.select} value={settings.graphStyle} onChange={event => onChange({ ...settings, graphStyle: event.target.value as GraphStyle })}>
-            <option value="full">完整</option>
-            <option value="compact">紧凑</option>
+            <option value="full">{t('settings.full')}</option>
+            <option value="compact">{t('settings.compact')}</option>
           </select>
         </label>
       </div>
-      <button type="button" className={css.secondaryButton} onClick={onClose}>关闭设置</button>
+      <button type="button" className={css.secondaryButton} onClick={onClose}>{t('settings.close')}</button>
     </div>
   )
 }
@@ -801,17 +824,23 @@ function FindBar({ count, index, onPrev, onNext, onClear }: {
   readonly onNext: () => void
   readonly onClear: () => void
 }) {
+  const t = useText()
   return (
     <div className={css.findBar} data-find-bar>
-      <span className={css.findCount}>{count === 0 ? '无匹配' : `${index + 1}/${count}`}</span>
-      <button type="button" className={css.secondaryButton} onClick={onPrev} disabled={count === 0}>◂ 上一个</button>
-      <button type="button" className={css.secondaryButton} onClick={onNext} disabled={count === 0}>下一个 ▸</button>
-      <button type="button" className={css.secondaryButton} onClick={onClear}>清除</button>
+      <span className={css.findCount}>{count === 0 ? t('find.noMatches') : `${index + 1}/${count}`}</span>
+      <button type="button" className={css.secondaryButton} onClick={onPrev} disabled={count === 0}>{t('find.previous')}</button>
+      <button type="button" className={css.secondaryButton} onClick={onNext} disabled={count === 0}>{t('find.next')}</button>
+      <button type="button" className={css.secondaryButton} onClick={onClear}>{t('find.clear')}</button>
     </div>
   )
 }
 
-export function GitGraphView({ read, readCommit, readFileDiff, readWorkingTree, readWorkingTreeFile, compare, metadata }: Props) {
+export function GitGraphView(props: Props) {
+  return <TextContext.Provider value={props.t}><GitGraphContent {...props} /></TextContext.Provider>
+}
+
+function GitGraphContent({ read, readCommit, readFileDiff, readWorkingTree, readWorkingTreeFile, compare, metadata }: Props) {
+  const t = useText()
   const [snapshot, setSnapshot] = useState<GitGraphSnapshot | undefined>()
   const [selectedHash, setSelectedHash] = useState<string>()
   const [searchText, setSearchText] = useState('')
@@ -842,26 +871,27 @@ export function GitGraphView({ read, readCommit, readFileDiff, readWorkingTree, 
   const sectionRef = useRef<HTMLElement>(null)
   const inlineRef = useRef<HTMLDivElement>(null)
   const [inlineHeight, setInlineHeight] = useState(0)
-  // Tracks the search text a full-range Host reload was last triggered with, so
-  // the debounced search effect never re-fires from a `loading` toggle.
-  const lastSearchedRef = useRef<string>('')
+  // Only the newest query may replace the graph, including after unmount.
+  const querySequence = useRef(0)
 
-  const load = useCallback(async (request: GitGraphInput) => {
+  const load = useCallback(async (request: GitGraphQuery) => {
+    const sequence = ++querySequence.current
     setLoading(true)
     setError(undefined)
     try {
       const result = await read(request)
+      if (sequence !== querySequence.current) return
       if (!result.ok) throw new Error(result.error.message)
       setSnapshot(result.value)
       setSelectedHash(current => result.value.commits.some(commit => commit.hash === current) ? current : result.value.commits[0]?.hash)
     } catch (cause: unknown) {
-      setError(cause instanceof Error ? cause.message : String(cause))
+      if (sequence === querySequence.current) setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
-      setLoading(false)
+      if (sequence === querySequence.current) setLoading(false)
     }
   }, [read])
 
-  const buildRequest = useCallback((max: number, emittedSearch: string): GitGraphInput => {
+  const buildRequest = useCallback((max: number, emittedSearch: string): GitGraphQuery => {
     const globs = branchGlob.split(',').map(item => item.trim()).filter(item => item.length > 0)
     return {
       maxCommits: max,
@@ -876,9 +906,10 @@ export function GitGraphView({ read, readCommit, readFileDiff, readWorkingTree, 
   const refresh = useCallback(() => void load(buildRequest(maxCommits, search)), [load, buildRequest, maxCommits, search])
 
   useEffect(() => {
-    void load(buildRequest(PAGE_SIZE, ''))
-    // Mount only.
-  }, [load, buildRequest])
+    void load(buildRequest(maxCommits, search))
+  }, [load, buildRequest, maxCommits, search])
+
+  useEffect(() => () => { querySequence.current += 1 }, [read])
 
   useEffect(() => {
     let cancelled = false
@@ -906,24 +937,13 @@ export function GitGraphView({ read, readCommit, readFileDiff, readWorkingTree, 
     return () => { cancelled = true }
   }, [showWorkingTree, readWorkingTree])
 
+  // Debounce only text; sorting and branch filters preserve the emitted query.
   useEffect(() => {
-    // Debounce the emitted full-range search. A ref guard means a completed
-    // load (which flips `loading`) never re-schedules another reload — without
-    // it, every finished load would restart this debounce and loop forever.
-    const text = searchText.trim()
-    if (text === lastSearchedRef.current) return
     const timer = setTimeout(() => {
-      lastSearchedRef.current = text
+      setSearch(searchText.trim())
       setMaxCommits(PAGE_SIZE)
-      void load(buildRequest(PAGE_SIZE, text))
     }, 350)
     return () => clearTimeout(timer)
-  }, [searchText, load, buildRequest])
-
-  // Search changes trigger a full-range Host query; keep the debounced copy in
-  // sync so the ordering of committed search vs scroll is stable.
-  useEffect(() => {
-    setSearch(searchText.trim())
   }, [searchText])
 
   const visibleCommits = useMemo(() => {
@@ -931,7 +951,7 @@ export function GitGraphView({ read, readCommit, readFileDiff, readWorkingTree, 
     return snapshot.commits.filter(commit => refMatches(commit, refFilter))
   }, [refFilter, snapshot])
   const layout = useMemo(() => layoutGraph(visibleCommits), [visibleCommits])
-  const canLoadMore = snapshot !== undefined && snapshot.state === 'ready' && snapshot.hasMore
+  const canLoadMore = snapshot !== undefined && snapshot.state === 'ready' && snapshot.hasMore && maxCommits < MAX_COMMITS
   const hasGraphRows = snapshot !== undefined && (visibleCommits.length > 0 || snapshot.workingTree.changed)
 
   // Only one inline expansion is open at a time (like vscode-git-graph):
@@ -977,7 +997,6 @@ export function GitGraphView({ read, readCommit, readFileDiff, readWorkingTree, 
   const loadMore = () => {
     const nextMax = Math.min(MAX_COMMITS, maxCommits + PAGE_SIZE)
     setMaxCommits(nextMax)
-    void load(buildRequest(nextMax, search))
   }
 
   // Load per-repository display settings once the graph path is known.
@@ -1023,27 +1042,27 @@ export function GitGraphView({ read, readCommit, readFileDiff, readWorkingTree, 
     setFindIndex(current => (current + delta + count) % count)
   }
 
-  // Keyboard navigation: ArrowUp/Down cycle rows, Home/H jump to HEAD, Cmd/Ctrl+F
-  // focuses the Find Bar, and Cmd/Ctrl+S toggles the settings panel.
+  // Shortcuts belong to this page; never intercept typing in another DSH pane.
   useEffect(() => {
     const section = sectionRef.current
     if (section === null) return
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.target !== section && !(event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement || event.target instanceof HTMLTextAreaElement)) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
+        event.preventDefault()
+        if (event.shiftKey) setShowSettings(current => !current)
+        else { setFindOpen(true); setFindIndex(0) }
         return
       }
-      if (findOpen || findText.length > 0) return
-      const rows = visibleCommits
-      if (rows.length === 0) return
-      const idx = rows.findIndex(commit => commit.hash === selectedHash)
-      if (event.key === 'ArrowDown') {
+      const target = event.target
+      if (target instanceof HTMLElement && target.closest('input, select, textarea, [contenteditable="true"]') !== null) return
+      if (findOpen || findText.length > 0 || visibleCommits.length === 0) return
+      const index = visibleCommits.findIndex(commit => commit.hash === selectedHash)
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()
-        setSelectedHash(idx >= 0 ? (rows[idx + 1]?.hash ?? rows[0]?.hash) : rows[0]?.hash)
-      } else if (event.key === 'ArrowUp') {
-        event.preventDefault()
-        setSelectedHash(idx > 0 ? (rows[idx - 1]?.hash ?? rows[0]?.hash) : rows[0]?.hash)
+        const nextIndex = event.key === 'ArrowDown' ? (index + 1) % visibleCommits.length : Math.max(0, index - 1)
+        setSelectedHash(visibleCommits[nextIndex]?.hash)
       } else if (event.key.toLowerCase() === 'h') {
-        const head = rows.find(commit => commit.isHead)
+        const head = visibleCommits.find(commit => commit.isHead)
         if (head !== undefined) setSelectedHash(head.hash)
       }
     }
@@ -1051,62 +1070,55 @@ export function GitGraphView({ read, readCommit, readFileDiff, readWorkingTree, 
     return () => section.removeEventListener('keydown', onKeyDown)
   }, [visibleCommits, selectedHash, findOpen, findText])
 
-  // Global Cmd/Ctrl+F to open the Find Bar, Cmd/Ctrl+Shift+F to open settings.
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
-        if (!event.shiftKey) {
-          event.preventDefault()
-          setFindOpen(true)
-          setFindIndex(0)
-        } else {
-          event.preventDefault()
-          setShowSettings(current => !current)
-        }
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
+  // Share the exact column definition with the header, commits and worktree row.
+  const columns = ['minmax(240px, 1fr)']
+  let rowMin = 252
+  if (display.showDate) { columns.push('100px'); rowMin += 108 }
+  if (display.showAuthor) { columns.push('120px'); rowMin += 128 }
+  if (display.showHash) { columns.push('76px'); rowMin += 84 }
+  const columnStyle: CSSProperties & { '--git-graph-columns': string; '--git-graph-row-min': string } = {
+    '--git-graph-columns': columns.join(' '),
+    '--git-graph-row-min': `${rowMin}px`,
+  }
 
   return (
-    <section ref={sectionRef} className={css.card} data-git-graph data-graph-style={display.graphStyle}>
+    <section ref={sectionRef} tabIndex={0} aria-label={t('view.title')} style={columnStyle} className={css.card} data-git-graph data-graph-style={display.graphStyle}>
       <header className={css.header}>
         <div className={css.titleBlock}>
-          <strong>Git Graph</strong>
-          <span className={css.path}>{snapshot?.path ?? '正在读取当前工作区…'}</span>
+          <strong>{t('view.title')}</strong>
+          <span className={css.path}>{snapshot?.path ?? t('status.loadingWorkspace')}</span>
         </div>
-        {snapshot !== undefined && <span className={snapshot.workingTree.changed ? css.dirty : css.clean}>{snapshot.workingTree.summary}</span>}
+        {snapshot !== undefined && <span className={snapshot.workingTree.changed ? css.dirty : css.clean}>{snapshot.state === 'not-git' ? t('status.notGit') : snapshot.workingTree.changed ? t('status.dirty') : t('status.clean')}</span>}
       </header>
 
-      <div className={css.toolbar} role="toolbar" aria-label="Git graph controls">
-        <input className={css.search} type="search" value={searchText} onChange={event => setSearchText(event.target.value)} placeholder="搜索提交、作者、引用或日期（全范围）" aria-label="Search commits" />
-        <input className={css.search} type="text" value={branchGlob} onChange={event => setBranchGlob(event.target.value)} placeholder="分支过滤，逗号分隔（如 main,release-*）" aria-label="Branch glob filter" />
-        <select className={css.select} value={refFilter} onChange={event => setRefFilter(event.target.value as RefFilter)} aria-label="Filter references">
-          <option value="all">全部引用</option>
-          <option value="head">本地分支</option>
-          <option value="remote">远程分支</option>
-          <option value="tag">标签</option>
+      <div className={css.toolbar} role="toolbar" aria-label={t('toolbar.aria')}>
+        <input className={css.search} type="search" value={searchText} onChange={event => setSearchText(event.target.value)} placeholder={t('toolbar.searchPlaceholder')} aria-label={t('toolbar.search')} />
+        <input className={css.search} type="text" value={branchGlob} onChange={event => setBranchGlob(event.target.value)} placeholder={t('toolbar.branchPlaceholder')} aria-label={t('toolbar.branch')} />
+        <select className={css.select} value={refFilter} onChange={event => setRefFilter(event.target.value as RefFilter)} aria-label={t('toolbar.refFilter')}>
+          <option value="all">{t('toolbar.allRefs')}</option>
+          <option value="head">{t('toolbar.localBranches')}</option>
+          <option value="remote">{t('toolbar.remoteBranches')}</option>
+          <option value="tag">{t('metadata.tags')}</option>
         </select>
-        <select className={css.select} value={sort} onChange={event => setSort(event.target.value as 'date' | 'author-date' | 'topological')} aria-label="Commit order">
-          <option value="date">日期排序</option>
-          <option value="author-date">作者日期排序</option>
-          <option value="topological">拓扑排序</option>
+        <select className={css.select} value={sort} onChange={event => setSort(event.target.value as 'date' | 'author-date' | 'topological')} aria-label={t('toolbar.sort')}>
+          <option value="date">{t('toolbar.sortDate')}</option>
+          <option value="author-date">{t('toolbar.sortAuthorDate')}</option>
+          <option value="topological">{t('toolbar.sortTopological')}</option>
         </select>
-        <label className={css.check}><input type="checkbox" checked={includeAll} onChange={event => setIncludeAll(event.target.checked)} />全部 refs</label>
-        <label className={css.check}><input type="checkbox" checked={firstParent} onChange={event => setFirstParent(event.target.checked)} />仅首父提交</label>
-        <button type="button" className={css.secondaryButton} onClick={() => setFindOpen(current => !current)}>查找</button>
-        <button type="button" className={css.secondaryButton} onClick={() => setShowSettings(current => !current)}>设置</button>
-        <button type="button" className={css.primaryButton} onClick={refresh} disabled={loading}>{loading ? '读取中…' : '刷新'}</button>
+        <label className={css.check}><input type="checkbox" checked={includeAll} onChange={event => setIncludeAll(event.target.checked)} />{t('toolbar.includeAll')}</label>
+        <label className={css.check}><input type="checkbox" checked={firstParent} onChange={event => setFirstParent(event.target.checked)} />{t('toolbar.firstParent')}</label>
+        <button type="button" className={css.secondaryButton} onClick={() => setFindOpen(current => !current)}>{t('toolbar.find')}</button>
+        <button type="button" className={css.secondaryButton} onClick={() => setShowSettings(current => !current)}>{t('toolbar.settings')}</button>
+        <button type="button" className={css.primaryButton} onClick={refresh} disabled={loading}>{loading ? t('toolbar.loading') : t('toolbar.refresh')}</button>
       </div>
 
       {findOpen && (
         <div className={css.findContainer}>
           <div className={css.findInputRow}>
-            <input className={css.findInput} type="search" value={findText} onChange={event => { setFindText(event.target.value); setFindIndex(0) }} placeholder="在当前结果中查找提交…" autoFocus aria-label="Find commits" />
-            <label className={css.check}><input type="checkbox" checked={findCase} onChange={event => setFindCase(event.target.checked)} />区分大小写</label>
-            <label className={css.check}><input type="checkbox" checked={findRegex} onChange={event => { setFindRegex(event.target.checked); setFindIndex(0) }} />正则</label>
-            <button type="button" className={css.primaryButton} onClick={() => setFindOpen(false)}>关闭</button>
+            <input className={css.findInput} type="search" value={findText} onChange={event => { setFindText(event.target.value); setFindIndex(0) }} placeholder={t('find.placeholder')} autoFocus aria-label={t('find.aria')} />
+            <label className={css.check}><input type="checkbox" checked={findCase} onChange={event => setFindCase(event.target.checked)} />{t('find.case')}</label>
+            <label className={css.check}><input type="checkbox" checked={findRegex} onChange={event => { setFindRegex(event.target.checked); setFindIndex(0) }} />{t('find.regex')}</label>
+            <button type="button" className={css.primaryButton} onClick={() => setFindOpen(false)}>{t('common.close')}</button>
           </div>
           <FindBar count={findMatches.length} index={findMatches.length === 0 ? 0 : findIndex} onPrev={() => findStep(-1)} onNext={() => findStep(1)} onClear={() => { setFindText(''); setFindIndex(0) }} />
         </div>
@@ -1115,35 +1127,35 @@ export function GitGraphView({ read, readCommit, readFileDiff, readWorkingTree, 
         <SettingsPanel settings={display} onChange={setDisplay} onClose={() => setShowSettings(false)} />
       )}
 
-      {error !== undefined && <div className={css.error} role="alert">读取 Git Graph 失败：{error}</div>}
-      {loading && snapshot === undefined && <div className={css.pending}>正在读取 Git Graph…</div>}
-      {!loading && error === undefined && snapshot !== undefined && visibleCommits.length === 0 && !snapshot.workingTree.changed && (
+      {error !== undefined && <div className={css.error} role="alert">{t('error.graph', { message: error })}</div>}
+      {loading && snapshot === undefined && <div className={css.pending}>{t('status.loadingGraph')}</div>}
+      {!loading && error === undefined && snapshot !== undefined && visibleCommits.length === 0 && (
         <div className={css.pending}>
-          {snapshot.state === 'not-git' && '当前目录不是 Git 仓库。'}
-          {snapshot.state === 'empty' && '当前是 Git 仓库，但还没有任何提交。'}
-          {snapshot.state === 'ready' && '当前筛选条件没有匹配的提交。'}
+          {snapshot.state === 'not-git' && t('status.notGit')}
+          {snapshot.state === 'empty' && t('status.empty')}
+          {snapshot.state === 'ready' && t('status.noMatches')}
         </div>
       )}
 
       {hasGraphRows && snapshot !== undefined && (
         <>
           <div className={css.graphPanel}>
-            <div className={css.graphHeader}>Graph</div>
+            <div className={css.graphHeader}>{t('column.graph')}</div>
             <div className={css.commitHeader} aria-hidden="true">
-              <span>Description</span>
-              {display.showDate && <span>Date</span>}
-              {display.showAuthor && <span>Author</span>}
-              {display.showHash && <span>Commit</span>}
+              <span>{t('column.description')}</span>
+              {display.showDate && <span>{t('column.date')}</span>}
+              {display.showAuthor && <span>{t('column.author')}</span>}
+              {display.showHash && <span>{t('column.commit')}</span>}
             </div>
             <GraphSvg layout={layout} workingTreeChanged={snapshot.workingTree.changed} selectedHash={selectedHash} gapAfterRow={expandedRow} gapHeight={inlineHeight} onSelect={selectCommit} />
             <div className={css.commitList}>
               {snapshot.workingTree.changed && (
                 <>
-                  <button type="button" className={css.workingTreeRow} title="查看未提交变更" onClick={toggleWorkingTree} aria-expanded={showWorkingTree}>
-                    <span className={css.commitDescription}><span className={css.headDot} />未提交变更</span>
-                    <span className={css.commitDate}>—</span>
-                    <span className={css.commitAuthor}>—</span>
-                    <span className={`${css.hash} ${css.commitHash}`}>WORKTREE</span>
+                  <button type="button" className={css.workingTreeRow} title={t('worktree.open')} onClick={toggleWorkingTree} aria-expanded={showWorkingTree}>
+                    <span className={css.commitDescription}><span className={css.headDot} />{t('worktree.title')}</span>
+                    {display.showDate && <span className={css.commitDate}>—</span>}
+                    {display.showAuthor && <span className={css.commitAuthor}>—</span>}
+                    {display.showHash && <span className={`${css.hash} ${css.commitHash}`}>WORKTREE</span>}
                   </button>
                   {showWorkingTree && (
                     <div className={css.inlineDetails} ref={inlineRef} data-inline-details>
@@ -1184,7 +1196,7 @@ export function GitGraphView({ read, readCommit, readFileDiff, readWorkingTree, 
               ))}
             </div>
           </div>
-          {canLoadMore && <button type="button" className={css.loadMore} onClick={loadMore} disabled={loading}>{loading ? '读取中…' : '加载更多提交'}</button>}
+          {canLoadMore && <button type="button" className={css.loadMore} onClick={loadMore} disabled={loading}>{loading ? t('toolbar.loading') : t('toolbar.loadMore')}</button>}
           <MetadataStrip metadata={repoMetadata} />
         </>
       )}

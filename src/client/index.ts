@@ -1,23 +1,34 @@
-/** Browser half: one independent Git Graph tab beside Chat and Trajectory. */
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+/** Browser half: a session-bound Git Graph page in the native right sidebar. */
+import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-gateway/client'
-import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+import type {} from '@deepseek-ai/dsh-client-locale/client'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import { TYPERT_REMOTE } from '../typert.remote-client.ts'
-import { GitGraphView } from './GitGraphView.tsx'
+import { GitGraphView, type GitGraphViewInjected } from './GitGraphView.tsx'
 import { installGitGraphStyles } from './styles.ts'
+import { en, NS, zh } from './locales.ts'
 
-export const inject = ['remote', 'slots']
+export const inject = ['remote', 'slots', 'locale', 'sidebarRightTabs']
 
-export function apply(ctx: ClientContext): void {
+export function apply(ctx: Context): void {
   ctx.effect(installGitGraphStyles)
+  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'git-graph dictionaries')
+  const t = ctx.locale.bind(NS)
   const remoteReady = ctx.remote.$mount(TYPERT_REMOTE)
   ctx.effect(() => remoteReady, 'git-graph remote')
-  ctx.slots.inject('conversation.view', () => ctx.slots.register({
-    name: 'conversation.view',
-    id: 'git-graph',
-    order: 20,
-    label: 'Git Graph',
-    inject: sessionId => {
+  ctx.effect(() => ctx.sidebarRightTabs.register({
+    id: 'dsh-git-graph',
+    kind: 'git-graph',
+    title: () => t('view.title'),
+    guide: [{ id: 'git-graph', order: 20, title: () => t('view.title'), description: () => t('guide.description') }],
+  }), 'git-graph tab type')
+  ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
+    name: 'sidebar.right.pane.tab',
+    key: 'dsh-git-graph',
+    locale: NS,
+    inject: (sessionId): GitGraphViewInjected => {
       const remote = async () => {
         await remoteReady
         return ctx.get('remote.gitGraph') as typeof ctx.remote.gitGraph
@@ -33,5 +44,6 @@ export function apply(ctx: ClientContext): void {
         metadata: async () => (await remote()).metadata(sessionId, {}),
       }
     },
-  }, GitGraphView))
+  }, GitGraphView)), 'git-graph tab body')
+  console.info('[git-graph] Native sidebar registered')
 }

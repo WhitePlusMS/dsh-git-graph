@@ -63,6 +63,9 @@ export interface GitGraphInput {
   readonly sort?: GitGraphSort
 }
 
+/** Browser queries read the current session workspace; only the model tool accepts a path. */
+export type GitGraphQuery = Omit<GitGraphInput, 'path'>
+
 /* ------------------------------------------------------------------ *
  * Phase 0 read-only data pipeline types.
  * ------------------------------------------------------------------ */
@@ -230,6 +233,8 @@ export interface GitGraphFileDiff {
   readonly path: string
   readonly oldPath: string
   readonly status: GitGraphFileChange['type']
+  /** True when Git reports binary content rather than a textual patch. */
+  readonly binary: boolean
   readonly additions: number
   readonly deletions: number
   /** A context line where the file is entirely added/deleted has no head. */
@@ -248,9 +253,7 @@ export interface GitGraphWorkingTreeChanges {
 }
 
 /** Request body for `gitGraph/readWorkingTree` (the working directory is implicit). */
-export interface GitGraphWorkingTreeRequest {
-  readonly includeUntracked?: boolean
-}
+export type GitGraphWorkingTreeRequest = Record<string, never>
 
 /** Request body for `gitGraph/readWorkingTreeFile`: diff one file vs the working tree. */
 export interface GitGraphWorkingTreeFileRequest {
@@ -275,3 +278,6 @@ export interface GitGraphMetadata {
   readonly tags: GitGraphTag[]
   readonly stashes: GitGraphStash[]
 }
+
+/** Empty request for repository-level metadata in the current session. */
+export type GitGraphMetadataRequest = Record<string, never>

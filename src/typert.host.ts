@@ -19,8 +19,7 @@ const hostCommitSchema = z.object({
   isHead: z.boolean(),
 }).strict()
 
-const hostInputSchema = z.object({
-  path: z.string().optional(),
+const hostQuerySchema = z.object({
   maxCommits: z.number().int().min(1).max(MAX_COMMITS).optional(),
   all: z.boolean().optional(),
   firstParent: z.boolean().optional(),
@@ -98,6 +97,7 @@ const hostFileDiffSchema = z.object({
   path: z.string(),
   oldPath: z.string(),
   status: z.enum(['A', 'M', 'D', 'R', 'U']),
+  binary: z.boolean(),
   additions: z.number().int().min(0),
   deletions: z.number().int().min(0),
   lines: z.array(hostDiffLineSchema),
@@ -153,9 +153,9 @@ const hostEmptyInputSchema = z.object({}).strict()
 export const gitGraphHostDescriptors = [
   createGitGraphInvocation({
     method: 'read',
-    inputSymbol: 'GitGraphInput',
+    inputSymbol: 'GitGraphQuery',
     resultSymbol: 'GitGraphSnapshot',
-    schemas: { input: hostInputSchema, result: hostSnapshotSchema, sessionId: z.string() },
+    schemas: { input: hostQuerySchema, result: hostSnapshotSchema, sessionId: z.string() },
   }),
   createGitGraphInvocation({
     method: 'readCommit',

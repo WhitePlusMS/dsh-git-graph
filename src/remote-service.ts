@@ -9,7 +9,7 @@ import type {
   GitGraphFileDiff,
   GitGraphFileDiffRequest,
   GitGraphFileRequest,
-  GitGraphInput,
+  GitGraphQuery,
   GitGraphMetadata,
   GitGraphSnapshot,
   GitGraphWorkingTreeChanges,
@@ -23,7 +23,7 @@ function workspaceOf(agent: Agent): string {
   return agent.session.header.cwd || process.cwd()
 }
 
-/** Read-only Host service for the independent conversation Git Graph view. */
+/** Read-only Host service for the session-bound right-sidebar Git Graph page. */
 export class GitGraphRemoteService extends TypertRemoteService {
   private readonly hostContext: Context
 
@@ -32,7 +32,7 @@ export class GitGraphRemoteService extends TypertRemoteService {
     this.hostContext = ctx
   }
 
-  async read(agent: Agent, request: GitGraphInput, signal: AbortSignal): Promise<GitGraphSnapshot> {
+  async read(agent: Agent, request: GitGraphQuery, signal: AbortSignal): Promise<GitGraphSnapshot> {
     return loadGitGraph(this.hostContext, request, { agent, signal })
   }
 

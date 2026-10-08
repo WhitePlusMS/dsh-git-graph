@@ -1,8 +1,8 @@
 import type { InvocationDescriptor, TypertSchema } from '@deepseek-ai/dsh-typert-protocol';
-import type { GitGraphFileDiff, GitGraphInput, GitGraphSnapshot } from './domain.js';
+import type { GitGraphFileDiff, GitGraphQuery, GitGraphSnapshot } from './domain.js';
 export declare const TYPERT_PACKAGE = "dsh-git-graph";
 /** Strict wire schemas intentionally use only the Typert `.parse()` contract. */
-export declare const gitGraphInputSchema: TypertSchema<GitGraphInput>;
+export declare const gitGraphQuerySchema: TypertSchema<GitGraphQuery>;
 export declare const gitGraphSnapshotSchema: TypertSchema<GitGraphSnapshot>;
 export declare const gitGraphCommitRequestSchema: TypertSchema<import('./domain.js').GitGraphCommitRequest>;
 export declare const gitGraphCommitDetailsSchema: TypertSchema<import('./domain.js').GitGraphCommitDetails>;

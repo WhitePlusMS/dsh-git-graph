@@ -7,4 +7,4 @@ export declare const name = "ui-git-graph";
 export declare const inject: string[];
 export { apply } from './runtime.js';
 export { GitGraphRemoteService } from './remote-service.js';
-export type { GitGraphCommit, GitGraphInput, GitGraphRef, GitGraphSnapshot } from './domain.js';
+export type * from './domain.js';

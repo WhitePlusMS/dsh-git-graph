@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Git Graph",
+    "description": "在原生右侧栏查看当前会话的 Git 历史、文件 Diff 与未提交变更。只读操作。"
+  }
+}

@@ -70,8 +70,8 @@ function summaryText(value: { path: string; state: string; branch: string | null
 
 /** Register the single read-only Git graph tool. */
 export function apply(ctx: Context): void {
-  // The service is session-scoped by the Host context and is read by the
-  // independently mounted Client conversation view through Typert RPC.
+  // The service resolves each request's Agent workspace. Sidebar reads use
+  // Typert RPC directly, independently of the model-facing tool.
   new GitGraphRemoteService(ctx)
 
   ctx.systemPrompt.section({
@@ -114,4 +114,5 @@ export function apply(ctx: Context): void {
       ...args.path === undefined ? {} : { locations: [{ path: args.path, line: 1 }] },
     }),
   }))
+  console.info('[git-graph] Read-only Host service and tool registered')
 }

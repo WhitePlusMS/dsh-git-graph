@@ -1,5 +1,6 @@
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { InvocationDescriptor, TypertSchema } from '@deepseek-ai/dsh-typert-protocol'
-import type { GitGraphCommit, GitGraphDiffLine, GitGraphFileDiff, GitGraphInput, GitGraphRef, GitGraphRepoState, GitGraphSnapshot, GitGraphSort } from './domain.ts'
+import type { GitGraphCommit, GitGraphDiffLine, GitGraphFileDiff, GitGraphQuery, GitGraphRef, GitGraphRepoState, GitGraphSnapshot, GitGraphSort } from './domain.ts'
 import { MAX_COMMITS } from './domain.ts'
 
 export const TYPERT_PACKAGE = 'dsh-git-graph'
@@ -80,11 +81,10 @@ function parseCommit(value: unknown, path: string): GitGraphCommit {
   }
 }
 
-function parseInput(value: unknown): GitGraphInput {
+function parseInput(value: unknown): GitGraphQuery {
   const object = objectAt(value, '$')
-  rejectUnknown(object, ['path', 'maxCommits', 'all', 'firstParent', 'glob', 'search', 'sort'], '$')
-  const result: { path?: string; maxCommits?: number; all?: boolean; firstParent?: boolean; glob?: string[]; search?: string; sort?: GitGraphSort } = {}
-  if (Object.hasOwn(object, 'path')) result.path = stringAt(object.path, '$.path')
+  rejectUnknown(object, ['maxCommits', 'all', 'firstParent', 'glob', 'search', 'sort'], '$')
+  const result: { maxCommits?: number; all?: boolean; firstParent?: boolean; glob?: string[]; search?: string; sort?: GitGraphSort } = {}
   if (Object.hasOwn(object, 'maxCommits')) result.maxCommits = integerAt(object.maxCommits, '$.maxCommits', 1, MAX_COMMITS)
   if (Object.hasOwn(object, 'all')) result.all = booleanAt(object.all, '$.all')
   if (Object.hasOwn(object, 'firstParent')) result.firstParent = booleanAt(object.firstParent, '$.firstParent')
@@ -122,9 +122,9 @@ function parseSnapshot(value: unknown): GitGraphSnapshot {
 }
 
 /** Strict wire schemas intentionally use only the Typert `.parse()` contract. */
-export const gitGraphInputSchema: TypertSchema<GitGraphInput> = { parse: parseInput }
+export const gitGraphQuerySchema: TypertSchema<GitGraphQuery> = { parse: parseInput }
 export const gitGraphSnapshotSchema: TypertSchema<GitGraphSnapshot> = { parse: parseSnapshot }
-const sessionIdSchema: TypertSchema<string> = { parse: value => stringAt(value, '$.agentId') }
+const sessionIdSchema: TypertSchema<SessionId> = { parse: value => stringAt(value, '$.agentId') as SessionId }
 
 /* ------------------------------------------------------------------ *
  * On-demand detail DTO schemas (strict, parse-only).
@@ -257,7 +257,7 @@ function parseDiffLine(value: unknown, path: string): GitGraphDiffLine {
 
 function parseFileDiff(value: unknown): GitGraphFileDiff {
   const object = objectAt(value, '$')
-  rejectUnknown(object, ['hash', 'path', 'oldPath', 'status', 'additions', 'deletions', 'lines'], '$')
+  rejectUnknown(object, ['hash', 'path', 'oldPath', 'status', 'binary', 'additions', 'deletions', 'lines'], '$')
   const status = stringAt(object.status, '$.status')
   if (status !== 'A' && status !== 'M' && status !== 'D' && status !== 'R' && status !== 'U') fail('$.status', 'A, M, D, R, or U')
   return {
@@ -265,6 +265,7 @@ function parseFileDiff(value: unknown): GitGraphFileDiff {
     path: stringAt(object.path, '$.path'),
     oldPath: stringAt(object.oldPath, '$.oldPath'),
     status,
+    binary: booleanAt(object.binary, '$.binary'),
     additions: integerAt(object.additions, '$.additions', 0, Number.MAX_SAFE_INTEGER),
     deletions: integerAt(object.deletions, '$.deletions', 0, Number.MAX_SAFE_INTEGER),
     lines: arrayAt(object.lines, '$.lines').map((entry, index) => parseDiffLine(entry, `$.lines[${index}]`)),
@@ -406,7 +407,7 @@ export function createGitGraphInvocation(spec: InvocationSpec): InvocationDescri
         codec: {
           mode: 'strict',
           typeSymbol: SESSION_ID_TYPE,
-          schema: spec.schemas.sessionId,
+          create: () => spec.schemas.sessionId,
         },
       },
       {
@@ -416,14 +417,14 @@ export function createGitGraphInvocation(spec: InvocationSpec): InvocationDescri
         codec: {
           mode: 'strict',
           typeSymbol: `${TYPERT_PACKAGE}#${spec.inputSymbol}`,
-          schema: spec.schemas.input,
+          create: () => spec.schemas.input,
         },
       },
     ],
     result: {
       mode: 'strict',
       typeSymbol: `${TYPERT_PACKAGE}#${spec.resultSymbol}`,
-      schema: spec.schemas.result,
+      create: () => spec.schemas.result,
     },
   }
 }
@@ -431,9 +432,9 @@ export function createGitGraphInvocation(spec: InvocationSpec): InvocationDescri
 /** Client descriptors use the local parse-only schemas to keep the bundle closed. */
 export const gitGraphInvocation = createGitGraphInvocation({
   method: 'read',
-  inputSymbol: 'GitGraphInput',
+  inputSymbol: 'GitGraphQuery',
   resultSymbol: 'GitGraphSnapshot',
-  schemas: { input: gitGraphInputSchema, result: gitGraphSnapshotSchema, sessionId: sessionIdSchema },
+  schemas: { input: gitGraphQuerySchema, result: gitGraphSnapshotSchema, sessionId: sessionIdSchema },
 })
 
 export const gitGraphReadCommitInvocation = createGitGraphInvocation({
