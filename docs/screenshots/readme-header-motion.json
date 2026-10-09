@@ -1,0 +1,25 @@
+{
+  "width": 1200,
+  "fps": 30,
+  "duration": 5.0,
+  "colors": 256,
+  "dither": "none",
+  "clip_to_base_alpha": true,
+  "max_size_mb": 2.0,
+  "reveals": [
+    {
+      "id": "project-icon",
+      "axis": "y",
+      "start": 0.05,
+      "end": 1.25,
+      "exit": { "start": 3.75, "end": 4.9 }
+    }
+  ],
+  "layers": [
+    {
+      "id": "project-title",
+      "enter": { "start": 0.25, "end": 1.1, "from": [0, 0] },
+      "exit": { "start": 3.75, "end": 4.9, "to": [0, 0] }
+    }
+  ]
+}

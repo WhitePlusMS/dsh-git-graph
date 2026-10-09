@@ -1,30 +1,44 @@
-# `dsh-git-graph`
+<p align="center">
+  <img src="docs/screenshots/readme-header.gif" width="100%" alt="dsh-git-graph — read-only Git Graph for DeepSeek Harness Web">
+</p>
 
-[中文说明](README.zh.md)
+<p align="center">
+  <strong>Version 0.4.0</strong> · DSH 0.2.0-rc.2 · <a href="LICENSE">MIT</a><br>
+  <a href="README.zh.md">中文说明</a> · <a href="docs/screenshots/readme-header.svg">Static title</a>
+</p>
 
 A read-only Git Graph for the native right sidebar of DeepSeek Harness Web. Browse your workspace's history, branches, and file changes without an API key or conversation message.
 
-**Version 0.4.0 · DSH 0.2.0-rc.2**
-
-[Install](#install-or-update) · [Usage](#usage) · [Uninstall](#uninstall) · [Documentation](#documentation)
+<p align="center">
+  <a href="#install-or-update">Install</a> · <a href="#usage">Usage</a> · <a href="#keyboard-controls">Keyboard controls</a> · <a href="#scope">Scope</a> · <a href="#uninstall">Uninstall</a> · <a href="#documentation">Documentation</a>
+</p>
 
 ![Real author avatars and inline commit details](docs/screenshots/display-avatar.png)
 
+<details>
+<summary>More screenshots: English light theme and 360px sidebar</summary>
+
+![English light theme](docs/screenshots/display-light-en.png)
+
+![360px sidebar](docs/screenshots/display-360.png)
+
+</details>
+
 ## Features
 
-- Commit topology, branches, tags, HEAD, search, and history filters.
-- Inline commit details with author/committer dates, parents, references, signature status, and copying.
-- Three reference layouts and combined labels for matching local/remote branches at the same commit.
-- File tree/list views, per-file diffs, and uncommitted changes; compare the changed-file lists of two commits.
-- Commit messages with links, bold, italic, and inline code; real GitHub/Gravatar author avatars.
-- Resizable columns, date display options, compact rows, line styles, and colour presets, saved per repository.
-- Chinese/English, light/dark themes, pane fullscreen, and narrow-screen support.
+- **History** — Commit topology, branches, tags, HEAD, search, and history filters.
+- **Commit details** — Inline details with author/committer dates, parents, references, signature status, and copying.
+- **References** — Three reference layouts and combined labels for matching local/remote branches at the same commit.
+- **File changes** — File tree/list views, per-file diffs, and uncommitted changes; compare the changed-file lists of two commits.
+- **Messages & authors** — Commit messages with links, bold, italic, and inline code; real GitHub/Gravatar author avatars.
+- **Display settings** — Resizable columns, date display options, compact rows, line styles, and colour presets, saved per repository.
+- **Interface** — Chinese/English, light/dark themes, pane fullscreen, and narrow-screen support.
 
 ## Install or update
 
 Requires DSH **0.2.0-rc.2**, the `dsh` CLI, and Git installed on the DSH Host.
 
-Once the `v0.4.0` tag is published to GitHub:
+Install `v0.4.0` from its GitHub tag:
 
 ```powershell
 dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/archive/refs/tags/v0.4.0.tar.gz
@@ -73,20 +87,13 @@ Shortcuts apply while focus is inside Git Graph. Normal navigation keys do not i
 - Initially loads 100 commits, with manual loading up to 500. Search scans up to 2,000 commits; Find searches loaded results. Reference-type filters show commits directly carrying the selected kind of label.
 - Two-commit comparison shows file lists. Side-by-side diffs, full revision text, tag signature verification, and stash diffs are not available. Tag/stash entries provide summaries and copying.
 
-<details>
-<summary>More screenshots: English light theme and 360px sidebar</summary>
-
-![English light theme](docs/screenshots/display-light-en.png)
-
-![360px sidebar](docs/screenshots/display-360.png)
-
-</details>
-
 ## Documentation
 
 - [Development, local installation, and API details](docs/DEVELOPMENT.md)
 - [Display acceptance report](docs/DISPLAY_TEST_REPORT.md)
 - [P0 report](docs/P0_TEST_REPORT.md) · [DSH adaptation report](docs/DSH_0.2_TEST_REPORT.md)
+
+---
 
 Inspired by [vscode-git-graph](https://github.com/mhutchie/vscode-git-graph). Thanks to its authors and contributors.
 
