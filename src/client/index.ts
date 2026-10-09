@@ -34,6 +34,7 @@ export function apply(ctx: Context): void {
         return ctx.get('remote.gitGraph') as typeof ctx.remote.gitGraph
       }
       return {
+        avatars: async (request, signal) => (await remote()).avatars(sessionId, request, signal),
         read: async request => (await remote()).read(sessionId, request),
         readCommit: async request => (await remote()).readCommit(sessionId, request),
         readFile: async request => (await remote()).readFile(sessionId, request),

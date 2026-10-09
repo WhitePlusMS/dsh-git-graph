@@ -9,6 +9,9 @@ export type GraphDateFormat = 'short' | 'full' | 'local'
 export type GraphStyle = 'compact' | 'full'
 export type GraphLineStyle = 'curved' | 'straight'
 export type GraphPalette = 'classic' | 'accessible'
+export type ReferenceAlignment = 'normal' | 'tags-right' | 'graph'
+export type DateSource = 'author' | 'committer'
+export type AvatarSource = 'auto' | 'gravatar'
 export type CommitColumn = 'description' | 'date' | 'author' | 'hash'
 
 /** Width bounds apply equally to persisted settings, pointer and keyboard input. */
@@ -19,6 +22,7 @@ export function clampColumnWidth(column: CommitColumn, width: number): number {
   const [min, max] = COLUMN_LIMITS[column]
   return Math.round(Math.min(max, Math.max(min, width)))
 }
+
 
 export interface GitGraphDisplaySettings {
   readonly showDate: boolean
@@ -31,6 +35,12 @@ export interface GitGraphDisplaySettings {
   readonly columnWidths: Readonly<Record<CommitColumn, number>>
   /** Fill available space until the description column is explicitly resized. */
   readonly fitDescription: boolean
+  readonly referenceAlignment: ReferenceAlignment
+  readonly combineReferences: boolean
+  readonly dateSource: DateSource
+  readonly richText: boolean
+  readonly showAvatars: boolean
+  readonly avatarSource: AvatarSource
 }
 
 export const DEFAULT_DISPLAY_SETTINGS: GitGraphDisplaySettings = {
@@ -43,6 +53,12 @@ export const DEFAULT_DISPLAY_SETTINGS: GitGraphDisplaySettings = {
   palette: 'classic',
   columnWidths: { description: 360, date: 112, author: 140, hash: 88 },
   fitDescription: true,
+  referenceAlignment: 'normal',
+  combineReferences: true,
+  dateSource: 'author',
+  richText: true,
+  showAvatars: true,
+  avatarSource: 'auto',
 }
 
 const STORAGE_PREFIX = 'dsh-git-graph:s:'
@@ -99,6 +115,13 @@ export function loadDisplaySettings(path: string): GitGraphDisplaySettings {
       palette: parsed.palette === 'accessible' ? 'accessible' : 'classic',
       columnWidths: { description: width('description'), date: width('date'), author: width('author'), hash: width('hash') },
       fitDescription: bool(parsed.fitDescription, DEFAULT_DISPLAY_SETTINGS.fitDescription),
+      referenceAlignment: parsed.referenceAlignment === 'tags-right' || parsed.referenceAlignment === 'graph'
+        ? parsed.referenceAlignment : 'normal',
+      combineReferences: bool(parsed.combineReferences, DEFAULT_DISPLAY_SETTINGS.combineReferences),
+      dateSource: parsed.dateSource === 'committer' ? 'committer' : 'author',
+      richText: bool(parsed.richText, DEFAULT_DISPLAY_SETTINGS.richText),
+      showAvatars: bool(parsed.showAvatars, DEFAULT_DISPLAY_SETTINGS.showAvatars),
+      avatarSource: parsed.avatarSource === 'gravatar' ? 'gravatar' : 'auto',
     }
   } catch {
     return DEFAULT_DISPLAY_SETTINGS

@@ -1,7 +1,7 @@
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { InvocationDescriptor, TypertSchema } from '@deepseek-ai/dsh-typert-protocol'
 import type { GitGraphCommit, GitGraphDiffLine, GitGraphFileDiff, GitGraphQuery, GitGraphRef, GitGraphRepoState, GitGraphSnapshot, GitGraphSort } from './domain.ts'
-import { MAX_COMMITS } from './domain.ts'
+import { MAX_AVATAR_BATCH, MAX_COMMITS } from './domain.ts'
 
 export const TYPERT_PACKAGE = 'dsh-git-graph'
 const SESSION_ID_TYPE = '@deepseek-ai/dsh-session/types#SessionId'
@@ -68,13 +68,14 @@ function parseRef(value: unknown, path: string): GitGraphRef {
 
 function parseCommit(value: unknown, path: string): GitGraphCommit {
   const object = objectAt(value, path)
-  rejectUnknown(object, ['hash', 'parents', 'author', 'email', 'date', 'subject', 'refs', 'isHead'], path)
+  rejectUnknown(object, ['hash', 'parents', 'author', 'email', 'date', 'committerDate', 'subject', 'refs', 'isHead'], path)
   return {
     hash: stringAt(object.hash, `${path}.hash`),
     parents: arrayAt(object.parents, `${path}.parents`).map((parent, index) => stringAt(parent, `${path}.parents[${index}]`)),
     author: stringAt(object.author, `${path}.author`),
     email: stringAt(object.email, `${path}.email`),
     date: stringAt(object.date, `${path}.date`),
+    committerDate: stringAt(object.committerDate, `${path}.committerDate`),
     subject: stringAt(object.subject, `${path}.subject`),
     refs: arrayAt(object.refs, `${path}.refs`).map((ref, index) => parseRef(ref, `${path}.refs[${index}]`)),
     isHead: booleanAt(object.isHead, `${path}.isHead`),
@@ -102,7 +103,7 @@ function parseInput(value: unknown): GitGraphQuery {
 
 function parseSnapshot(value: unknown): GitGraphSnapshot {
   const object = objectAt(value, '$')
-  rejectUnknown(object, ['path', 'state', 'branch', 'head', 'workingTree', 'commits', 'hasMore'], '$')
+  rejectUnknown(object, ['path', 'state', 'branch', 'head', 'remotes', 'workingTree', 'commits', 'hasMore'], '$')
   const workingTree = objectAt(object.workingTree, '$.workingTree')
   rejectUnknown(workingTree, ['changed', 'summary'], '$.workingTree')
   const state = stringAt(object.state, '$.state')
@@ -112,6 +113,7 @@ function parseSnapshot(value: unknown): GitGraphSnapshot {
     state: state as GitGraphRepoState,
     branch: nullableStringAt(object.branch, '$.branch'),
     head: nullableStringAt(object.head, '$.head'),
+    remotes: arrayAt(object.remotes, '$.remotes').map((remote, index) => stringAt(remote, `$.remotes[${index}]`)),
     workingTree: {
       changed: booleanAt(workingTree.changed, '$.workingTree.changed'),
       summary: stringAt(workingTree.summary, '$.workingTree.summary'),
@@ -368,6 +370,36 @@ function parseEmptyInput(_value: unknown): Record<string, never> {
 export const gitGraphMetadataSchema: TypertSchema<import('./domain.ts').GitGraphMetadata> = { parse: parseMetadata }
 export const gitGraphEmptyInputSchema: TypertSchema<Record<string, never>> = { parse: parseEmptyInput }
 
+export const gitGraphAvatarRequestSchema: TypertSchema<import('./domain.ts').GitGraphAvatarRequest> = { parse(value) {
+  const request = objectAt(value, '$')
+  rejectUnknown(request, ['hashes', 'source'], '$')
+  const hashes = arrayAt(request.hashes, '$.hashes').map((hash, index) => hashStringAt(hash, `$.hashes[${index}]`))
+  if (hashes.length === 0 || hashes.length > MAX_AVATAR_BATCH) fail('$.hashes', '1 to 24 commit hashes')
+  const source = stringAt(request.source, '$.source')
+  if (source !== 'auto' && source !== 'gravatar') fail('$.source', 'auto or gravatar')
+  return { hashes, source }
+} }
+
+export const gitGraphAvatarResultSchema: TypertSchema<import('./domain.ts').GitGraphAvatarResult> = { parse(value) {
+  const result = objectAt(value, '$')
+  rejectUnknown(result, ['avatars'], '$')
+  const entries = arrayAt(result.avatars, '$.avatars')
+  if (entries.length > MAX_AVATAR_BATCH) fail('$.avatars', 'at most 24 avatars')
+  return { avatars: entries.map((entry, index) => {
+    const path = `$.avatars[${index}]`
+    const avatar = objectAt(entry, path)
+    rejectUnknown(avatar, ['email', 'image', 'provider'], path)
+    const email = stringAt(avatar.email, `${path}.email`)
+    const image = nullableStringAt(avatar.image, `${path}.image`)
+    const provider = nullableStringAt(avatar.provider, `${path}.provider`)
+    if (email.length > 320) fail(`${path}.email`, 'at most 320 characters')
+    if (image !== null && (image.length > 100000 || !/^data:image\/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+=*$/u.test(image))) fail(`${path}.image`, 'a bounded raster data URL')
+    if (provider !== null && provider !== 'github' && provider !== 'gravatar') fail(`${path}.provider`, 'github, gravatar, or null')
+    if ((image === null) !== (provider === null)) fail(path, 'matching image and provider availability')
+    return { email, image, provider }
+  }) }
+} }
+
 /* ------------------------------------------------------------------ *
  * Generic invocation builder shared by Host and Client faces.
  * ------------------------------------------------------------------ */
@@ -487,6 +519,10 @@ export const gitGraphMetadataInvocation = createGitGraphInvocation({
 })
 
 export const gitGraphDescriptors = [
+  createGitGraphInvocation({
+    method: 'avatars', inputSymbol: 'GitGraphAvatarRequest', resultSymbol: 'GitGraphAvatarResult',
+    schemas: { input: gitGraphAvatarRequestSchema, result: gitGraphAvatarResultSchema, sessionId: sessionIdSchema },
+  }),
   gitGraphInvocation,
   gitGraphReadCommitInvocation,
   gitGraphFileInvocation,

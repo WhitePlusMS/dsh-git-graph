@@ -1,12 +1,14 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { Agent } from '@deepseek-ai/dsh-agent';
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
-import type { GitGraphCommitDetails, GitGraphCompareRequest, GitGraphCompareResult, GitGraphFileContent, GitGraphFileDiff, GitGraphFileDiffRequest, GitGraphFileRequest, GitGraphQuery, GitGraphMetadata, GitGraphSnapshot, GitGraphWorkingTreeChanges, GitGraphWorkingTreeFileRequest, GitGraphWorkingTreeRequest } from './domain.js';
+import type { GitGraphAvatarRequest, GitGraphAvatarResult, GitGraphCommitDetails, GitGraphCompareRequest, GitGraphCompareResult, GitGraphFileContent, GitGraphFileDiff, GitGraphFileDiffRequest, GitGraphFileRequest, GitGraphQuery, GitGraphMetadata, GitGraphSnapshot, GitGraphWorkingTreeChanges, GitGraphWorkingTreeFileRequest, GitGraphWorkingTreeRequest } from './domain.js';
 /** Read-only Host service for the session-bound right-sidebar Git Graph page. */
 export declare class GitGraphRemoteService extends TypertRemoteService {
     private readonly hostContext;
+    private readonly avatarStore;
     constructor(ctx: Context);
     read(agent: Agent, request: GitGraphQuery, signal: AbortSignal): Promise<GitGraphSnapshot>;
+    avatars(agent: Agent, request: GitGraphAvatarRequest, signal: AbortSignal): Promise<GitGraphAvatarResult>;
     readCommit(agent: Agent, request: {
         hash: string;
     }, signal: AbortSignal): Promise<GitGraphCommitDetails>;

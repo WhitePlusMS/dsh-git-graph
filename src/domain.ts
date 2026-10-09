@@ -16,6 +16,8 @@ export interface GitGraphCommit {
   readonly email: string
   /** ISO-8601 author timestamp. */
   readonly date: string
+  /** ISO-8601 committer timestamp, independent of author date. */
+  readonly committerDate: string
   /** Commit subject (first line). */
   readonly subject: string
   readonly refs: GitGraphRef[]
@@ -38,6 +40,8 @@ export interface GitGraphSnapshot {
   readonly state: GitGraphRepoState
   readonly branch: string | null
   readonly head: string | null
+  /** Actual configured remote names; names may contain slashes. */
+  readonly remotes: string[]
   readonly workingTree: {
     readonly changed: boolean
     readonly summary: string
@@ -281,3 +285,19 @@ export interface GitGraphMetadata {
 
 /** Empty request for repository-level metadata in the current session. */
 export type GitGraphMetadataRequest = Record<string, never>
+
+/** Avatar reads are bound to actual commit authors in the current workspace. */
+export const MAX_AVATAR_BATCH = 24
+export interface GitGraphAvatarRequest {
+  readonly hashes: string[]
+  readonly source: 'auto' | 'gravatar'
+}
+export interface GitGraphAvatar {
+  readonly email: string
+  /** Only bounded raster data URLs are sent; null keeps the local initials. */
+  readonly image: string | null
+  readonly provider: 'github' | 'gravatar' | null
+}
+export interface GitGraphAvatarResult {
+  readonly avatars: GitGraphAvatar[]
+}

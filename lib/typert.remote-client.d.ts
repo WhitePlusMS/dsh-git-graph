@@ -1,9 +1,10 @@
 import type { SessionId } from '@deepseek-ai/dsh-session/types';
 import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol';
-import type { GitGraphCompareRequest, GitGraphCompareResult, GitGraphCommitDetails, GitGraphFileContent, GitGraphFileDiff, GitGraphFileRequest, GitGraphQuery, GitGraphMetadata, GitGraphSnapshot, GitGraphWorkingTreeChanges, GitGraphWorkingTreeFileRequest, GitGraphWorkingTreeRequest } from './domain.js';
+import type { GitGraphAvatarRequest, GitGraphAvatarResult, GitGraphCompareRequest, GitGraphCompareResult, GitGraphCommitDetails, GitGraphFileContent, GitGraphFileDiff, GitGraphFileRequest, GitGraphQuery, GitGraphMetadata, GitGraphSnapshot, GitGraphWorkingTreeChanges, GitGraphWorkingTreeFileRequest, GitGraphWorkingTreeRequest } from './domain.js';
 import { gitGraphCompareInvocation, gitGraphFileDiffInvocation, gitGraphFileInvocation, gitGraphMetadataInvocation, gitGraphReadCommitInvocation, gitGraphWorkingTreeFileInvocation, gitGraphWorkingTreeInvocation } from './typert.shared.js';
 declare module '@deepseek-ai/dsh-typert-protocol' {
     interface TypertRemoteNamespace$6769744772617068 {
+        avatars: (agentId: SessionId, request: GitGraphAvatarRequest, signal?: AbortSignal) => Promise<RemoteResult<GitGraphAvatarResult>>;
         read: (agentId: SessionId, request: GitGraphQuery) => Promise<RemoteResult<GitGraphSnapshot>>;
         readCommit: (agentId: SessionId, request: {
             hash: string;
@@ -16,6 +17,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
         metadata: (agentId: SessionId, request: Record<string, never>) => Promise<RemoteResult<GitGraphMetadata>>;
     }
     interface TypertRemoteMap {
+        'gitGraph/avatars': (agentId: SessionId, request: GitGraphAvatarRequest, signal?: AbortSignal) => Promise<RemoteResult<GitGraphAvatarResult>>;
         'gitGraph/read': (agentId: SessionId, request: GitGraphQuery) => Promise<RemoteResult<GitGraphSnapshot>>;
         'gitGraph/readCommit': (agentId: SessionId, request: {
             hash: string;
@@ -31,6 +33,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
         gitGraph: TypertRemoteNamespace$6769744772617068;
     }
     interface TypertRemoteScopeMap {
+        'agent:gitGraph/avatars': (request: GitGraphAvatarRequest, signal?: AbortSignal) => Promise<RemoteResult<GitGraphAvatarResult>>;
         'agent:gitGraph/read': (request: GitGraphQuery) => Promise<RemoteResult<GitGraphSnapshot>>;
         'agent:gitGraph/readCommit': (request: {
             hash: string;

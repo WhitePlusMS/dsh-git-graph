@@ -53,6 +53,11 @@ export const css = {
   refCopy: 'dsh-git-graph-ref-copy',
   refsMore: 'dsh-git-graph-refs-more',
   currentBranch: 'dsh-git-graph-current-branch',
+  remoteJoined: 'dsh-git-graph-remote-joined',
+  tagsRight: 'dsh-git-graph-tags-right',
+  graphRefs: 'dsh-git-graph-graph-refs',
+  graphRefRow: 'dsh-git-graph-graph-ref-row',
+  settingsHint: 'dsh-git-graph-settings-hint',
   avatar: 'dsh-git-graph-avatar',
   metadataStrip: 'dsh-git-graph-metadata-strip',
   metadataGroup: 'dsh-git-graph-metadata-group',
@@ -155,6 +160,7 @@ const CSS = `
   outline: none;
 }
 .dsh-git-graph-header {
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -179,6 +185,7 @@ const CSS = `
 .dsh-git-graph-clean { color: var(--dsw-alias-state-success-primary); }
 .dsh-git-graph-dirty { color: var(--dsw-alias-state-warn-label); }
 .dsh-git-graph-toolbar {
+  flex: none;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -378,6 +385,16 @@ const CSS = `
   font-weight: 700;
   user-select: none;
 }
+.dsh-git-graph-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+.dsh-git-graph-graph-refs { grid-column: 1; grid-row: 2; position: relative; pointer-events: none; }
+.dsh-git-graph-graph-ref-row { position: absolute; width: 160px; display: flex; align-items: center; pointer-events: auto; }
+.dsh-git-graph-graph-ref-row .dsh-git-graph-refs { max-width: 160px; }
+.dsh-git-graph-graph-ref-row .dsh-git-graph-current-branch { display: none; }
+.dsh-git-graph-tags-right { margin-left: auto; flex: 0 1 auto; min-width: 0; max-width: 40%; }
+.dsh-git-graph-tags-right .dsh-git-graph-refs { max-width: 100%; }
+.dsh-git-graph-remote-joined { flex: none; max-width: 64px; border: 0; border-left: 1px solid var(--git-graph-border); padding: 0 4px; overflow: hidden; text-overflow: ellipsis; color: var(--dsw-alias-state-business-primary); background: transparent; font: inherit; cursor: pointer; }
+.dsh-git-graph-ref > .dsh-git-graph-ref-copy { flex: 1; }
+.dsh-git-graph-settings-hint { flex: 1 1 100%; color: var(--git-graph-tertiary); font-size: 11px; }
 .dsh-git-graph-metadata-strip {
   flex: none;
   max-height: 120px;
@@ -427,6 +444,7 @@ const CSS = `
 }
 .dsh-git-graph-mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
 .dsh-git-graph-subject {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -525,6 +543,8 @@ const CSS = `
   white-space: pre-wrap;
   word-break: break-word;
 }
+.dsh-git-graph-detail-body a { color: var(--dsw-alias-link); text-decoration: underline; }
+.dsh-git-graph-detail-body code { padding: 1px 3px; border-radius: 3px; background: var(--git-graph-hover); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
 .dsh-git-graph-file-changes { margin: 12px 0 0; }
 .dsh-git-graph-file-changes-header {
   margin-bottom: 6px;
@@ -651,7 +671,8 @@ const CSS = `
 .dsh-git-graph-file-del { padding: 0 3px; color: var(--dsw-alias-state-error-primary); }
 .dsh-git-graph-inline-details {
   box-sizing: border-box;
-  width: min(100%, calc(100cqw - var(--git-graph-svg-width)));
+  width: min(calc(100% + var(--git-graph-ref-width)), calc(100cqw - var(--git-graph-svg-width)));
+  margin-left: calc(0px - var(--git-graph-ref-width));
   min-width: 200px;
   padding: 8px 10px;
   border-bottom: 1px solid var(--git-graph-border);

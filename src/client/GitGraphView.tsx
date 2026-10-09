@@ -2,14 +2,18 @@ import { createContext, Fragment, useCallback, useContext, useEffect, useLayoutE
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import type { GitGraphAvatar, GitGraphAvatarRequest, GitGraphAvatarResult } from '../domain.ts'
 import type { GitGraphCommit, GitGraphCommitDetails, GitGraphCompareRequest, GitGraphCompareResult, GitGraphFileChange, GitGraphFileContent, GitGraphFileDiff, GitGraphFileRequest, GitGraphQuery, GitGraphMetadata, GitGraphRef, GitGraphSnapshot, GitGraphWorkingTreeChanges, GitGraphWorkingTreeFileRequest } from '../domain.ts'
 import { layoutGraph, type GraphLayout } from './graph-layout.ts'
-import { loadDisplaySettings, saveDisplaySettings, DEFAULT_DISPLAY_SETTINGS, COLUMN_LIMITS, clampColumnWidth, type CommitColumn, type GitGraphDisplaySettings, type GraphDateFormat, type GraphStyle, type GraphLineStyle, type GraphPalette } from './settings.ts'
-import { displayHunks, graphDisplayWidth, graphRowHeight, visibleColumns } from './presentation.ts'
+import { loadDisplaySettings, saveDisplaySettings, DEFAULT_DISPLAY_SETTINGS, COLUMN_LIMITS, clampColumnWidth, type AvatarSource, type DateSource, type ReferenceAlignment, type CommitColumn, type GitGraphDisplaySettings, type GraphDateFormat, type GraphStyle, type GraphLineStyle, type GraphPalette } from './settings.ts'
+import { commitDate, displayHunks, graphDisplayWidth, graphRowHeight, referenceLabels, visibleColumns } from './presentation.ts'
+import { avatarEmail, useAvatars } from './avatars.ts'
+import { RichMessage } from './RichMessage.tsx'
 import { css } from './styles.ts'
 import { NS, type GitGraphTranslate } from './locales.ts'
 
 export interface GitGraphViewInjected {
+  readonly avatars: (request: GitGraphAvatarRequest, signal: AbortSignal) => Promise<RemoteResult<GitGraphAvatarResult>>
   readonly read: (request: GitGraphQuery) => Promise<RemoteResult<GitGraphSnapshot>>
   readonly readCommit: (request: { hash: string }) => Promise<RemoteResult<GitGraphCommitDetails>>
   readonly readFile: (request: GitGraphFileRequest) => Promise<RemoteResult<GitGraphFileContent>>
@@ -25,6 +29,7 @@ type RefFilter = 'all' | GitGraphRef['kind']
 
 const MAX_COMMITS = 500
 const PAGE_SIZE = 100
+const NO_COMMITS: readonly GitGraphCommit[] = []
 
 /** Share the slot-owned translator with the nested detail and diff panels. */
 const TextContext = createContext<GitGraphTranslate | undefined>(undefined)
@@ -78,19 +83,17 @@ function CopyButton({ value, label, className = css.secondaryButton, children, h
     }}><span aria-live="polite">{state === 'copied' ? t('common.copied') : state === 'failed' ? t('common.copyFailed') : children ?? label}</span></button>
 }
 
-function RefBadges({ refs, compact = false, currentBranch, onShowAll }: {
+function RefBadges({ refs, compact = false, currentBranch, onShowAll, remotes, combine }: {
   readonly refs: readonly GitGraphRef[]; readonly compact?: boolean; readonly currentBranch?: string | null; readonly onShowAll?: () => void
+  readonly remotes: readonly string[]; readonly combine: boolean
 }) {
   const t = useText()
-  const ordered = [...refs].sort((a, b) => {
-    const rank = (ref: GitGraphRef) => ref.kind === 'head' && ref.name === currentBranch ? -1 : ref.kind === 'head' ? 0 : ref.kind === 'remote' ? 1 : 2
-    return rank(a) - rank(b) || a.name.localeCompare(b.name)
-  })
+  const ordered = referenceLabels(refs, remotes, combine, currentBranch ?? null)
   const shown = compact ? ordered.slice(0, 1) : ordered
   return refs.length === 0 ? null : (
     <span className={css.refs} aria-label={t('refs.aria')}>
-      {shown.map(ref => (
-        <span key={`${ref.kind}:${ref.name}`} className={css.ref} data-kind={ref.kind} title={ref.name}>
+      {shown.map(({ ref, remotes: joined }) => (
+        <span key={`${ref.kind}:${ref.name}`} className={css.ref} data-kind={ref.kind} data-combined={joined.length > 0} title={[ref.name, ...joined.map(remote => remote.name)].join('\n')}>
           <CopyButton value={ref.name} label={t('refs.copy', { name: ref.name })} className={css.refCopy}
             hint={`${ref.kind === 'remote' ? t('refs.remoteHint') : ref.kind === 'head' ? t('toolbar.localBranches') : t('metadata.tags')} · ${ref.name}${ref.kind === 'head' && ref.name === currentBranch ? ` · ${t('refs.current')}` : ''}`}>
           <svg className={css.refIcon} viewBox="0 0 16 16" aria-hidden="true">
@@ -111,9 +114,11 @@ function RefBadges({ refs, compact = false, currentBranch, onShowAll }: {
           <span className={css.refName}>{ref.name}</span>
           {ref.kind === 'head' && ref.name === currentBranch && <span className={css.currentBranch}>{t('refs.current')}</span>}
           </CopyButton>
+          {joined.map(remote => <CopyButton key={remote.name} value={remote.name} label={t('refs.copy', { name: remote.name })} className={css.remoteJoined}
+            hint={`${t('refs.remoteHint')} · ${remote.name}`}>{remote.name.slice(0, -ref.name.length - 1)}</CopyButton>)}
         </span>
       ))}
-      {compact && ordered.length > shown.length && <button type="button" className={css.refsMore} title={ordered.map(ref => ref.name).join('\n')} aria-label={t('refs.showAll', { count: ordered.length })} onClick={event => { event.stopPropagation(); onShowAll?.() }}>+{ordered.length - shown.length}</button>}
+      {compact && ordered.length > shown.length && <button type="button" className={css.refsMore} title={refs.map(ref => ref.name).join('\n')} aria-label={t('refs.showAll', { count: refs.length })} onClick={event => { event.stopPropagation(); onShowAll?.() }}>+{ordered.length - shown.length}</button>}
     </span>
   )
 }
@@ -240,7 +245,24 @@ function commitMatchesFind(commit: GitGraphCommit, text: string, caseSensitive: 
   return haystack.includes(needle)
 }
 
-function CommitRow({ commit, selected, display, findActive, onSelect, onShowRefs, currentBranch, hovered, onHover }: {
+/** Labels use the same row/gap geometry as the SVG and follow their own node. */
+function GraphReferenceLabels({ layout, workingTreeChanged, gapAfterRow, gapHeight, rowHeight, remotes, currentBranch, combine, onSelect }: {
+  readonly layout: GraphLayout; readonly workingTreeChanged: boolean; readonly gapAfterRow: number | undefined
+  readonly gapHeight: number; readonly rowHeight: number; readonly remotes: readonly string[]
+  readonly currentBranch: string | null; readonly combine: boolean; readonly onSelect: (hash: string) => void
+}) {
+  const offset = workingTreeChanged ? 1 : 0
+  return <div className={css.graphRefs} style={{ width: 'calc(var(--git-graph-svg-width) + var(--git-graph-ref-width))',
+    height: (layout.nodes.length + offset) * rowHeight + (gapAfterRow === undefined ? 0 : gapHeight) }} data-graph-reference-labels>
+    {layout.nodes.map(node => <div key={node.commit.hash} className={css.graphRefRow} data-ref-commit={node.commit.hash}
+      style={{ left: 30 + node.lane * 16, top: (node.row + offset) * rowHeight + (gapAfterRow !== undefined && node.row > gapAfterRow ? gapHeight : 0), height: rowHeight }}>
+      <RefBadges refs={node.commit.refs.filter(ref => ref.kind !== 'tag')} compact remotes={remotes} combine={combine}
+        currentBranch={currentBranch} onShowAll={() => onSelect(node.commit.hash)} />
+    </div>)}
+  </div>
+}
+
+function CommitRow({ commit, selected, display, findActive, onSelect, onShowRefs, currentBranch, hovered, onHover, remotes, avatar }: {
   readonly commit: GitGraphCommit
   readonly selected: boolean
   readonly display: GitGraphDisplaySettings
@@ -250,6 +272,8 @@ function CommitRow({ commit, selected, display, findActive, onSelect, onShowRefs
   readonly currentBranch: string | null
   readonly hovered: boolean
   readonly onHover: (hash: string | undefined) => void
+  readonly remotes: readonly string[]
+  readonly avatar: GitGraphAvatar | undefined
 }) {
   const t = useText()
   return (
@@ -258,11 +282,12 @@ function CommitRow({ commit, selected, display, findActive, onSelect, onShowRefs
       onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onSelect() } }}>
       <span className={css.commitDescription}>
         {commit.isHead && <span className={css.headDot} title={t('graph.head')} aria-label={t('graph.head')} />}
-        <Avatar email={commit.email} name={commit.author} />
-        <RefBadges refs={commit.refs} compact currentBranch={currentBranch} onShowAll={onShowRefs} />
+        <Avatar email={commit.email} name={commit.author} avatar={avatar} />
+        {display.referenceAlignment !== 'graph' && <RefBadges refs={display.referenceAlignment === 'normal' ? commit.refs : commit.refs.filter(ref => ref.kind !== 'tag')} compact currentBranch={currentBranch} onShowAll={onShowRefs} remotes={remotes} combine={display.combineReferences} />}
         <span className={findActive ? `${css.subject} ${css.findHighlight}` : css.subject} title={commit.subject}>{commit.subject || t('common.noSubject')}</span>
+        {display.referenceAlignment !== 'normal' && <span className={css.tagsRight}><RefBadges refs={commit.refs.filter(ref => ref.kind === 'tag')} compact currentBranch={currentBranch} onShowAll={onShowRefs} remotes={remotes} combine={false} /></span>}
       </span>
-      {display.showDate && <span className={css.commitDate} title={formatDate(commit.date)}>{formatDateValue(commit.date, display.dateFormat)}</span>}
+      {display.showDate && <span className={css.commitDate} title={`${t(display.dateSource === 'author' ? 'details.authorDate' : 'details.committerDate')} · ${formatDate(commitDate(commit, display.dateSource))}`}>{formatDateValue(commitDate(commit, display.dateSource), display.dateFormat)}</span>}
       {display.showAuthor && <span className={css.commitAuthor} title={`${commit.author} <${commit.email}>`}>{commit.author}</span>}
       {display.showHash && <span className={`${css.hash} ${css.commitHash}`} title={commit.hash}>{shortHash(commit.hash)}</span>}
     </div>
@@ -458,13 +483,17 @@ function FileChangesView({ changes, view, onOpenFile }: {
     : <FlatFileList changes={changes} onOpenFile={onOpenFile} />
 }
 
-function CommitDetails({ commit, readCommit, compareActive, onCompare, onOpenFile, currentBranch }: {
+function CommitDetails({ commit, readCommit, compareActive, onCompare, onOpenFile, currentBranch, remotes, display, avatar, readRevision }: {
   readonly commit: GitGraphCommit | undefined
   readonly readCommit: GitGraphViewInjected['readCommit']
   readonly compareActive: boolean
   readonly onCompare: () => void
   readonly onOpenFile: (hash: string, path: string) => void
   readonly currentBranch: string | null
+  readonly remotes: readonly string[]
+  readonly display: GitGraphDisplaySettings
+  readonly avatar: GitGraphAvatar | undefined
+  readonly readRevision: number
 }) {
   const t = useText()
   const [revision, setRevision] = useState(0)
@@ -485,12 +514,12 @@ function CommitDetails({ commit, readCommit, compareActive, onCompare, onOpenFil
       if (!cancelled) setDetailsError(cause instanceof Error ? cause.message : String(cause))
     })
     return () => { cancelled = true }
-  }, [commit?.hash, readCommit, revision])
+  }, [commit?.hash, readCommit, revision, readRevision])
 
   if (commit === undefined) return <div className={css.emptyDetails}>{t('details.select')}</div>
 
   const signatureText = details?.signature
-    ? `${t('details.signed', { status: details.signature.status })}${details.signature.signer ? ` · ${details.signature.signer}` : ''}`
+    ? `${t(`signature.${details.signature.status}`)}${details.signature.signer ? ` · ${details.signature.signer}` : ''}`
     : t('details.unsigned')
 
   return (
@@ -506,16 +535,19 @@ function CommitDetails({ commit, readCommit, compareActive, onCompare, onOpenFil
       </div>
       <dl className={css.detailsList}>
         <dt>Hash</dt><dd className={css.mono}>{commit.hash}</dd>
-        <dt>{t('details.author')}</dt><dd>{commit.author} &lt;{commit.email}&gt;</dd>
-        <dt>{t('details.date')}</dt><dd>{formatDate(commit.date)}</dd>
+        <dt>{t('details.author')}</dt><dd><Avatar email={commit.email} name={commit.author} avatar={avatar} /> {commit.author} &lt;{commit.email}&gt;</dd>
+        <dt>{t('details.authorDate')}</dt><dd>{formatDate(commit.date)}</dd>
+        <dt>{t('details.committerDate')}</dt><dd>{formatDate(commit.committerDate)}</dd>
         {details !== undefined && (
           <>
             <dt>{t('details.committer')}</dt><dd>{details.committer} &lt;{details.committerEmail}&gt;</dd>
-            <dt>{t('details.signature')}</dt><dd>{signatureText}</dd>
+            <dt>{t('details.signature')}</dt><dd title={signatureText} data-signature-status={details.signature?.status}>{signatureText}</dd>
+            {details.signature !== null && <><dt>{t('details.key')}</dt><dd className={css.mono}>{details.signature.key === null ? t('common.unknown')
+              : <CopyButton value={details.signature.key} label={t('details.copyKey')} className={css.linkButton}>{details.signature.key}</CopyButton>}</dd></>}
           </>
         )}
         <dt>{t('details.parents')}</dt><dd className={css.mono}>{commit.parents.length === 0 ? t('details.root') : commit.parents.map(parent => <CopyButton key={parent} value={parent} label={t('common.copyHash')} className={css.linkButton}>{shortHash(parent)}</CopyButton>)}</dd>
-        <dt>{t('details.refs')}</dt><dd><RefBadges refs={commit.refs} currentBranch={currentBranch} /></dd>
+        <dt>{t('details.refs')}</dt><dd><RefBadges refs={commit.refs} currentBranch={currentBranch} remotes={remotes} combine={display.combineReferences} /></dd>
       </dl>
 
       {details === undefined && detailsError === undefined && <div className={css.pending}>{t('details.loading')}</div>}
@@ -523,7 +555,7 @@ function CommitDetails({ commit, readCommit, compareActive, onCompare, onOpenFil
 
       {details !== undefined && details.body.length > 0 && (
         <details className={css.message} open={details.body.length < 600 && details.body.split('\n').length <= 8}>
-          <summary>{t('details.message')}</summary><pre className={css.detailBody}>{details.body}</pre>
+          <summary>{t('details.message')}</summary><RichMessage text={details.body} formatted={display.richText} />
         </details>
       )}
 
@@ -773,15 +805,21 @@ function ComparePanel({ targetHash, commits, compare, onClose }: {
   )
 }
 
-function Avatar({ email, name }: { readonly email: string; readonly name: string }) {
-  // Deterministic initial + colour avatar. It never requires the network, so a
-  // failed/absent remote avatar can never block the graph or its details.
+function Avatar({ email, name, avatar }: { readonly email: string; readonly name: string; readonly avatar: GitGraphAvatar | undefined }) {
+  const t = useText()
+  const [failed, setFailed] = useState(false)
+  useEffect(() => setFailed(false), [avatar?.image])
+  // The deterministic initials remain visible while loading and after failure.
   const palette = ['#0085d9', '#d9008f', '#00a86b', '#d98500', '#7b4bc4', '#d9a800', '#008a7a']
   let seed = 0
   for (const char of email) seed = (seed * 31 + char.charCodeAt(0)) >>> 0
   const colour = palette[seed % palette.length]
   const initial = (name.trim().charAt(0) || '?').toLocaleUpperCase()
-  return <span className={css.avatar} style={{ background: colour }} aria-hidden="true">{initial}</span>
+  const image = !failed && avatar?.image ? avatar.image : undefined
+  return <span className={css.avatar} style={{ background: colour }} aria-hidden="true" title={image === undefined ? name : t('avatar.source', { provider: avatar?.provider === 'github' ? 'GitHub' : 'Gravatar' })}
+    data-avatar-provider={image === undefined ? 'initials' : avatar?.provider}>
+    {image === undefined ? initial : <img src={image} alt="" loading="lazy" onError={() => setFailed(true)} />}
+  </span>
 }
 
 function MetadataStrip({ metadata, error, onRetry }: { readonly metadata: GitGraphMetadata | undefined; readonly error: string | undefined; readonly onRetry: () => void }) {
@@ -856,6 +894,19 @@ function SettingsPanel({ settings, onChange, onClose }: {
   const toggle = (key: 'showDate' | 'showAuthor' | 'showHash') => onChange({ ...settings, [key]: !settings[key] })
   return (
     <div className={css.settingsPanel} data-settings-panel>
+      <div className={css.settingsField}><label>{t('settings.referenceAlignment')}<select className={css.select} value={settings.referenceAlignment} onChange={event => onChange({ ...settings, referenceAlignment: event.target.value as ReferenceAlignment })}>
+        <option value="normal">{t('settings.refsNormal')}</option><option value="tags-right">{t('settings.refsTagsRight')}</option><option value="graph">{t('settings.refsGraph')}</option>
+      </select></label></div>
+      <div className={css.settingsField}><label><input type="checkbox" checked={settings.combineReferences} onChange={event => onChange({ ...settings, combineReferences: event.target.checked })} />{t('settings.combineReferences')}</label></div>
+      <div className={css.settingsField}><label>{t('settings.dateSource')}<select className={css.select} value={settings.dateSource} onChange={event => onChange({ ...settings, dateSource: event.target.value as DateSource })}>
+        <option value="author">{t('details.authorDate')}</option><option value="committer">{t('details.committerDate')}</option>
+      </select></label></div>
+      <div className={css.settingsField}><label><input type="checkbox" checked={settings.richText} onChange={event => onChange({ ...settings, richText: event.target.checked })} />{t('settings.richText')}</label></div>
+      <div className={css.settingsField}><label><input type="checkbox" checked={settings.showAvatars} onChange={event => onChange({ ...settings, showAvatars: event.target.checked })} />{t('settings.showAvatars')}</label></div>
+      <div className={css.settingsField}><label>{t('settings.avatarSource')}<select className={css.select} value={settings.avatarSource} onChange={event => onChange({ ...settings, avatarSource: event.target.value as AvatarSource })}>
+        <option value="auto">{t('settings.avatarAuto')}</option><option value="gravatar">Gravatar</option>
+      </select></label></div>
+      <div className={css.settingsHint}>{t('settings.avatarHint')}</div>
       <div className={css.settingsField}><label><input type="checkbox" checked={settings.showDate} onChange={() => toggle('showDate')} />{t('settings.showDate')}</label></div>
       <div className={css.settingsField}><label><input type="checkbox" checked={settings.showAuthor} onChange={() => toggle('showAuthor')} />{t('settings.showAuthor')}</label></div>
       <div className={css.settingsField}><label><input type="checkbox" checked={settings.showHash} onChange={() => toggle('showHash')} />{t('settings.showHash')}</label></div>
@@ -912,7 +963,7 @@ export function GitGraphView(props: Props) {
   return <TextContext.Provider value={props.t}><GitGraphContent {...props} /></TextContext.Provider>
 }
 
-function GitGraphContent({ read, readCommit, readFileDiff, readWorkingTree, readWorkingTreeFile, compare, metadata }: Props) {
+function GitGraphContent({ read, readCommit, readFileDiff, readWorkingTree, readWorkingTreeFile, compare, metadata, avatars: readAvatars }: Props) {
   const t = useText()
   const [snapshot, setSnapshot] = useState<GitGraphSnapshot | undefined>()
   const [selectedHash, setSelectedHash] = useState<string>()
@@ -953,6 +1004,8 @@ function GitGraphContent({ read, readCommit, readFileDiff, readWorkingTree, read
   // Only the newest query may replace the graph, including after unmount.
   const querySequence = useRef(0)
   const loadedPath = useRef<string>()
+  const authorAvatars = useAvatars(snapshot?.commits ?? NO_COMMITS, snapshot?.path, display.avatarSource,
+    display.showAvatars && settingsRepo === snapshot?.path, readAvatars)
   const findError = useMemo(() => {
     if (!findRegex || findText.length === 0) return undefined
     try { new RegExp(findText); return undefined } catch { return t('find.invalidRegex') }
@@ -1086,7 +1139,7 @@ function GitGraphContent({ read, readCommit, readFileDiff, readWorkingTree, read
     const observer = new ResizeObserver(update)
     observer.observe(element)
     return () => observer.disconnect()
-  }, [selectedHash, showWorkingTree])
+  }, [selectedHash, showWorkingTree, expandedRow, snapshot?.workingTree.changed])
 
   const loadMore = () => {
     const nextMax = Math.min(MAX_COMMITS, maxCommits + PAGE_SIZE)
@@ -1195,15 +1248,32 @@ function GitGraphContent({ read, readCommit, readFileDiff, readWorkingTree, read
   const resizeColumn = (column: CommitColumn, width: number) => setDisplay(current => ({ ...current,
     fitDescription: column === 'description' ? false : current.fitDescription,
     columnWidths: { ...current.columnWidths, [column]: clampColumnWidth(column, width) } }))
-  const columnStyle: CSSProperties & { '--git-graph-columns': string; '--git-graph-row-min': string; '--git-graph-row-height': string; '--git-graph-svg-width': string } = {
+  const extraGraphWidth = display.referenceAlignment === 'graph' ? 160 : 0
+  const columnStyle: CSSProperties & { '--git-graph-columns': string; '--git-graph-row-min': string; '--git-graph-row-height': string; '--git-graph-svg-width': string; '--git-graph-ref-width': string } = {
     '--git-graph-columns': columns.map(column => column === 'description' && display.fitDescription ? `minmax(${display.columnWidths[column]}px, 1fr)` : `${display.columnWidths[column]}px`).join(' '),
     '--git-graph-row-min': `${rowMin}px`,
     '--git-graph-row-height': `${rowHeight}px`,
     '--git-graph-svg-width': `${graphDisplayWidth(layout.laneCount) + 8}px`,
+    '--git-graph-ref-width': `${extraGraphWidth}px`,
   }
 
+  const selectedCommit = visibleCommits.find(commit => commit.hash === selectedHash)
+  const expansion = showWorkingTree ? <>
+    <WorkingTreeChangesPanel changes={workingTreeChanges} error={workingTreeError} onRetry={refresh}
+      onClose={() => setShowWorkingTree(false)} onOpenFile={path => setWorkingTreeFile(path)} />
+    {workingTreeFile !== undefined && <WorkingTreeFileViewer key={`${workingTreeFile}:${readRevision}`} path={workingTreeFile} readWorkingTreeFile={readWorkingTreeFile} onClose={() => setWorkingTreeFile(undefined)} />}
+  </> : selectedCommit === undefined || snapshot === undefined ? null : <>
+    <CommitDetails key={selectedCommit.hash} currentBranch={snapshot.branch} remotes={snapshot.remotes} display={display} readRevision={readRevision}
+      avatar={display.showAvatars ? authorAvatars.images.get(avatarEmail(selectedCommit.email)) : undefined}
+      commit={selectedCommit} readCommit={readCommit} compareActive={compareTarget === selectedCommit.hash}
+      onCompare={() => setCompareTarget(compareTarget === selectedCommit.hash ? undefined : selectedCommit.hash)}
+      onOpenFile={(hash, path) => setViewingFile({ hash, path })} />
+    {viewingFile !== undefined && viewingFile.hash === selectedCommit.hash && <FileViewer hash={viewingFile.hash} path={viewingFile.path} readFileDiff={readFileDiff} onClose={() => setViewingFile(undefined)} />}
+    {compareTarget === selectedCommit.hash && <ComparePanel targetHash={selectedCommit.hash} commits={snapshot.commits} compare={compare} onClose={() => setCompareTarget(undefined)} />}
+  </>
+
   return (
-    <section ref={sectionRef} tabIndex={0} aria-label={t('view.title')} aria-busy={loading} style={columnStyle} className={css.card} data-git-graph data-graph-style={display.graphStyle}>
+    <section ref={sectionRef} tabIndex={0} aria-label={t('view.title')} aria-busy={loading} style={columnStyle} className={css.card} data-git-graph data-graph-style={display.graphStyle} data-ref-alignment={display.referenceAlignment} data-avatar-loading={authorAvatars.loading}>
       <header className={css.header}>
         <div className={css.titleBlock}>
           <strong>{t('view.title')}</strong>
@@ -1258,6 +1328,7 @@ function GitGraphContent({ read, readCommit, readFileDiff, readWorkingTree, read
 
       {error !== undefined && <div className={css.error} role="alert">{t('error.graph', { message: error })}<button type="button" className={css.secondaryButton} onClick={refresh} disabled={loading}>{t('common.retry')}</button></div>}
       {navigationHint !== undefined && <div className={css.hint} role="status">{navigationHint}<button type="button" className={css.linkButton} onClick={() => setNavigationHint(undefined)}>{t('common.close')}</button></div>}
+      {display.showAvatars && authorAvatars.error !== undefined && <div className={css.hint} role="status">{t('avatar.error')}</div>}
       {loading && snapshot === undefined && <div className={css.pending}>{t('status.loadingGraph')}</div>}
       {!loading && error === undefined && snapshot !== undefined && visibleCommits.length === 0 && (
         <div className={css.pending}>
@@ -1272,9 +1343,12 @@ function GitGraphContent({ read, readCommit, readFileDiff, readWorkingTree, read
           <div className={css.graphPanel} ref={panelRef}>
             <div className={css.graphHeader}>{t('column.graph')}</div>
             <div className={css.commitHeader}>
-              {columns.map(column => <span key={column} className={css.headerCell}>{t(column === 'hash' ? 'column.commit' : `column.${column}`)}<ColumnResizer column={column} width={display.columnWidths[column]} onChange={resizeColumn} /></span>)}
+              {columns.map(column => <span key={column} className={css.headerCell}>{t(column === 'date' ? display.dateSource === 'author' ? 'details.authorDate' : 'details.committerDate' : column === 'hash' ? 'column.commit' : `column.${column}`)}<ColumnResizer column={column} width={display.columnWidths[column]} onChange={resizeColumn} /></span>)}
             </div>
             <GraphSvg layout={layout} workingTreeChanged={snapshot.workingTree.changed} selectedHash={selectedHash} gapAfterRow={expandedRow} gapHeight={inlineHeight} onSelect={selectCommit} rowHeight={rowHeight} lineStyle={display.lineStyle} palette={display.palette} hoveredHash={hoveredHash} onHover={setHoveredHash} />
+            {display.referenceAlignment === 'graph' && <GraphReferenceLabels layout={layout} workingTreeChanged={snapshot.workingTree.changed}
+              gapAfterRow={expandedRow} gapHeight={inlineHeight} rowHeight={rowHeight} remotes={snapshot.remotes} currentBranch={snapshot.branch}
+              combine={display.combineReferences} onSelect={setSelectedHash} />}
             <div className={css.commitList}>
               {snapshot.workingTree.changed && (
                 <>
@@ -1286,39 +1360,17 @@ function GitGraphContent({ read, readCommit, readFileDiff, readWorkingTree, read
                   </button>
                   {showWorkingTree && (
                     <div className={css.inlineDetails} ref={inlineRef} data-inline-details>
-                      <WorkingTreeChangesPanel
-                        changes={workingTreeChanges}
-                        error={workingTreeError}
-                        onRetry={refresh}
-                        onClose={() => setShowWorkingTree(false)}
-                        onOpenFile={path => setWorkingTreeFile(path)}
-                      />
-                      {workingTreeFile !== undefined && (
-                        <WorkingTreeFileViewer key={`${workingTreeFile}:${readRevision}`} path={workingTreeFile} readWorkingTreeFile={readWorkingTreeFile} onClose={() => setWorkingTreeFile(undefined)} />
-                      )}
+                      {expansion}
                     </div>
                   )}
                 </>
               )}
               {visibleCommits.map(commit => (
                 <Fragment key={commit.hash}>
-                  <CommitRow commit={commit} selected={commit.hash === selectedHash} display={display} findActive={findMatches.length > 0 && findMatches.some(match => match.hash === commit.hash)} onSelect={() => selectCommit(commit.hash)} currentBranch={snapshot.branch} hovered={hoveredHash === commit.hash} onHover={setHoveredHash} onShowRefs={() => setSelectedHash(commit.hash)} />
+                  <CommitRow commit={commit} selected={commit.hash === selectedHash} display={display} findActive={findMatches.length > 0 && findMatches.some(match => match.hash === commit.hash)} onSelect={() => selectCommit(commit.hash)} currentBranch={snapshot.branch} hovered={hoveredHash === commit.hash} onHover={setHoveredHash} onShowRefs={() => setSelectedHash(commit.hash)} remotes={snapshot.remotes} avatar={display.showAvatars ? authorAvatars.images.get(avatarEmail(commit.email)) : undefined} />
                   {commit.hash === selectedHash && (
                     <div className={css.inlineDetails} ref={inlineRef} data-inline-details>
-                      <CommitDetails
-                        currentBranch={snapshot.branch}
-                        commit={commit}
-                        readCommit={readCommit}
-                        compareActive={compareTarget === commit.hash}
-                        onCompare={() => setCompareTarget(compareTarget === commit.hash ? undefined : commit.hash)}
-                        onOpenFile={(hash, path) => setViewingFile({ hash, path })}
-                      />
-                      {viewingFile !== undefined && viewingFile.hash === commit.hash && (
-                        <FileViewer hash={viewingFile.hash} path={viewingFile.path} readFileDiff={readFileDiff} onClose={() => setViewingFile(undefined)} />
-                      )}
-                      {compareTarget === commit.hash && (
-                        <ComparePanel targetHash={commit.hash} commits={snapshot.commits} compare={compare} onClose={() => setCompareTarget(undefined)} />
-                      )}
+                      {expansion}
                     </div>
                   )}
                 </Fragment>

@@ -1,6 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { Agent } from '@deepseek-ai/dsh-agent';
 import type { GitGraphCommit, GitGraphCommitDetails, GitGraphCompareRequest, GitGraphCompareResult, GitGraphDiffLine, GitGraphFileChange, GitGraphFileContent, GitGraphFileDiff, GitGraphFileDiffRequest, GitGraphFileRequest, GitGraphInput, GitGraphMetadata, GitGraphRepoConfig, GitGraphSignature, GitGraphSnapshot, GitGraphStash, GitGraphTag, GitGraphTagDetails, GitGraphWorkingTree, GitGraphWorkingTreeChanges, GitGraphWorkingTreeFileRequest } from './domain.js';
+import type { AvatarAuthor } from './avatars.js';
 /** Minimal execution identity shared by the tool and the independent view. */
 export interface GitGraphExecutionContext {
     readonly agent?: Agent;
@@ -121,3 +122,8 @@ export declare function loadWorkingTreeFile(ctx: Context, cwd: string, request: 
 export declare function loadCompare(ctx: Context, cwd: string, request: GitGraphCompareRequest, signal: AbortSignal): Promise<GitGraphCompareResult>;
 /** Load repository-level metadata (tags + stashes) for the on-demand view. */
 export declare function loadMetadata(ctx: Context, cwd: string, signal: AbortSignal): Promise<GitGraphMetadata>;
+/** Resolve identity from Git, never from an email or URL supplied by the browser. */
+export declare function loadAvatarAuthors(ctx: Context, cwd: string, hashes: readonly string[], signal: AbortSignal): Promise<{
+    authors: AvatarAuthor[];
+    remote: string | null;
+}>;

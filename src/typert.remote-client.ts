@@ -1,6 +1,8 @@
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import type {
+  GitGraphAvatarRequest,
+  GitGraphAvatarResult,
   GitGraphCompareRequest,
   GitGraphCompareResult,
   GitGraphCommitDetails,
@@ -28,6 +30,7 @@ import {
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface TypertRemoteNamespace$6769744772617068 {
+    avatars: (agentId: SessionId, request: GitGraphAvatarRequest, signal?: AbortSignal) => Promise<RemoteResult<GitGraphAvatarResult>>
     read: (agentId: SessionId, request: GitGraphQuery) => Promise<RemoteResult<GitGraphSnapshot>>
     readCommit: (agentId: SessionId, request: { hash: string }) => Promise<RemoteResult<GitGraphCommitDetails>>
     readFile: (agentId: SessionId, request: GitGraphFileRequest) => Promise<RemoteResult<GitGraphFileContent>>
@@ -39,6 +42,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
   }
 
   interface TypertRemoteMap {
+    'gitGraph/avatars': (agentId: SessionId, request: GitGraphAvatarRequest, signal?: AbortSignal) => Promise<RemoteResult<GitGraphAvatarResult>>
     'gitGraph/read': (agentId: SessionId, request: GitGraphQuery) => Promise<RemoteResult<GitGraphSnapshot>>
     'gitGraph/readCommit': (agentId: SessionId, request: { hash: string }) => Promise<RemoteResult<GitGraphCommitDetails>>
     'gitGraph/readFile': (agentId: SessionId, request: GitGraphFileRequest) => Promise<RemoteResult<GitGraphFileContent>>
@@ -54,6 +58,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
   }
 
   interface TypertRemoteScopeMap {
+    'agent:gitGraph/avatars': (request: GitGraphAvatarRequest, signal?: AbortSignal) => Promise<RemoteResult<GitGraphAvatarResult>>
     'agent:gitGraph/read': (request: GitGraphQuery) => Promise<RemoteResult<GitGraphSnapshot>>
     'agent:gitGraph/readCommit': (request: { hash: string }) => Promise<RemoteResult<GitGraphCommitDetails>>
     'agent:gitGraph/readFile': (request: GitGraphFileRequest) => Promise<RemoteResult<GitGraphFileContent>>

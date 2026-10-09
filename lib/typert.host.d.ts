@@ -1,10 +1,10 @@
-export declare const gitGraphHostDescriptors: readonly [any, any, any, any, any, any, any, any];
+export declare const gitGraphHostDescriptors: readonly [any, any, any, any, any, any, any, any, any];
 /** Host contract discovered automatically by dsh-typert-loader. */
 export declare const TYPERT: {
     package: any;
     face: string;
     schemas: any[];
-    invocations: readonly [any, any, any, any, any, any, any, any];
+    invocations: readonly [any, any, any, any, any, any, any, any, any];
     model: {
         services: any[];
         events: any[];

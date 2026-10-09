@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { MAX_COMMITS } from './domain.ts'
+import { MAX_AVATAR_BATCH, MAX_COMMITS } from './domain.ts'
 import { createGitGraphInvocation, TYPERT_PACKAGE } from './typert.shared.ts'
 
 /** Host-only zod codecs required by dsh-typert-loader for RPC registration. */
@@ -14,6 +14,7 @@ const hostCommitSchema = z.object({
   author: z.string(),
   email: z.string(),
   date: z.string(),
+  committerDate: z.string(),
   subject: z.string(),
   refs: z.array(hostRefSchema),
   isHead: z.boolean(),
@@ -33,6 +34,7 @@ const hostSnapshotSchema = z.object({
   state: z.enum(['not-git', 'empty', 'ready']),
   branch: z.string().nullable(),
   head: z.string().nullable(),
+  remotes: z.array(z.string()),
   workingTree: z.object({
     changed: z.boolean(),
     summary: z.string(),
@@ -150,7 +152,19 @@ const hostMetadataSchema = z.object({
 
 const hostEmptyInputSchema = z.object({}).strict()
 
+const hostAvatarRequestSchema = z.object({ hashes: z.array(hashSchema).min(1).max(MAX_AVATAR_BATCH), source: z.enum(['auto', 'gravatar']) }).strict()
+const hostAvatarSchema = z.object({
+  email: z.string().max(320),
+  image: z.string().max(100000).regex(/^data:image\/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+=*$/u).nullable(),
+  provider: z.enum(['github', 'gravatar']).nullable(),
+}).strict().refine(value => (value.image === null) === (value.provider === null))
+const hostAvatarResultSchema = z.object({ avatars: z.array(hostAvatarSchema).max(MAX_AVATAR_BATCH) }).strict()
+
 export const gitGraphHostDescriptors = [
+  createGitGraphInvocation({
+    method: 'avatars', inputSymbol: 'GitGraphAvatarRequest', resultSymbol: 'GitGraphAvatarResult',
+    schemas: { input: hostAvatarRequestSchema, result: hostAvatarResultSchema, sessionId: z.string() },
+  }),
   createGitGraphInvocation({
     method: 'read',
     inputSymbol: 'GitGraphQuery',

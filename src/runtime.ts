@@ -15,6 +15,7 @@ const GRAPH_OUTPUT_SCHEMA = {
     state: { type: 'string', required: true, enum: ['not-git', 'empty', 'ready'] },
     branch: { oneOf: [{ type: 'string' }, { type: 'null' }], required: true },
     head: { oneOf: [{ type: 'string' }, { type: 'null' }], required: true },
+    remotes: { type: 'array', required: true, items: { type: 'string' } },
     workingTree: {
       type: 'object',
       additionalProperties: false,
@@ -36,6 +37,7 @@ const GRAPH_OUTPUT_SCHEMA = {
           author: { type: 'string', required: true },
           email: { type: 'string', required: true },
           date: { type: 'string', required: true },
+          committerDate: { type: 'string', required: true },
           subject: { type: 'string', required: true },
           refs: {
             type: 'array',

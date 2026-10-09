@@ -31,9 +31,10 @@ import type {
   GitGraphWorkingTreeChanges,
   GitGraphWorkingTreeFileRequest,
 } from './domain.ts'
-import { MAX_COMMITS } from './domain.ts'
+import { MAX_AVATAR_BATCH, MAX_COMMITS } from './domain.ts'
+import type { AvatarAuthor } from './avatars.ts'
 
-const LOG_FORMAT = '%H%x00%P%x00%an%x00%ae%x00%aI%x00%s%x00%D%x00%x1e'
+const LOG_FORMAT = '%H%x00%P%x00%aN%x00%aE%x00%aI%x00%cI%x00%s%x00%D%x00%x1e'
 const OUTPUT_MAX_BYTES = 8 * 1024 * 1024
 const STDERR_MAX_BYTES = 64 * 1024
 const GRACE_MS = 3_000
@@ -152,16 +153,17 @@ export function parseGitLog(text: string): GitGraphCommit[] {
     const record = rawRecord.replace(/^[\r\n]+/u, '')
     if (record.trim().length === 0) continue
     const fields = record.split('\u0000')
-    if (fields.length < 7) throw new GitGraphError('Git log 输出格式不完整')
+    if (fields.length < 9) throw new GitGraphError('Git log 输出格式不完整')
     const hash = fields[0]
     const parents = fields[1]
     const author = fields[2]
     const email = fields[3]
     const date = fields[4]
-    const subject = fields[5]
-    const decorations = fields[6]
+    const committerDate = fields[5]
+    const subject = fields[6]
+    const decorations = fields[7]
     if (hash === undefined || parents === undefined || author === undefined || email === undefined
-      || date === undefined || subject === undefined || decorations === undefined || hash.length === 0) {
+      || date === undefined || committerDate === undefined || subject === undefined || decorations === undefined || hash.length === 0) {
       throw new GitGraphError('Git log 输出包含空提交记录')
     }
     const refs = parseRefs(decorations)
@@ -171,6 +173,7 @@ export function parseGitLog(text: string): GitGraphCommit[] {
       author,
       email,
       date,
+      committerDate,
       subject,
       refs,
       isHead: decorations.split(',').some(ref => ref.trim() === 'HEAD' || ref.trim().startsWith('HEAD -> ')),
@@ -226,6 +229,7 @@ function commitMatchesSearch(commit: GitGraphCommit, query: string): boolean {
     commit.author,
     commit.email,
     commit.date,
+    commit.committerDate,
     ...commit.refs.map(ref => ref.name),
   ].join('\n').toLocaleLowerCase()
   return haystack.includes(needle)
@@ -290,6 +294,7 @@ function nonGitRepositorySnapshot(cwd: string): GitGraphSnapshot {
     state: 'not-git',
     branch: null,
     head: null,
+    remotes: [],
     workingTree: {
       changed: false,
       summary: '不是 Git 仓库',
@@ -320,6 +325,8 @@ export async function loadGitGraph(
   const headResult = await runGit(ctx, cwd, ['rev-parse', '--verify', 'HEAD'], exec.signal, [0, 1, 128])
   const headText = headResult.exitCode === 0 ? headResult.stdout.trim() : ''
   const head = headText.length > 0 ? headText : null
+  const remoteResult = await runGit(ctx, cwd, ['remote'], exec.signal)
+  const remotes = remoteResult.stdout.split(/\r?\n/u).filter(name => name.length > 0)
   const orderFlag = validated.sort === 'author-date' ? '--author-date-order'
     : validated.sort === 'topological' ? '--topo-order'
     : '--date-order'
@@ -343,6 +350,7 @@ export async function loadGitGraph(
       state: head === null ? 'empty' : 'ready',
       branch: statusInfo.branch,
       head,
+      remotes,
       workingTree: {
         changed: statusInfo.changed,
         summary: statusInfo.summary,
@@ -387,6 +395,7 @@ export async function loadGitGraph(
     state: allCommits.length === 0 ? 'empty' : 'ready',
     branch: statusInfo.branch,
     head,
+    remotes,
     workingTree: {
       changed: statusInfo.changed,
       summary: statusInfo.summary,
@@ -1054,4 +1063,20 @@ export async function loadMetadata(ctx: Context, cwd: string, signal: AbortSigna
     loadStashes(ctx, cwd, signal),
   ])
   return { tags, stashes }
+}
+
+/** Resolve identity from Git, never from an email or URL supplied by the browser. */
+export async function loadAvatarAuthors(ctx: Context, cwd: string, hashes: readonly string[], signal: AbortSignal): Promise<{ authors: AvatarAuthor[]; remote: string | null }> {
+  if (hashes.length === 0 || hashes.length > MAX_AVATAR_BATCH) throw new GitGraphError('头像请求数量超出范围')
+  for (const hash of hashes) assertValidHash(hash)
+  const [log, remote] = await Promise.all([
+    runGit(ctx, cwd, ['log', '--no-walk=unsorted', '--format=%aE%x00%ae%x1e', ...hashes, '--'], signal),
+    runGit(ctx, cwd, ['config', '--get', 'remote.origin.url'], signal, [0, 1]),
+  ])
+  const authors = log.stdout.split('\u001e').filter(record => record.trim().length > 0).map(record => {
+    const [email, sourceEmail] = record.replace(/^[\r\n]+/u, '').split('\u0000')
+    if (email === undefined || sourceEmail === undefined) throw new GitGraphError('Git 头像作者字段不完整')
+    return { email: email.trim(), sourceEmail: sourceEmail.trim() }
+  })
+  return { authors, remote: remote.exitCode === 0 ? remote.stdout.trim() : null }
 }

@@ -15,6 +15,8 @@ export declare const gitGraphCompareRequestSchema: TypertSchema<import('./domain
 export declare const gitGraphCompareResultSchema: TypertSchema<import('./domain.js').GitGraphCompareResult>;
 export declare const gitGraphMetadataSchema: TypertSchema<import('./domain.js').GitGraphMetadata>;
 export declare const gitGraphEmptyInputSchema: TypertSchema<Record<string, never>>;
+export declare const gitGraphAvatarRequestSchema: TypertSchema<import('./domain.js').GitGraphAvatarRequest>;
+export declare const gitGraphAvatarResultSchema: TypertSchema<import('./domain.js').GitGraphAvatarResult>;
 export interface GitGraphInvocationSchemas {
     readonly input: TypertSchema;
     readonly result: TypertSchema;
@@ -37,5 +39,5 @@ export declare const gitGraphWorkingTreeInvocation: InvocationDescriptor;
 export declare const gitGraphWorkingTreeFileInvocation: InvocationDescriptor;
 export declare const gitGraphCompareInvocation: InvocationDescriptor;
 export declare const gitGraphMetadataInvocation: InvocationDescriptor;
-export declare const gitGraphDescriptors: readonly [InvocationDescriptor, InvocationDescriptor, InvocationDescriptor, InvocationDescriptor, InvocationDescriptor, InvocationDescriptor, InvocationDescriptor, InvocationDescriptor];
+export declare const gitGraphDescriptors: readonly [InvocationDescriptor, InvocationDescriptor, InvocationDescriptor, InvocationDescriptor, InvocationDescriptor, InvocationDescriptor, InvocationDescriptor, InvocationDescriptor, InvocationDescriptor];
 export {};
