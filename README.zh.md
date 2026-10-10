@@ -13,10 +13,14 @@
   <a href="#安装与更新">安装</a> · <a href="#使用">使用</a> · <a href="#快捷键">快捷键</a> · <a href="#使用范围">使用范围</a> · <a href="#卸载">卸载</a> · <a href="#更多文档">更多文档</a>
 </p>
 
-![真实作者头像与行内提交详情](docs/screenshots/display-avatar.png)
+![原生侧栏、提交图与筛选演示](docs/screenshots/demo.gif)
+
+GIF 录制于 0.4.0；0.5.0 新增的两提交 Diff 与完整原文效果见下方截图。
 
 <details>
 <summary>更多截图：两提交比较、完整原文、英文及窄屏</summary>
+
+![真实作者头像与行内提交详情](docs/screenshots/display-avatar.png)
 
 ![两提交逐文件 Diff](docs/screenshots/compare-diff-0.5.0.png)
 
@@ -40,6 +44,14 @@
 - **正文与头像**：正文链接、粗体、斜体、行内代码，以及 GitHub / Gravatar 真实作者头像。
 - **显示设置**：可调列宽、日期显示、紧凑行高、连线样式和配色，按仓库保存设置。
 - **界面适配**：中英文、明暗主题、面板全屏和窄屏显示。
+
+**提交详情与逐文件 Diff**
+
+![提交详情与逐文件 Diff 演示](docs/screenshots/diff.gif)
+
+**提交比较与未提交变更**
+
+![两提交变更清单与工作区 Diff 演示](docs/screenshots/compare.gif)
 
 ## 安装与更新
 

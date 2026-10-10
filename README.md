@@ -13,10 +13,14 @@ A read-only Git Graph for the native right sidebar of DeepSeek Harness Web. Brow
   <a href="#install-or-update">Install</a> · <a href="#usage">Usage</a> · <a href="#keyboard-controls">Keyboard controls</a> · <a href="#scope">Scope</a> · <a href="#uninstall">Uninstall</a> · <a href="#documentation">Documentation</a>
 </p>
 
-![Real author avatars and inline commit details](docs/screenshots/display-avatar.png)
+![Native sidebar, commit graph, and filtering demo](docs/screenshots/demo.gif)
+
+The GIFs were recorded with 0.4.0. Screenshots of the new 0.5.0 comparison and full-source views are included below.
 
 <details>
 <summary>More screenshots: commit comparison, full source, English, and narrow screens</summary>
+
+![Real author avatars and inline commit details](docs/screenshots/display-avatar.png)
 
 ![Two-commit file diff](docs/screenshots/compare-diff-0.5.0.png)
 
@@ -40,6 +44,14 @@ A read-only Git Graph for the native right sidebar of DeepSeek Harness Web. Brow
 - **Messages & authors** — Commit messages with links, bold, italic, and inline code; real GitHub/Gravatar author avatars.
 - **Display settings** — Resizable columns, date display options, compact rows, line styles, and colour presets, saved per repository.
 - **Interface** — Chinese/English, light/dark themes, pane fullscreen, and narrow-screen support.
+
+**Commit details and file diffs**
+
+![Commit details and per-file diff demo](docs/screenshots/diff.gif)
+
+**Commit comparison and uncommitted changes**
+
+![Changed-file comparison and working-tree diff demo](docs/screenshots/compare.gif)
 
 ## Install or update
 
