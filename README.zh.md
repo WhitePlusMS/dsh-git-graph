@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>当前版本 0.4.0</strong> · 适配 DSH 0.2.0-rc.2 · <a href="LICENSE">MIT</a><br>
+  <strong>当前版本 0.5.0</strong> · 适配 DSH 0.2.0-rc.2 · <a href="LICENSE">MIT</a><br>
   <a href="README.md">English</a> · <a href="docs/screenshots/readme-header.svg">静态标题</a>
 </p>
 
@@ -16,7 +16,13 @@
 ![真实作者头像与行内提交详情](docs/screenshots/display-avatar.png)
 
 <details>
-<summary>更多截图：英文浅色主题与 360px 窄侧栏</summary>
+<summary>更多截图：两提交比较、完整原文、英文及窄屏</summary>
+
+![两提交逐文件 Diff](docs/screenshots/compare-diff-0.5.0.png)
+
+![完整历史原文](docs/screenshots/source-0.5.0.png)
+
+![360px 完整原文](docs/screenshots/source-360-0.5.0.png)
 
 ![英文浅色主题](docs/screenshots/display-light-en.png)
 
@@ -29,7 +35,8 @@
 - **提交历史**：提交拓扑、分支、Tag、HEAD，以及提交搜索和历史筛选。
 - **提交详情**：行内展示作者与提交者日期、父提交、引用、签名状态和复制操作。
 - **引用布局**：三种引用布局，同一提交上的同名本地 / 远端分支可合并显示。
-- **文件变更**：文件树 / 列表、逐文件 Diff、未提交变更，以及两次提交的变更文件清单比较。
+- **文件变更**：文件树 / 列表、逐文件 Diff、未提交变更；选择两次提交后，可以打开每个变更文件的 Diff。
+- **历史原文**：查看和复制旧 / 新版本的完整文本，显示对应路径、提交 Hash、行号及大小。
 - **正文与头像**：正文链接、粗体、斜体、行内代码，以及 GitHub / Gravatar 真实作者头像。
 - **显示设置**：可调列宽、日期显示、紧凑行高、连线样式和配色，按仓库保存设置。
 - **界面适配**：中英文、明暗主题、面板全屏和窄屏显示。
@@ -38,10 +45,10 @@
 
 需要 **DSH 0.2.0-rc.2**、可用的 `dsh` CLI，以及 DSH Host 上已安装的 Git。
 
-使用 `v0.4.0` 标签归档安装：
+使用 `v0.5.0` 标签归档安装：
 
 ```powershell
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/archive/refs/tags/v0.4.0.tar.gz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/archive/refs/tags/v0.5.0.tar.gz
 dsh web
 ```
 
@@ -54,6 +61,7 @@ dsh web
 1. 在 DSH Web 中选择工作区，打开右侧栏。
 2. 从侧栏开始页选择 **Git Graph**。
 3. 点击提交查看行内详情，点击文件查看 Diff；点击 **未提交变更** 查看工作区改动。
+4. 点击 **比较提交…** 并选择基准提交，再点击变更文件。在历史文件查看器中切换 **Diff / 完整原文**，并选择旧 / 新版本。
 
 通过 **设置** 调整显示效果，设置按仓库分别保存。
 
@@ -79,17 +87,19 @@ dsh plugin --profile web remove dsh-git-graph
 | 拖拽列分隔线 / `←` / `→` | 调整列宽；方向键需先聚焦分隔线 |
 | 双击分隔线 | 恢复默认列宽 |
 
-快捷键在 Git Graph 获得焦点时生效，普通导航键不会拦截输入框中的文字输入。
+快捷键在 Git Graph 获得焦点时生效，普通导航键不会拦截输入框中的文字输入或文件查看器中的滚动。
 
 ## 使用范围
 
 - 图谱读取当前工作区的本地 Git 数据；刷新不会执行 Fetch，也不会修改仓库。
 - 初始加载 100 条提交，手动加载最多 500 条；搜索最多扫描 2000 条，查找仅针对已加载结果。引用类型筛选只显示直接带对应标签的提交。
-- 两提交比较仅显示文件清单，尚无左右 Diff、完整版本原文、Tag 签名验证或 Stash Diff；Tag / Stash 条目提供摘要和复制。
+- 历史文件查看器提供统一 Diff 和完整文本，单文件读取上限为 1 MiB。二进制和超限文件会显示状态，不会将截断文本当作完整内容；重命名、新增和删除按实际存在的版本及对应路径读取。
+- 尚无左右 Diff、语法高亮、Tag 签名验证或 Stash Diff；Tag / Stash 条目提供摘要和复制。
 
 ## 更多文档
 
 - [开发、本地安装与 API 说明](docs/DEVELOPMENT.md)
+- [版本说明](CHANGELOG.md) · [提交比较与完整原文验收报告](docs/COMPARE_SOURCE_TEST_REPORT.md)
 - [显示功能验收报告](docs/DISPLAY_TEST_REPORT.md)
 - [P0 报告](docs/P0_TEST_REPORT.md) · [DSH 适配报告](docs/DSH_0.2_TEST_REPORT.md)
 

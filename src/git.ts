@@ -923,9 +923,9 @@ export function parseFileDiff(text: string): GitGraphDiffLine[] {
 }
 
 /**
- * Load the added/deleted line diff of one file inside a commit, rendered like
- * vscode-git-graph. The base is the commit's first parent (empty tree for the
- * root commit), matching `loadCommitDetails`'s comparison base.
+ * Load one file's diff using the same range as its enclosing file list. An
+ * explicit base compares both selected commits; otherwise use the target's
+ * first parent (empty tree for a root commit).
  */
 export async function loadFileDiff(
   ctx: Context,
@@ -935,10 +935,21 @@ export async function loadFileDiff(
 ): Promise<GitGraphFileDiff> {
   assertValidHash(request.hash)
   assertRepoRelativePath(request.path, cwd)
-  const details = await loadCommitDetails(ctx, cwd, request.hash, signal)
-  const change = details.fileChanges.find(file => file.newPath === request.path || file.oldPath === request.path)
-  if (change === undefined) throw new GitGraphError(`文件在该提交中不存在或没有变更：${request.path}`)
-  const base = details.parents[0] ?? EMPTY_TREE_HASH
+  let base: string
+  let changes: readonly GitGraphFileChange[]
+  if (request.baseHash !== undefined) {
+    assertValidHash(request.baseHash)
+    base = request.baseHash
+    // The target's last commit may not touch this file. Resolve status and
+    // rename paths from the selected pair, never from its first-parent diff.
+    changes = (await loadCompare(ctx, cwd, { baseHash: base, targetHash: request.hash }, signal)).changes
+  } else {
+    const details = await loadCommitDetails(ctx, cwd, request.hash, signal)
+    base = details.parents[0] ?? EMPTY_TREE_HASH
+    changes = details.fileChanges
+  }
+  const change = changes.find(file => file.newPath === request.path || file.oldPath === request.path)
+  if (change === undefined) throw new GitGraphError(`文件在所选比较范围内不存在或没有变更：${request.path}`)
   // Keep both rename paths in the pathspec so Git can recognize the rename.
   const diff = await runGit(ctx, cwd, [
     'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--find-renames', '--unified=3',

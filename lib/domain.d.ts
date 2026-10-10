@@ -203,9 +203,9 @@ export interface GitGraphDiffLine {
     readonly newLine: number | null;
 }
 /**
- * Per-file change inside a commit, rendered as added/deleted lines the way
- * vscode-git-graph shows a file diff. The base is the commit's first parent
- * (or the empty tree for a root commit), matching `loadCommitDetails`.
+ * Per-file change between a base and target commit. A request without an
+ * explicit base compares the target with its first parent (empty tree for a
+ * root commit), matching `loadCommitDetails`.
  */
 export interface GitGraphFileDiff {
     readonly hash: string;
@@ -223,6 +223,8 @@ export interface GitGraphFileDiff {
 export interface GitGraphFileDiffRequest {
     readonly hash: string;
     readonly path: string;
+    /** Explicit comparison base; omitted for the target commit's own changes. */
+    readonly baseHash?: string;
 }
 /** The list of files changed in the working tree relative to HEAD (or empty tree). */
 export interface GitGraphWorkingTreeChanges {

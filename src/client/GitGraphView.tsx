@@ -3,7 +3,7 @@ import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { GitGraphAvatar, GitGraphAvatarRequest, GitGraphAvatarResult } from '../domain.ts'
-import type { GitGraphCommit, GitGraphCommitDetails, GitGraphCompareRequest, GitGraphCompareResult, GitGraphFileChange, GitGraphFileContent, GitGraphFileDiff, GitGraphFileRequest, GitGraphQuery, GitGraphMetadata, GitGraphRef, GitGraphSnapshot, GitGraphWorkingTreeChanges, GitGraphWorkingTreeFileRequest } from '../domain.ts'
+import type { GitGraphCommit, GitGraphCommitDetails, GitGraphCompareRequest, GitGraphCompareResult, GitGraphFileChange, GitGraphFileContent, GitGraphFileDiff, GitGraphFileDiffRequest, GitGraphFileRequest, GitGraphQuery, GitGraphMetadata, GitGraphRef, GitGraphSnapshot, GitGraphWorkingTreeChanges, GitGraphWorkingTreeFileRequest } from '../domain.ts'
 import { layoutGraph, type GraphLayout } from './graph-layout.ts'
 import { loadDisplaySettings, saveDisplaySettings, DEFAULT_DISPLAY_SETTINGS, COLUMN_LIMITS, clampColumnWidth, type AvatarSource, type DateSource, type ReferenceAlignment, type CommitColumn, type GitGraphDisplaySettings, type GraphDateFormat, type GraphStyle, type GraphLineStyle, type GraphPalette } from './settings.ts'
 import { commitDate, displayHunks, graphDisplayWidth, graphRowHeight, referenceLabels, visibleColumns } from './presentation.ts'
@@ -17,7 +17,7 @@ export interface GitGraphViewInjected {
   readonly read: (request: GitGraphQuery) => Promise<RemoteResult<GitGraphSnapshot>>
   readonly readCommit: (request: { hash: string }) => Promise<RemoteResult<GitGraphCommitDetails>>
   readonly readFile: (request: GitGraphFileRequest) => Promise<RemoteResult<GitGraphFileContent>>
-  readonly readFileDiff: (request: GitGraphFileRequest) => Promise<RemoteResult<GitGraphFileDiff>>
+  readonly readFileDiff: (request: GitGraphFileDiffRequest) => Promise<RemoteResult<GitGraphFileDiff>>
   readonly readWorkingTree: () => Promise<RemoteResult<GitGraphWorkingTreeChanges>>
   readonly readWorkingTreeFile: (request: GitGraphWorkingTreeFileRequest) => Promise<RemoteResult<GitGraphFileDiff>>
   readonly compare: (request: GitGraphCompareRequest) => Promise<RemoteResult<GitGraphCompareResult>>
@@ -488,7 +488,7 @@ function CommitDetails({ commit, readCommit, compareActive, onCompare, onOpenFil
   readonly readCommit: GitGraphViewInjected['readCommit']
   readonly compareActive: boolean
   readonly onCompare: () => void
-  readonly onOpenFile: (hash: string, path: string) => void
+  readonly onOpenFile: (hash: string, change: GitGraphFileChange) => void
   readonly currentBranch: string | null
   readonly remotes: readonly string[]
   readonly display: GitGraphDisplaySettings
@@ -568,7 +568,7 @@ function CommitDetails({ commit, readCommit, compareActive, onCompare, onOpenFil
           <FileChangesView
             changes={details.fileChanges}
             view={view}
-            onOpenFile={change => onOpenFile(commit.hash, change.newPath)}
+            onOpenFile={change => onOpenFile(commit.hash, change)}
           />
         </div>
       )}
@@ -608,22 +608,82 @@ function DiffBody({ diff }: { readonly diff: GitGraphFileDiff }) {
   )
 }
 
-function FileViewer({ hash, path, readFileDiff, onClose }: {
+/** Read the whole Git blob on demand; switching versions discards late replies. */
+function FileSource({ hash, path, readFile }: {
   readonly hash: string
   readonly path: string
+  readonly readFile: GitGraphViewInjected['readFile']
+}) {
+  const t = useText()
+  const [content, setContent] = useState<GitGraphFileContent>()
+  const [error, setError] = useState<string>()
+  const [revision, setRevision] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    setContent(undefined)
+    setError(undefined)
+    void readFile({ hash, path }).then(result => {
+      if (cancelled) return
+      if (result.ok) setContent(result.value)
+      else setError(result.error.message)
+    }).catch((cause: unknown) => {
+      if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause))
+    })
+    return () => { cancelled = true }
+  }, [hash, path, readFile, revision])
+
+  // Two text nodes keep even a many-line, bounded blob from creating a DOM
+  // element per line. Copy uses the untouched text, including its final newline.
+  const lineNumbers = useMemo(() => {
+    const text = content?.text
+    if (text === undefined || text === null || text.length === 0) return ''
+    const count = text.split('\n').length - (text.endsWith('\n') ? 1 : 0)
+    return Array.from({ length: count }, (_, index) => index + 1).join('\n')
+  }, [content?.text])
+
+  return <div data-source-file data-source-hash={hash} data-source-path={path}>
+    <div className={css.fileViewerToolbar}>
+      <span className={`${css.fileViewerMeta} ${css.mono}`}>{t('source.version', { hash: shortHash(hash), path })}</span>
+      {content !== undefined && <span className={css.fileViewerMeta}>{t('source.size', { size: content.size.toLocaleString() })}</span>}
+      {content?.kind === 'text' && content.text !== null && <CopyButton value={content.text} label={t('source.copy')} hint={t('source.copy')} />}
+    </div>
+    {error !== undefined && <div className={css.error} role="alert">{t('source.error', { message: error })}<button type="button" className={css.secondaryButton} onClick={() => setRevision(current => current + 1)}>{t('common.retry')}</button></div>}
+    {content === undefined && error === undefined && <div className={css.pending}>{t('source.loading')}</div>}
+    {content?.truncated === true && <div className={css.pending}>{t('source.tooLarge', { size: content.size.toLocaleString() })}</div>}
+    {content !== undefined && !content.truncated && (content.kind === 'binary' || content.text === null) && <div className={css.pending}>{t('source.binary')}</div>}
+    {content?.kind === 'text' && !content.truncated && content.text !== null && (
+      content.text.length === 0 ? <div className={css.pending}>{t('source.empty')}</div> :
+        <div className={css.sourceViewer} data-source-viewer role="region" aria-label={t('source.aria')}>
+          <pre className={css.sourceLineNumbers} aria-hidden="true">{lineNumbers}</pre>
+          <pre className={css.sourceText} data-source-text tabIndex={0}>{content.text}</pre>
+        </div>
+    )}
+  </div>
+}
+
+/** One historical viewer shared by a commit's changes and any selected pair. */
+function FileViewer({ hash, baseHash, change, readFileDiff, readFile, onClose }: {
+  readonly hash: string
+  readonly baseHash: string | undefined
+  readonly change: GitGraphFileChange
   readonly readFileDiff: GitGraphViewInjected['readFileDiff']
+  readonly readFile: GitGraphViewInjected['readFile']
   readonly onClose: () => void
 }) {
   const t = useText()
   const [diff, setDiff] = useState<GitGraphFileDiff>()
   const [error, setError] = useState<string>()
   const [revision, setRevision] = useState(0)
+  const [mode, setMode] = useState<'diff' | 'source'>('diff')
+  const [side, setSide] = useState<'base' | 'target'>('target')
+  const path = change.newPath
 
   useEffect(() => {
     let cancelled = false
     setDiff(undefined)
     setError(undefined)
-    void readFileDiff({ hash, path }).then(result => {
+    void readFileDiff({ hash, path, ...(baseHash === undefined ? {} : { baseHash }) }).then(result => {
       if (cancelled) return
       if (result.ok) setDiff(result.value)
       else setError(result.error.message)
@@ -631,33 +691,52 @@ function FileViewer({ hash, path, readFileDiff, onClose }: {
       if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause))
     })
     return () => { cancelled = true }
-  }, [hash, path, readFileDiff, revision])
+  }, [hash, baseHash, path, readFileDiff, revision])
 
   const hasChange = diff !== undefined && diff.lines.some(line => line.type !== 'context')
   const binaryLike = diff?.binary === true
+  const baseExists = baseHash !== undefined && change.type !== 'A'
+  const targetExists = change.type !== 'D'
+  // A deletion has no target blob. Its complete source belongs to the base;
+  // renamed files read the matching old/new path for each selected version.
+  const sourceSide = targetExists ? side : 'base'
+  const sourceHash = sourceSide === 'base' ? baseHash : hash
+  const sourcePath = sourceSide === 'base' ? change.oldPath : change.newPath
 
   return (
     <div className={css.fileViewer} data-file-viewer>
       <div className={css.fileViewerHeader}>
         <span className={css.fileViewerTitle}>
-          {diff !== undefined && <DiffStatusBadge status={diff.status} />}
-          <span className={css.mono} title={diff?.oldPath !== path ? `${diff?.oldPath ?? ''} → ${path}` : path}>{diff?.status === 'R' ? `${diff.oldPath} → ${path}` : path}</span>
+          <DiffStatusBadge status={change.type} />
+          <span className={css.mono} title={change.type === 'R' ? `${change.oldPath} → ${path}` : path}>{change.type === 'R' ? `${change.oldPath} → ${path}` : path}</span>
         </span>
         <span className={css.fileViewerMeta}>
-          {diff !== undefined && !diff.binary && `+${diff.additions} −${diff.deletions}`}
+          {mode === 'diff' && diff !== undefined && !diff.binary && `+${diff.additions} −${diff.deletions}`}
         </span>
-        <CopyButton value={path} label={t('common.copyPath')} />
+        <CopyButton value={mode === 'source' ? sourcePath : path} label={t('common.copyPath')} />
         <button type="button" className={css.secondaryButton} onClick={onClose}>{t('common.close')}</button>
       </div>
-      {error !== undefined && <div className={css.error} role="alert">{t('diff.error', { message: error })}<button type="button" className={css.secondaryButton} onClick={() => setRevision(current => current + 1)}>{t('common.retry')}</button></div>}
-      {diff === undefined && error === undefined && <div className={css.pending}>{t('diff.loading')}</div>}
-      {diff !== undefined && !hasChange && binaryLike && (
+      <div className={css.fileViewerToolbar}>
+        <span className={css.viewToggle} role="group" aria-label={t('file.contentMode')}>
+          <button type="button" aria-pressed={mode === 'diff'} className={mode === 'diff' ? `${css.viewToggleBtn} ${css.viewToggleActive}` : css.viewToggleBtn} onClick={() => setMode('diff')}>{t('file.diffMode')}</button>
+          <button type="button" aria-pressed={mode === 'source'} className={mode === 'source' ? `${css.viewToggleBtn} ${css.viewToggleActive}` : css.viewToggleBtn} onClick={() => setMode('source')}>{t('source.mode')}</button>
+        </span>
+        {mode === 'source' && <span className={css.viewToggle} role="group" aria-label={t('source.side')}>
+          <button type="button" aria-pressed={sourceSide === 'base'} disabled={!baseExists} title={!baseExists ? t('source.absent') : baseHash} className={sourceSide === 'base' ? `${css.viewToggleBtn} ${css.viewToggleActive}` : css.viewToggleBtn} onClick={() => setSide('base')}>{t('source.old')}</button>
+          <button type="button" aria-pressed={sourceSide === 'target'} disabled={!targetExists} title={!targetExists ? t('source.absent') : hash} className={sourceSide === 'target' ? `${css.viewToggleBtn} ${css.viewToggleActive}` : css.viewToggleBtn} onClick={() => setSide('target')}>{t('source.new')}</button>
+        </span>}
+      </div>
+      {mode === 'source' && (sourceHash === undefined ? <div className={css.pending}>{t('source.absent')}</div> :
+        <FileSource key={`${sourceHash}:${sourcePath}`} hash={sourceHash} path={sourcePath} readFile={readFile} />)}
+      {mode === 'diff' && error !== undefined && <div className={css.error} role="alert">{t('diff.error', { message: error })}<button type="button" className={css.secondaryButton} onClick={() => setRevision(current => current + 1)}>{t('common.retry')}</button></div>}
+      {mode === 'diff' && diff === undefined && error === undefined && <div className={css.pending}>{t('diff.loading')}</div>}
+      {mode === 'diff' && diff !== undefined && !hasChange && binaryLike && (
         <div className={css.pending}>{t('diff.binary')}</div>
       )}
-      {diff !== undefined && !hasChange && !binaryLike && (
+      {mode === 'diff' && diff !== undefined && !hasChange && !binaryLike && (
         <div className={css.pending}>{t('diff.noChanges')}</div>
       )}
-      {diff !== undefined && hasChange && <DiffBody diff={diff} />}
+      {mode === 'diff' && diff !== undefined && hasChange && <DiffBody diff={diff} />}
     </div>
   )
 }
@@ -745,20 +824,26 @@ function WorkingTreeFileViewer({ path, readWorkingTreeFile, onClose }: {
   )
 }
 
-function ComparePanel({ targetHash, commits, compare, onClose }: {
+function ComparePanel({ targetHash, commits, compare, readFileDiff, readFile, onClose }: {
   readonly targetHash: string
   readonly commits: readonly GitGraphCommit[]
   readonly compare: GitGraphViewInjected['compare']
+  readonly readFileDiff: GitGraphViewInjected['readFileDiff']
+  readonly readFile: GitGraphViewInjected['readFile']
   readonly onClose: () => void
 }) {
   const t = useText()
-  const [baseHash, setBaseHash] = useState<string>(commits[0]?.hash ?? '')
+  const [baseHash, setBaseHash] = useState<string>(commits.find(commit => commit.hash !== targetHash)?.hash ?? '')
   const [result, setResult] = useState<GitGraphCompareResult>()
   const [error, setError] = useState<string>()
+  const [file, setFile] = useState<GitGraphFileChange>()
+  const [view, setView] = useState<FileListKind>('list')
+  const [revision, setRevision] = useState(0)
 
   useEffect(() => {
     setResult(undefined)
     setError(undefined)
+    setFile(undefined)
     if (baseHash.length === 0 || baseHash === targetHash) return
     let cancelled = false
     void compare({ baseHash, targetHash }).then(res => {
@@ -769,13 +854,19 @@ function ComparePanel({ targetHash, commits, compare, onClose }: {
       if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause))
     })
     return () => { cancelled = true }
-  }, [baseHash, targetHash, compare])
+  }, [baseHash, targetHash, compare, revision])
 
   return (
     <div className={css.comparePanel} data-compare-panel>
       <div className={css.compareRow}>
         <span className={css.fileViewerTitle}>{t('compare.title')}</span>
-        <select className={`${css.select} ${css.selectWide}`} value={baseHash} onChange={event => setBaseHash(event.target.value)} aria-label={t('compare.base')}>
+        <select className={`${css.select} ${css.selectWide}`} value={baseHash} onChange={event => {
+          // Remove old-range files immediately, before the next request effect.
+          setFile(undefined)
+          setResult(undefined)
+          setError(undefined)
+          setBaseHash(event.target.value)
+        }} aria-label={t('compare.base')}>
           {commits.map(commit => (
             <option key={commit.hash} value={commit.hash}>
               {shortHash(commit.hash)} · {commit.subject || t('common.noSubject')}
@@ -784,21 +875,20 @@ function ComparePanel({ targetHash, commits, compare, onClose }: {
         </select>
         <button type="button" className={css.secondaryButton} onClick={onClose}>{t('common.close')}</button>
       </div>
+      {baseHash.length > 0 && baseHash !== targetHash && <div className={`${css.compareHint} ${css.mono}`} data-compare-range>{t('compare.range', { base: shortHash(baseHash), target: shortHash(targetHash) })}</div>}
       {baseHash === targetHash && <div className={css.compareHint}>{t('compare.selectDifferent')}</div>}
-      {error !== undefined && <div className={css.error} role="alert">{t('compare.error', { message: error })}</div>}
+      {baseHash.length > 0 && baseHash !== targetHash && result === undefined && error === undefined && <div className={css.pending}>{t('compare.loading')}</div>}
+      {error !== undefined && <div className={css.error} role="alert">{t('compare.error', { message: error })}<button type="button" className={css.secondaryButton} onClick={() => setRevision(current => current + 1)}>{t('common.retry')}</button></div>}
       {result !== undefined && (
         <div className={css.fileChanges}>
-          <div className={css.fileChangesHeader}>{t('compare.files', { count: result.changes.length })}</div>
+          <div className={css.fileChangesHeaderRow}>
+            <span className={css.fileChangesTitle}>{t('compare.files', { count: result.changes.length })}</span>
+            <ViewToggle view={view} onChange={setView} />
+          </div>
           {result.changes.length === 0 && <div className={css.compareHint}>{t('compare.empty')}</div>}
-          <ul className={css.fileChangesList}>
-            {result.changes.map((change, index) => (
-              <li key={`${change.type}-${change.oldPath}-${change.newPath}-${index}`} className={css.fileChange}>
-                <FileChangeStatus type={change.type} />
-                <span className={css.mono} title={change.newPath}>{change.newPath}</span>
-                <span className={css.fileChangeStat}>{(change.additions ?? 0) > 0 ? `+${change.additions}` : ''}{(change.deletions ?? 0) > 0 ? ` −${change.deletions}` : ''}</span>
-              </li>
-            ))}
-          </ul>
+          <FileChangesView changes={result.changes} view={view} onOpenFile={change => setFile(change)} />
+          {file !== undefined && <FileViewer key={`${baseHash}:${targetHash}:${file.newPath}`} hash={targetHash} baseHash={baseHash}
+            change={file} readFileDiff={readFileDiff} readFile={readFile} onClose={() => setFile(undefined)} />}
         </div>
       )}
     </div>
@@ -963,7 +1053,7 @@ export function GitGraphView(props: Props) {
   return <TextContext.Provider value={props.t}><GitGraphContent {...props} /></TextContext.Provider>
 }
 
-function GitGraphContent({ read, readCommit, readFileDiff, readWorkingTree, readWorkingTreeFile, compare, metadata, avatars: readAvatars }: Props) {
+function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorkingTree, readWorkingTreeFile, compare, metadata, avatars: readAvatars }: Props) {
   const t = useText()
   const [snapshot, setSnapshot] = useState<GitGraphSnapshot | undefined>()
   const [selectedHash, setSelectedHash] = useState<string>()
@@ -978,7 +1068,7 @@ function GitGraphContent({ read, readCommit, readFileDiff, readWorkingTree, read
   const [sort, setSort] = useState<'date' | 'author-date' | 'topological'>('date')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>()
-  const [viewingFile, setViewingFile] = useState<{ hash: string; path: string }>()
+  const [viewingFile, setViewingFile] = useState<{ hash: string; change: GitGraphFileChange }>()
   const [compareTarget, setCompareTarget] = useState<string>()
   const [showWorkingTree, setShowWorkingTree] = useState(false)
   const [workingTreeChanges, setWorkingTreeChanges] = useState<GitGraphWorkingTreeChanges>()
@@ -1221,7 +1311,9 @@ function GitGraphContent({ read, readCommit, readFileDiff, readWorkingTree, read
         return
       }
       const target = event.target
-      if (target instanceof HTMLElement && target.closest('input, select, textarea, [contenteditable="true"], [role="separator"]') !== null) return
+      // Direction keys inside a historical viewer scroll its content, rather
+      // than replacing the selected commit and discarding the open file.
+      if (target instanceof HTMLElement && target.closest('input, select, textarea, [contenteditable="true"], [role="separator"], [data-file-viewer]') !== null) return
       if (findOpen || findText.length > 0) return
       if (event.key.toLowerCase() === 'h') {
         const head = visibleCommits.find(commit => commit.isHead)
@@ -1267,9 +1359,11 @@ function GitGraphContent({ read, readCommit, readFileDiff, readWorkingTree, read
       avatar={display.showAvatars ? authorAvatars.images.get(avatarEmail(selectedCommit.email)) : undefined}
       commit={selectedCommit} readCommit={readCommit} compareActive={compareTarget === selectedCommit.hash}
       onCompare={() => setCompareTarget(compareTarget === selectedCommit.hash ? undefined : selectedCommit.hash)}
-      onOpenFile={(hash, path) => setViewingFile({ hash, path })} />
-    {viewingFile !== undefined && viewingFile.hash === selectedCommit.hash && <FileViewer hash={viewingFile.hash} path={viewingFile.path} readFileDiff={readFileDiff} onClose={() => setViewingFile(undefined)} />}
-    {compareTarget === selectedCommit.hash && <ComparePanel targetHash={selectedCommit.hash} commits={snapshot.commits} compare={compare} onClose={() => setCompareTarget(undefined)} />}
+      onOpenFile={(hash, change) => setViewingFile({ hash, change })} />
+    {viewingFile !== undefined && viewingFile.hash === selectedCommit.hash && <FileViewer key={`${viewingFile.hash}:${viewingFile.change.newPath}:${readRevision}`}
+      hash={viewingFile.hash} baseHash={selectedCommit.parents[0]} change={viewingFile.change} readFileDiff={readFileDiff} readFile={readFile} onClose={() => setViewingFile(undefined)} />}
+    {compareTarget === selectedCommit.hash && <ComparePanel targetHash={selectedCommit.hash} commits={snapshot.commits} compare={compare}
+      readFileDiff={readFileDiff} readFile={readFile} onClose={() => setCompareTarget(undefined)} />}
   </>
 
   return (

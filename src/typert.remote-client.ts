@@ -8,6 +8,7 @@ import type {
   GitGraphCommitDetails,
   GitGraphFileContent,
   GitGraphFileDiff,
+  GitGraphFileDiffRequest,
   GitGraphFileRequest,
   GitGraphQuery,
   GitGraphMetadata,
@@ -34,7 +35,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     read: (agentId: SessionId, request: GitGraphQuery) => Promise<RemoteResult<GitGraphSnapshot>>
     readCommit: (agentId: SessionId, request: { hash: string }) => Promise<RemoteResult<GitGraphCommitDetails>>
     readFile: (agentId: SessionId, request: GitGraphFileRequest) => Promise<RemoteResult<GitGraphFileContent>>
-    readFileDiff: (agentId: SessionId, request: GitGraphFileRequest) => Promise<RemoteResult<GitGraphFileDiff>>
+    readFileDiff: (agentId: SessionId, request: GitGraphFileDiffRequest) => Promise<RemoteResult<GitGraphFileDiff>>
     readWorkingTree: (agentId: SessionId, request: GitGraphWorkingTreeRequest) => Promise<RemoteResult<GitGraphWorkingTreeChanges>>
     readWorkingTreeFile: (agentId: SessionId, request: GitGraphWorkingTreeFileRequest) => Promise<RemoteResult<GitGraphFileDiff>>
     compare: (agentId: SessionId, request: GitGraphCompareRequest) => Promise<RemoteResult<GitGraphCompareResult>>
@@ -46,7 +47,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'gitGraph/read': (agentId: SessionId, request: GitGraphQuery) => Promise<RemoteResult<GitGraphSnapshot>>
     'gitGraph/readCommit': (agentId: SessionId, request: { hash: string }) => Promise<RemoteResult<GitGraphCommitDetails>>
     'gitGraph/readFile': (agentId: SessionId, request: GitGraphFileRequest) => Promise<RemoteResult<GitGraphFileContent>>
-    'gitGraph/readFileDiff': (agentId: SessionId, request: GitGraphFileRequest) => Promise<RemoteResult<GitGraphFileDiff>>
+    'gitGraph/readFileDiff': (agentId: SessionId, request: GitGraphFileDiffRequest) => Promise<RemoteResult<GitGraphFileDiff>>
     'gitGraph/readWorkingTree': (agentId: SessionId, request: GitGraphWorkingTreeRequest) => Promise<RemoteResult<GitGraphWorkingTreeChanges>>
     'gitGraph/readWorkingTreeFile': (agentId: SessionId, request: GitGraphWorkingTreeFileRequest) => Promise<RemoteResult<GitGraphFileDiff>>
     'gitGraph/compare': (agentId: SessionId, request: GitGraphCompareRequest) => Promise<RemoteResult<GitGraphCompareResult>>
@@ -62,7 +63,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'agent:gitGraph/read': (request: GitGraphQuery) => Promise<RemoteResult<GitGraphSnapshot>>
     'agent:gitGraph/readCommit': (request: { hash: string }) => Promise<RemoteResult<GitGraphCommitDetails>>
     'agent:gitGraph/readFile': (request: GitGraphFileRequest) => Promise<RemoteResult<GitGraphFileContent>>
-    'agent:gitGraph/readFileDiff': (request: GitGraphFileRequest) => Promise<RemoteResult<GitGraphFileDiff>>
+    'agent:gitGraph/readFileDiff': (request: GitGraphFileDiffRequest) => Promise<RemoteResult<GitGraphFileDiff>>
     'agent:gitGraph/readWorkingTree': (request: GitGraphWorkingTreeRequest) => Promise<RemoteResult<GitGraphWorkingTreeChanges>>
     'agent:gitGraph/readWorkingTreeFile': (request: GitGraphWorkingTreeFileRequest) => Promise<RemoteResult<GitGraphFileDiff>>
     'agent:gitGraph/compare': (request: GitGraphCompareRequest) => Promise<RemoteResult<GitGraphCompareResult>>

@@ -2,7 +2,7 @@
 
 [使用说明](../README.zh.md) · [English README](../README.md)
 
-本项目当前版本为 0.4.0，适配 DSH 0.2.0-rc.2。这里记录本地安装、构建、内部数据接口及验收依据。
+本项目当前版本为 0.5.0，适配 DSH 0.2.0-rc.2。这里记录本地安装、构建、内部数据接口及验收依据。
 
 ## 本地安装与自定义 profile
 
@@ -12,7 +12,7 @@
 pnpm install --frozen-lockfile
 pnpm run typecheck
 pnpm pack --pack-destination .scratch/release
-dsh plugin --profile web add ./.scratch/release/dsh-git-graph-0.4.0.tgz
+dsh plugin --profile web add ./.scratch/release/dsh-git-graph-0.5.0.tgz
 dsh web
 ```
 
@@ -22,7 +22,7 @@ dsh web
 
 ```powershell
 dsh --profile my-web --from-default-profile web --dump-config
-dsh plugin --profile my-web add ./.scratch/release/dsh-git-graph-0.4.0.tgz
+dsh plugin --profile my-web add ./.scratch/release/dsh-git-graph-0.5.0.tgz
 dsh --profile my-web
 ```
 
@@ -42,7 +42,9 @@ pnpm run build
 
 ## Git 数据与路径处理
 
-Host 通过固定、不经过 shell 的 subprocess 参数读取 Git 数据，采用字面路径匹配并禁用可选索引更新。界面按需读取仓库状态、HEAD、有界历史、提交详情、文件 Diff、工作区变更和提交比较。另有独立 `readFile` Remote API，界面文件查看器使用 Diff API。
+Host 通过固定、不经过 shell 的 subprocess 参数读取 Git 数据，采用字面路径匹配并禁用可选索引更新。界面按需读取仓库状态、HEAD、有界历史、提交详情、文件 Diff、工作区变更和提交比较。历史文件查看器使用 `readFileDiff` 读取统一 Diff，使用 `readFile` 按需读取完整原文，两个接口沿用 domain DTO 与 `RemoteResult`。
+
+`readFileDiff` 接收 `hash`、仓库相对 `path` 及可选 `baseHash`。明确基准时比较两端树，不使用 merge-base；未指定时比较目标与首父提交，根提交比较空树。两端变更列表决定文件状态和重命名前后的路径，即使目标最后一次提交未修改该文件也能读取范围 Diff。`readFile` 只接收 `hash` / `path`，单文件上限为 1 MiB；新增、删除、重命名读取各自存在的一端，空文件、二进制和超限分别展示。
 
 浏览器请求绑定当前会话工作区，不接受任意仓库 `path`。文件请求必须使用仓库相对路径；绝对路径和仓库外路径被拒绝。非 Git 目录和无提交仓库有独立空状态；无提交仓库仍可查看暂存文件。
 
@@ -77,5 +79,6 @@ git_graph({
 | DSH 0.2 适配 | 78 项通过 | 48 项通过 | [DSH 适配报告](DSH_0.2_TEST_REPORT.md) |
 | 0.3.0 的 P0 显示优化 | 88 项通过 | 56 项通过 | [P0 报告](P0_TEST_REPORT.md) |
 | 0.4.0 的显示更新 | 106 项通过 | 26 项通过 | [显示功能报告](DISPLAY_TEST_REPORT.md) |
+| 0.5.0 的两提交 Diff 与完整原文 | 115 项通过 | 18 项通过 | [提交比较与原文报告](COMPARE_SOURCE_TEST_REPORT.md) |
 
-各阶段数量不相加。P0 验收时临时包为 0.1.0，后纳入 0.3.0；0.4.0 显示实现验收时临时包仍为 0.3.0。两次版本调整另行通过类型检查、构建和打包，未因版本号变化重复浏览器验收。本地验证不代表标签已经发布。
+各阶段数量不相加。P0 验收时临时包为 0.1.0，后纳入 0.3.0；0.4.0 显示实现验收时临时包仍为 0.3.0；0.5.0 比较与原文实现验收时临时包仍为 0.4.0。版本调整另行通过类型检查、构建和打包，未因版本号变化重复浏览器验收。正式版本记录见[版本说明](../CHANGELOG.md)。

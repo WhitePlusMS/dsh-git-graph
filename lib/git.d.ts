@@ -98,9 +98,9 @@ export declare function parseHunkHeader(line: string): {
  */
 export declare function parseFileDiff(text: string): GitGraphDiffLine[];
 /**
- * Load the added/deleted line diff of one file inside a commit, rendered like
- * vscode-git-graph. The base is the commit's first parent (empty tree for the
- * root commit), matching `loadCommitDetails`'s comparison base.
+ * Load one file's diff using the same range as its enclosing file list. An
+ * explicit base compares both selected commits; otherwise use the target's
+ * first parent (empty tree for a root commit).
  */
 export declare function loadFileDiff(ctx: Context, cwd: string, request: GitGraphFileDiffRequest, signal: AbortSignal): Promise<GitGraphFileDiff>;
 /** The sentinel hash used for the non-committed working-tree side of a diff. */

@@ -7,6 +7,7 @@ export declare const gitGraphSnapshotSchema: TypertSchema<GitGraphSnapshot>;
 export declare const gitGraphCommitRequestSchema: TypertSchema<import('./domain.js').GitGraphCommitRequest>;
 export declare const gitGraphCommitDetailsSchema: TypertSchema<import('./domain.js').GitGraphCommitDetails>;
 export declare const gitGraphFileRequestSchema: TypertSchema<import('./domain.js').GitGraphFileRequest>;
+export declare const gitGraphFileDiffRequestSchema: TypertSchema<import('./domain.js').GitGraphFileDiffRequest>;
 export declare const gitGraphFileContentSchema: TypertSchema<import('./domain.js').GitGraphFileContent>;
 export declare const gitGraphFileDiffSchema: TypertSchema<GitGraphFileDiff>;
 export declare const gitGraphWorkingTreeChangesSchema: TypertSchema<import('./domain.js').GitGraphWorkingTreeChanges>;

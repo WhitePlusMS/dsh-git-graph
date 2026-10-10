@@ -78,6 +78,7 @@ const hostCommitDetailsSchema = z.object({
 }).strict()
 
 const hostFileRequestSchema = z.object({ hash: hashSchema, path: z.string() }).strict()
+const hostFileDiffRequestSchema = z.object({ hash: hashSchema, path: z.string(), baseHash: hashSchema.optional() }).strict()
 const hostFileContentSchema = z.object({
   hash: z.string(),
   path: z.string(),
@@ -185,9 +186,9 @@ export const gitGraphHostDescriptors = [
   }),
   createGitGraphInvocation({
     method: 'readFileDiff',
-    inputSymbol: 'GitGraphFileRequest',
+    inputSymbol: 'GitGraphFileDiffRequest',
     resultSymbol: 'GitGraphFileDiff',
-    schemas: { input: hostFileRequestSchema, result: hostFileDiffSchema, sessionId: z.string() },
+    schemas: { input: hostFileDiffRequestSchema, result: hostFileDiffSchema, sessionId: z.string() },
   }),
   createGitGraphInvocation({
     method: 'readWorkingTree',

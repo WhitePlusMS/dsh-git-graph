@@ -107,6 +107,10 @@ export const css = {
   fileViewerTitle: 'dsh-git-graph-file-viewer-title',
   fileViewerMeta: 'dsh-git-graph-file-viewer-meta',
   fileViewerContent: 'dsh-git-graph-file-viewer-content',
+  fileViewerToolbar: 'dsh-git-graph-file-viewer-toolbar',
+  sourceViewer: 'dsh-git-graph-source-viewer',
+  sourceLineNumbers: 'dsh-git-graph-source-line-numbers',
+  sourceText: 'dsh-git-graph-source-text',
   diffViewer: 'dsh-git-graph-diff-viewer',
   diffHeader: 'dsh-git-graph-diff-header',
   diffBody: 'dsh-git-graph-diff-body',
@@ -743,6 +747,32 @@ const CSS = `
   white-space: pre-wrap;
   word-break: break-word;
 }
+.dsh-git-graph-file-viewer-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.dsh-git-graph-source-viewer {
+  display: flex;
+  max-height: 380px;
+  overflow: auto;
+  border: 1px solid var(--git-graph-border);
+  border-radius: 6px;
+  background: var(--dsw-alias-markdown-code-block);
+  color: var(--git-graph-text);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+  line-height: 18px;
+}
+.dsh-git-graph-source-line-numbers,
+.dsh-git-graph-source-text { margin: 0; font: inherit; white-space: pre; tab-size: 4; }
+.dsh-git-graph-source-line-numbers {
+  position: sticky;
+  left: 0;
+  flex: none;
+  padding: 8px;
+  text-align: right;
+  color: var(--git-graph-tertiary);
+  background: var(--git-graph-layer);
+  user-select: none;
+}
+.dsh-git-graph-source-text { flex: 1; min-width: max-content; padding: 8px 12px; }
 .dsh-git-graph-diff-viewer {
   max-height: 380px;
   overflow: auto;

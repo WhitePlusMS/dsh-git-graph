@@ -221,6 +221,17 @@ function parseFileRequest(value: unknown): import('./domain.ts').GitGraphFileReq
   return { hash: hashStringAt(object.hash, '$.hash'), path: stringAt(object.path, '$.path') }
 }
 
+/** File diffs accept an explicit base; blob reads remain hash/path-only. */
+function parseFileDiffRequest(value: unknown): import('./domain.ts').GitGraphFileDiffRequest {
+  const object = objectAt(value, '$')
+  rejectUnknown(object, ['hash', 'path', 'baseHash'], '$')
+  return {
+    hash: hashStringAt(object.hash, '$.hash'),
+    path: stringAt(object.path, '$.path'),
+    ...(object.baseHash === undefined ? {} : { baseHash: hashStringAt(object.baseHash, '$.baseHash') }),
+  }
+}
+
 function parseCompareRequest(value: unknown): import('./domain.ts').GitGraphCompareRequest {
   const object = objectAt(value, '$')
   rejectUnknown(object, ['baseHash', 'targetHash'], '$')
@@ -301,6 +312,7 @@ function parseCompareResult(value: unknown): import('./domain.ts').GitGraphCompa
 export const gitGraphCommitRequestSchema: TypertSchema<import('./domain.ts').GitGraphCommitRequest> = { parse: parseCommitRequest }
 export const gitGraphCommitDetailsSchema: TypertSchema<import('./domain.ts').GitGraphCommitDetails> = { parse: parseCommitDetails }
 export const gitGraphFileRequestSchema: TypertSchema<import('./domain.ts').GitGraphFileRequest> = { parse: parseFileRequest }
+export const gitGraphFileDiffRequestSchema: TypertSchema<import('./domain.ts').GitGraphFileDiffRequest> = { parse: parseFileDiffRequest }
 export const gitGraphFileContentSchema: TypertSchema<import('./domain.ts').GitGraphFileContent> = { parse: parseFileContent }
 export const gitGraphFileDiffSchema: TypertSchema<GitGraphFileDiff> = { parse: parseFileDiff }
 export const gitGraphWorkingTreeChangesSchema: TypertSchema<import('./domain.ts').GitGraphWorkingTreeChanges> = { parse: parseWorkingTreeChanges }
@@ -485,9 +497,9 @@ export const gitGraphFileInvocation = createGitGraphInvocation({
 
 export const gitGraphFileDiffInvocation = createGitGraphInvocation({
   method: 'readFileDiff',
-  inputSymbol: 'GitGraphFileRequest',
+  inputSymbol: 'GitGraphFileDiffRequest',
   resultSymbol: 'GitGraphFileDiff',
-  schemas: { input: gitGraphFileRequestSchema, result: gitGraphFileDiffSchema, sessionId: sessionIdSchema },
+  schemas: { input: gitGraphFileDiffRequestSchema, result: gitGraphFileDiffSchema, sessionId: sessionIdSchema },
 })
 
 export const gitGraphWorkingTreeInvocation = createGitGraphInvocation({
