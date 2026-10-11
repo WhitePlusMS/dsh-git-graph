@@ -7,10 +7,12 @@
   <a href="README.zh.md">中文说明</a> · <a href="docs/screenshots/readme-header.svg">Static title</a>
 </p>
 
-A read-only Git Graph for the native right sidebar of DeepSeek Harness Web. Browse your workspace's history, branches, and file changes without an API key or conversation message.
+# DSH Git Graph
+
+[dsh-git-graph](https://github.com/WhitePlusMS/dsh-git-graph) by **WhitePlusMS** is a read-only Git visualization plugin for the native right sidebar of **DeepSeek Harness (DSH) Web**. Browse your workspace's commit history, branches, and file changes without an API key or conversation message.
 
 <p align="center">
-  <a href="#install-or-update">Install</a> · <a href="#usage">Usage</a> · <a href="#keyboard-controls">Keyboard controls</a> · <a href="#scope">Scope</a> · <a href="#uninstall">Uninstall</a> · <a href="#documentation">Documentation</a>
+  <a href="#install-or-update">Install</a> · <a href="#usage">Usage</a> · <a href="#keyboard-controls">Keyboard controls</a> · <a href="#faq">FAQ</a> · <a href="#scope">Scope</a> · <a href="#uninstall">Uninstall</a> · <a href="#documentation">Documentation</a>
 </p>
 
 ![Native sidebar, commit graph, and filtering demo](docs/screenshots/demo.gif)
@@ -101,9 +103,22 @@ Use the profile you installed into, and restart it after removal.
 
 Shortcuts apply while focus is inside Git Graph. Normal navigation keys do not intercept typing in inputs or scrolling in a file viewer.
 
+## FAQ
+
+**How do I view commits and file diffs in DeepSeek Harness Web?**
+
+[Install the plugin](#install-or-update) for DSH 0.2.0-rc.2, then open **Git Graph** from the native right sidebar. See [Usage](#usage) for two-commit comparisons and full historical source.
+
+**Do I need an API key or a conversation message?**
+
+No. Git Graph reads the current workspace's local Git data directly.
+
+**Can Git Graph commit, merge, push, pull, or fetch?**
+
+No. The plugin is read-only; refreshing the graph does not fetch remote changes or modify the repository.
+
 ## Scope
 
-- The graph reads the current workspace's local Git data. Refresh does not fetch remote changes or modify the repository.
 - Initially loads 100 commits, with manual loading up to 500. Search scans up to 2,000 commits; Find searches loaded results. Reference-type filters show commits directly carrying the selected kind of label.
 - Historical file viewers provide unified diffs and full text up to 1 MiB per file. Binary and oversized files show their status; text is not truncated and presented as complete. Renamed, added, and deleted files use the available version and corresponding path.
 - Side-by-side diffs, syntax highlighting, tag signature verification, and stash diffs are not available. Tag/stash entries provide summaries and copying.

@@ -7,10 +7,12 @@
   <a href="README.md">English</a> · <a href="docs/screenshots/readme-header.svg">静态标题</a>
 </p>
 
-为 DeepSeek Harness Web 的原生右侧栏提供只读 Git Graph。直接浏览工作区的提交历史、分支和文件变更，无需 API Key 或发送对话消息。
+# DSH Git Graph
+
+[dsh-git-graph](https://github.com/WhitePlusMS/dsh-git-graph) 是 **WhitePlusMS** 开发的 **DeepSeek Harness（DSH）Web** 只读 Git 可视化插件，位于原生右侧栏。直接浏览工作区的提交历史、分支和文件变更，无需 API Key 或发送对话消息。
 
 <p align="center">
-  <a href="#安装与更新">安装</a> · <a href="#使用">使用</a> · <a href="#快捷键">快捷键</a> · <a href="#使用范围">使用范围</a> · <a href="#卸载">卸载</a> · <a href="#更多文档">更多文档</a>
+  <a href="#安装与更新">安装</a> · <a href="#使用">使用</a> · <a href="#快捷键">快捷键</a> · <a href="#常见问题">常见问题</a> · <a href="#使用范围">使用范围</a> · <a href="#卸载">卸载</a> · <a href="#更多文档">更多文档</a>
 </p>
 
 ![原生侧栏、提交图与筛选演示](docs/screenshots/demo.gif)
@@ -101,9 +103,22 @@ dsh plugin --profile web remove dsh-git-graph
 
 快捷键在 Git Graph 获得焦点时生效，普通导航键不会拦截输入框中的文字输入或文件查看器中的滚动。
 
+## 常见问题
+
+**如何在 DeepSeek Harness Web 查看提交和文件 Diff？**
+
+为 DSH 0.2.0-rc.2 [安装插件](#安装与更新)，再从原生右侧栏打开 **Git Graph**。两提交比较和完整历史原文的操作见[使用说明](#使用)。
+
+**需要 API Key 或发送对话消息吗？**
+
+不需要。Git Graph 直接读取当前工作区的本地 Git 数据。
+
+**插件会提交、合并、推送、拉取或 Fetch 吗？**
+
+不会。插件只读，刷新图谱不会 Fetch 远端变更，也不会修改仓库。
+
 ## 使用范围
 
-- 图谱读取当前工作区的本地 Git 数据；刷新不会执行 Fetch，也不会修改仓库。
 - 初始加载 100 条提交，手动加载最多 500 条；搜索最多扫描 2000 条，查找仅针对已加载结果。引用类型筛选只显示直接带对应标签的提交。
 - 历史文件查看器提供统一 Diff 和完整文本，单文件读取上限为 1 MiB。二进制和超限文件会显示状态，不会将截断文本当作完整内容；重命名、新增和删除按实际存在的版本及对应路径读取。
 - 尚无左右 Diff、语法高亮、Tag 签名验证或 Stash Diff；Tag / Stash 条目提供摘要和复制。
