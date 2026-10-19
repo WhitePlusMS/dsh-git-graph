@@ -1,16 +1,17 @@
 name: Package release
 
 on:
-  release:
-    types: [published]
+  push:
+    branches: [master]
+  workflow_dispatch:
 
 jobs:
   package:
+    # 只有显式发布提交或手动运行才创建版本，普通开发提交不会发布。
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'release:')
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    env:
-      RELEASE_TAG: ${{ github.event.release.tag_name }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -19,23 +20,21 @@ jobs:
         with:
           node-version: '22.22.1'
           package-manager-cache: false
-      - name: Check release version
-        # 发布标签必须对应当前包版本，避免把错误版本的安装包附到 Release。
-        run: |
-          node --input-type=module -e 'import fs from "node:fs"; const { version } = JSON.parse(fs.readFileSync("package.json", "utf8")); if (process.env.RELEASE_TAG !== `v${version}`) throw new Error("Release tag must match package.json");'
       - name: Install dependencies
         run: |
           npm install --global pnpm@11.22.0
           pnpm install --frozen-lockfile
       - name: Typecheck
         run: pnpm run typecheck
-      - name: Pack and upload
+      - name: Pack and publish
         env:
           GH_TOKEN: ${{ github.token }}
-        # prepack 使用项目现有构建脚本生成 lib；不覆盖已经发布的同名附件。
+        # prepack 使用现有构建脚本生成 lib；标签固定到本次已检查的提交。
+        # 同版本已经发布时 gh 会明确失败，不移动旧标签或覆盖旧附件。
         run: |
           pnpm pack --pack-destination .release
           package_version="$(node --input-type=module -e 'import fs from "node:fs"; console.log(JSON.parse(fs.readFileSync("package.json", "utf8")).version)')"
+          node --input-type=module -e 'import fs from "node:fs"; const { version } = JSON.parse(fs.readFileSync("package.json", "utf8")); const section = fs.readFileSync("CHANGELOG.md", "utf8").split(/^## /m).find(text => text.startsWith(`${version} —`)); if (!section) throw new Error("Missing version in CHANGELOG.md"); fs.writeFileSync(".release/RELEASE_NOTES.md", `## ${section.trim()}\n`);'
           cd .release
           sha256sum "dsh-git-graph-${package_version}.tgz" > SHA256SUMS.txt
-          gh release upload "$RELEASE_TAG" "dsh-git-graph-${package_version}.tgz" SHA256SUMS.txt --repo "$GITHUB_REPOSITORY"
+          gh release create "v${package_version}" "dsh-git-graph-${package_version}.tgz" SHA256SUMS.txt --target "$GITHUB_SHA" --title "v${package_version} · dsh-git-graph" --notes-file RELEASE_NOTES.md --latest --repo "$GITHUB_REPOSITORY"
