@@ -1,0 +1,41 @@
+name: Package release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.22.1'
+          package-manager-cache: false
+      - name: Check release version
+        # 发布标签必须对应当前包版本，避免把错误版本的安装包附到 Release。
+        run: |
+          node --input-type=module -e 'import fs from "node:fs"; const { version } = JSON.parse(fs.readFileSync("package.json", "utf8")); if (process.env.RELEASE_TAG !== `v${version}`) throw new Error("Release tag must match package.json");'
+      - name: Install dependencies
+        run: |
+          npm install --global pnpm@11.22.0
+          pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm run typecheck
+      - name: Pack and upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # prepack 使用项目现有构建脚本生成 lib；不覆盖已经发布的同名附件。
+        run: |
+          pnpm pack --pack-destination .release
+          package_version="$(node --input-type=module -e 'import fs from "node:fs"; console.log(JSON.parse(fs.readFileSync("package.json", "utf8")).version)')"
+          cd .release
+          sha256sum "dsh-git-graph-${package_version}.tgz" > SHA256SUMS.txt
+          gh release upload "$RELEASE_TAG" "dsh-git-graph-${package_version}.tgz" SHA256SUMS.txt --repo "$GITHUB_REPOSITORY"

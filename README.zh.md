@@ -3,11 +3,11 @@
 </p>
 
 <p align="center">
-  <strong>当前版本 0.5.0</strong> · 适配 DSH 0.2.0-rc.2 · <a href="LICENSE">MIT</a><br>
+  <strong>当前版本 0.5.1</strong> · 适配 DSH 0.2.0-rc.2 · <a href="LICENSE">MIT</a><br>
   <a href="README.md">English</a> · <a href="docs/screenshots/readme-header.svg">静态标题</a>
 </p>
 
-# DSH Git Graph
+# dsh-git-graph
 
 [dsh-git-graph](https://github.com/WhitePlusMS/dsh-git-graph) 是 **WhitePlusMS** 开发的 **DeepSeek Harness（DSH）Web** 只读 Git 可视化插件，位于原生右侧栏。直接浏览工作区的提交历史、分支和文件变更，无需 API Key 或发送对话消息。
 
@@ -57,23 +57,40 @@ GIF 录制于 0.4.0；0.5.0 新增的两提交 Diff 与完整原文效果见下�
 
 ## 安装与更新
 
-需要 **DSH 0.2.0-rc.2**、可用的 `dsh` CLI，以及 DSH Host 上已安装的 Git。
+需要 **DSH 0.2.0-rc.2**、可用的 `dsh` CLI、用于安装插件的 pnpm，以及 DSH Host 上已安装的 Git。
 
-使用 `v0.5.0` 标签归档安装：
+通过 DSH 内置插件页面或命令行安装 `v0.5.1` Release 成品包，两者接受同一安装来源。参见官方的[插件管理器说明](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/packages/client/ui-plugin-manager/README.zh.md)与[打包安装文档](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/docs/user/develop/basic/publish.zh.md)。
 
-```powershell
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/archive/refs/tags/v0.5.0.tar.gz
-dsh web
+在 DSH 中打开 **插件 → 添加插件**，粘贴下面的地址，安装后选择**立即启用**：
+
+```text
+https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.1/dsh-git-graph-0.5.1.tgz
 ```
 
-更新时先停止 DSH Web，执行目标版本的 `add` 命令，再重新启动。
+也可以在终端安装：
+
+```powershell
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.1/dsh-git-graph-0.5.1.tgz
+```
+
+归档已包含构建后的 `lib/` 入口，无需克隆仓库、在本机构建，或保留固定路径的开发目录。
+
+这个 `.tgz` 由 `pnpm pack` 生成并作为 GitHub Release 附件发布，与 GitHub 自动生成的源码归档分开。DSH 官方支持在界面和命令行中使用这个包地址；发布 Release 不会自动完成插件市场收录。仅输入包名安装则需要先发布到 npm。
+
+检查 `dsh-git-graph` 是否已安装为 `0.5.1`：
+
+```powershell
+dsh plugin --profile web list dsh-git-graph
+```
+
+使用 `dsh web` 启动 DSH Web；如果已有实例正在运行，重启原实例使插件生效。更新时执行目标发布标签的 `add` 命令，再重启原实例。安装、启动和卸载须使用同一 profile 名称。
 
 自定义 profile、本地 `.tgz` 安装和源码构建见[开发指南](docs/DEVELOPMENT.md#本地安装与自定义-profile)。
 
 ## 使用
 
 1. 在 DSH Web 中选择工作区，打开右侧栏。
-2. 从侧栏开始页选择 **Git Graph**。
+2. 从侧栏开始页选择 **dsh-git-graph**。
 3. 点击提交查看行内详情，点击文件查看 Diff；点击 **未提交变更** 查看工作区改动。
 4. 点击 **比较提交…** 并选择基准提交，再点击变更文件。在历史文件查看器中切换 **Diff / 完整原文**，并选择旧 / 新版本。
 
@@ -107,7 +124,18 @@ dsh plugin --profile web remove dsh-git-graph
 
 **如何在 DeepSeek Harness Web 查看提交和文件 Diff？**
 
-为 DSH 0.2.0-rc.2 [安装插件](#安装与更新)，再从原生右侧栏打开 **Git Graph**。两提交比较和完整历史原文的操作见[使用说明](#使用)。
+为 DSH 0.2.0-rc.2 [安装插件](#安装与更新)，再从原生右侧栏打开 **dsh-git-graph**。两提交比较和完整历史原文的操作见[使用说明](#使用)。
+
+**为什么提示 `cannot resolve profile bundle "dsh-git-graph"`？**
+
+此前从本地目录安装时，插件可能仍链接到已经移动或删除的文件夹。在同一 profile 中重新安装 Release 成品包；先移除再添加，也能让 DSH 在旧安装未启用时重新登记 bundle：
+
+```powershell
+dsh plugin --profile web remove dsh-git-graph
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.1/dsh-git-graph-0.5.1.tgz
+```
+
+之后重启该 DSH Web 实例。单独运行 `dsh plugin --profile web install` 会沿用已保存的安装来源，无法修复指向不存在目录的链接。
 
 **需要 API Key 或发送对话消息吗？**
 

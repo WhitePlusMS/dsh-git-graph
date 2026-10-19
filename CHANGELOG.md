@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.1 — 2026-10-19
+
+- **命名修正**：组合包注册 ID、Host 插件名称、中英文侧栏标题与插件元数据统一为 `dsh-git-graph`，移除早期的 `ui-git-graph` 注册标识。
+- **安装说明**：中英文 README 补充 DSH 官方文档、安装检查、同一 profile 约定，以及失效本地目录链接的 remove / add 重装步骤。
+- **发布包**：GitHub Release 发布后自动检查、打包并附加预构建 `.tgz` 与 SHA-256 校验文件，可直接通过 DSH 插件页面或 CLI 安装。
+
+适配 DSH **0.2.0-rc.2**。npm 包名仍为 `dsh-git-graph`。
+
+### English
+
+- Use `dsh-git-graph` for the bundle row, Host plugin name, sidebar titles, and plugin metadata.
+- Clarify the official DSH installation workflow, verification, profile selection, and reinstallation after a local checkout moves or is deleted.
+- Build and attach a prebuilt `.tgz` and SHA-256 checksums when a GitHub Release is published, for installation through DSH's plugin page or CLI.
+
+Requires DSH **0.2.0-rc.2**. The npm package name remains `dsh-git-graph`.
+
 ## 0.5.0 — 2026-10-10
 
 - **两提交 Diff**：选择基准和目标提交后，点击变更文件即可查看两端的统一 Diff；支持文件树 / 列表、重命名、新增和删除。目标最后一次提交未改动该文件时，仍展示所选范围内的变化。

@@ -2,7 +2,7 @@
 
 [使用说明](../README.zh.md) · [English README](../README.md)
 
-本项目当前版本为 0.5.0，适配 DSH 0.2.0-rc.2。这里记录本地安装、构建、内部数据接口及验收依据。
+本项目当前版本为 0.5.1，适配 DSH 0.2.0-rc.2。这里记录本地安装、构建、内部数据接口及验收依据。
 
 ## 本地安装与自定义 profile
 
@@ -12,7 +12,7 @@
 pnpm install --frozen-lockfile
 pnpm run typecheck
 pnpm pack --pack-destination .scratch/release
-dsh plugin --profile web add ./.scratch/release/dsh-git-graph-0.5.0.tgz
+dsh plugin --profile web add ./.scratch/release/dsh-git-graph-0.5.1.tgz
 dsh web
 ```
 
@@ -22,7 +22,7 @@ dsh web
 
 ```powershell
 dsh --profile my-web --from-default-profile web --dump-config
-dsh plugin --profile my-web add ./.scratch/release/dsh-git-graph-0.5.0.tgz
+dsh plugin --profile my-web add ./.scratch/release/dsh-git-graph-0.5.1.tgz
 dsh --profile my-web
 ```
 
@@ -39,6 +39,14 @@ pnpm run build
 构建生成独立 Host 和浏览器端产物到 `lib/`，安装包不要求检出 Harness monorepo。根 TypeScript solution 分别引用 Host、Client 和测试程序。客户端通过 Cordis effect、类型化本地化及 DSH 原生侧栏服务注册，并使用目标版本的主题别名。
 
 源码与 `lib/` 产物需要一起提交，供 GitHub 标签归档安装；不保留旧 DSH API 兼容分支。
+
+组合包行 ID、Host 导出名称、侧栏标题和插件元数据统一使用 `dsh-git-graph`，与 npm 包名一致。修改名称后须重新生成 `lib/`，再打包安装。
+
+## 发布 GitHub Release 成品包
+
+提交源码、`lib/` 和版本说明后，在 GitHub 网页创建与 `package.json` 版本一致的标签并发布 Release，例如 `v0.5.1`。
+
+`.github/workflows/release.yml` 会在 Release 发布后执行类型检查和 `pnpm pack`，将含 `lib/` 的 `.tgz` 与 `SHA256SUMS.txt` 附到该 Release。工作流不覆盖已有同名附件；检查 Actions 成功且附件可下载后，再用 README 中的地址安装。该过程不发布到 npm，也不自动完成市场目录收录。
 
 ## Git 数据与路径处理
 

@@ -3,11 +3,11 @@
 </p>
 
 <p align="center">
-  <strong>Version 0.5.0</strong> · DSH 0.2.0-rc.2 · <a href="LICENSE">MIT</a><br>
+  <strong>Version 0.5.1</strong> · DSH 0.2.0-rc.2 · <a href="LICENSE">MIT</a><br>
   <a href="README.zh.md">中文说明</a> · <a href="docs/screenshots/readme-header.svg">Static title</a>
 </p>
 
-# DSH Git Graph
+# dsh-git-graph
 
 [dsh-git-graph](https://github.com/WhitePlusMS/dsh-git-graph) by **WhitePlusMS** is a read-only Git visualization plugin for the native right sidebar of **DeepSeek Harness (DSH) Web**. Browse your workspace's commit history, branches, and file changes without an API key or conversation message.
 
@@ -57,23 +57,40 @@ The GIFs were recorded with 0.4.0. Screenshots of the new 0.5.0 comparison and f
 
 ## Install or update
 
-Requires DSH **0.2.0-rc.2**, the `dsh` CLI, and Git installed on the DSH Host.
+Requires DSH **0.2.0-rc.2**, the `dsh` CLI, pnpm for plugin installation, and Git installed on the DSH Host.
 
-Install `v0.5.0` from its GitHub tag:
+Install the prebuilt `v0.5.1` Release package through either DSH's plugin page or the CLI. Both accept the same package source. See the official [plugin manager guide](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/packages/client/ui-plugin-manager/README.md) and [packaging guide](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/docs/user/develop/basic/publish.md).
 
-```powershell
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/archive/refs/tags/v0.5.0.tar.gz
-dsh web
+In DSH, open **Plugins → Add plugin**, paste this URL, install it, and choose **Enable now**:
+
+```text
+https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.1/dsh-git-graph-0.5.1.tgz
 ```
 
-For updates, stop DSH Web, run `add` for the desired version, then restart it.
+Or install from the terminal:
+
+```powershell
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.1/dsh-git-graph-0.5.1.tgz
+```
+
+The archive includes the built `lib/` entry points. You do not need to clone this repository, build it locally, or keep a development folder at a fixed path.
+
+This `.tgz` is built with `pnpm pack` and uploaded as a GitHub Release asset; it is separate from GitHub's automatically generated source archives. DSH supports installing this package URL in both the UI and CLI. Publishing a release does not automatically list the plugin in a marketplace; installing by package name alone requires an npm publication.
+
+Check that `dsh-git-graph` is installed at version `0.5.1`:
+
+```powershell
+dsh plugin --profile web list dsh-git-graph
+```
+
+Start DSH Web with `dsh web`, or restart your existing instance to load the plugin. For updates, run `add` with the desired release tag, then restart that instance. Use the same profile name for installation, startup, and removal.
 
 For a custom profile, local `.tgz` installation, or source builds, see the [development guide](docs/DEVELOPMENT.md#本地安装与自定义-profile).
 
 ## Usage
 
 1. Select a workspace in DSH Web and open the right sidebar.
-2. Select **Git Graph** from the sidebar's start page.
+2. Select **dsh-git-graph** from the sidebar's start page.
 3. Select a commit for inline details, or a file for its diff. Select **Uncommitted Changes** to inspect working-tree changes.
 4. Choose **Compare commit…** and a base commit, then select a changed file. In a historical file viewer, switch between **Diff** and **Full source**, and choose the old or new version.
 
@@ -107,7 +124,18 @@ Shortcuts apply while focus is inside Git Graph. Normal navigation keys do not i
 
 **How do I view commits and file diffs in DeepSeek Harness Web?**
 
-[Install the plugin](#install-or-update) for DSH 0.2.0-rc.2, then open **Git Graph** from the native right sidebar. See [Usage](#usage) for two-commit comparisons and full historical source.
+[Install the plugin](#install-or-update) for DSH 0.2.0-rc.2, then open **dsh-git-graph** from the native right sidebar. See [Usage](#usage) for two-commit comparisons and full historical source.
+
+**Why does DSH report `cannot resolve profile bundle "dsh-git-graph"`?**
+
+A previous local-directory installation may still link to a folder that was moved or deleted. Reinstall the Release package in the same profile; removing it first also lets DSH register the bundle again if the old installation was no longer enabled:
+
+```powershell
+dsh plugin --profile web remove dsh-git-graph
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.1/dsh-git-graph-0.5.1.tgz
+```
+
+Restart that DSH Web instance afterward. Running `dsh plugin --profile web install` alone reuses the saved package source and cannot repair a link to a missing folder.
 
 **Do I need an API key or a conversation message?**
 

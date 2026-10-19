@@ -3,7 +3,7 @@
  * `dsh.client` and `exports["./client"]`; it is intentionally not imported by
  * this Host module.
  */
-export declare const name = "ui-git-graph";
+export declare const name = "dsh-git-graph";
 export declare const inject: string[];
 export { apply } from './runtime.js';
 export { GitGraphRemoteService } from './remote-service.js';
