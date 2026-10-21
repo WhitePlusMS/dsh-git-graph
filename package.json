@@ -71,6 +71,7 @@
     "typecheck": "tsc -p tsconfig.host.json --noEmit && tsc -p tsconfig.client.json --noEmit && tsc -p tsconfig.tests.json --noEmit",
     "build": "node scripts/build.mjs",
     "bundle": "node scripts/build.mjs",
+    "dev": "node scripts/dev.mjs",
     "prepack": "node scripts/build.mjs"
   },
   "license": "MIT",

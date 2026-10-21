@@ -124,6 +124,7 @@ function indent(text, spaces) {
 }
 
 function buildClient() {
+  const buildId = new Date().toISOString().replace(/\.\d+Z$/u, 'Z')
   const order = collect(CLIENT_ENTRY)
   const postOrder = []
   const seen = new Set()
@@ -136,6 +137,8 @@ function buildClient() {
   visit(CLIENT_ENTRY)
   const factories = postOrder.map(file => {
     let body = transpile(readFileSync(file, 'utf8'), file, ts.ModuleKind.CommonJS)
+    // Stamp the running bundle so the UI can report which build is live.
+    body = body.split('__GIT_GRAPH_BUILD_ID__').join(JSON.stringify(buildId))
     body = body.replace(/require\((['"])(\.[^'"]+)\1\)/g, (_all, quote, specifier) => {
       const target = resolveLocal(file, specifier)
       const id = target === undefined ? undefined : postOrder.indexOf(target)

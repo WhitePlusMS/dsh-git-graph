@@ -28,6 +28,32 @@ dsh --profile my-web
 
 安装、启动和卸载必须使用同一个 profile 名称。
 
+## 开发时的实时预览
+
+`dsh-client-hmr` 每 500ms 轮询已安装插件的 `lib/client.js` 入口（`mtime`、`ctime` 与大小），产物一变就通过 `/plugins/events` 把新 bundle 推给已打开的页面并**热替换该插件**——不需要发布、不需要刷新页面、不需要重启 Host。被替换插件内的 React 状态会重置，会话与工作区状态保留。Host 半侧（`lib/index.js`）只在 Host 启动时加载一次，所以**宿主侧改动必须重启**。
+
+不要用软链方式安装（`dsh plugin --profile web add file:<目录>`）。本插件 Host 半侧在运行时真实 import `@deepseek-ai/dsh-typert-protocol` 与 `@deepseek-ai/dsh-tools`，软链会让 Node 从本工作区的 `node_modules` 解析出第二份协议模块实例。正确做法是保留 profile 里的安装副本，把构建产物同步进去：
+
+```powershell
+pnpm run dev
+```
+
+`scripts/dev.mjs` 依次做三件事：构建、把 `lib/`、`locale/`、`cordis.patch.yml`、`package.json` **原子写入**（临时文件 + 重命名）已安装的 profile 副本、继续监听 `src/` 与 `locale/`。原子写入保证 HMR 轮询不会读到写了一半的 bundle 从而替换失败。构建失败时安装目录保持上一版，不写入半成品。
+
+默认自动发现 `~/.dsh/profiles/*/node_modules/dsh-git-graph`；需要指定其他位置时用 `DSH_PLUGIN_DIR`：
+
+```powershell
+$env:DSH_PLUGIN_DIR = 'C:\Users\me\.dsh\profiles\my-web\node_modules\dsh-git-graph'
+pnpm run dev
+```
+
+| 改了什么 | 生效方式 |
+| --- | --- |
+| `src/client/**`、`locale/**` | 约 500ms 内热替换，无需刷新页面 |
+| `src/*.ts`（Host 半侧）、`cordis.patch.yml`、`package.json` | 重启 `dsh web` |
+
+热替换失败**不会回滚**旧 bundle。失败会显示在 **设置 → 插件 → 插件列表**，可在那里重试；刷新页面也会重新加载。恢复到发布版只需重新执行一次 `dsh plugin --profile web add <Release 包地址>`。
+
 ## 构建与客户端接入
 
 ```powershell
