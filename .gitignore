@@ -27,6 +27,7 @@ out/
 /wayfinder/
 /CONTEXT.md
 /UPDATE_LOG.md
+/DSH_PLUGIN_GUIDE.md
 
 # 本地缓存、临时文件和日志
 .cache/
