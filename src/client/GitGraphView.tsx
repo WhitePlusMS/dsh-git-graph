@@ -906,7 +906,14 @@ function Avatar({ email, name, avatar }: { readonly email: string; readonly name
   const colour = palette[seed % palette.length]
   const initial = (name.trim().charAt(0) || '?').toLocaleUpperCase()
   const image = !failed && avatar?.image ? avatar.image : undefined
-  return <span className={css.avatar} style={{ background: colour }} aria-hidden="true" title={image === undefined ? name : t('avatar.source', { provider: avatar?.provider === 'github' ? 'GitHub' : 'Gravatar' })}
+  // "Not loaded yet" and "this email has no public avatar" look the same on
+  // screen, so only the second one explains itself on hover.
+  const missing = image === undefined && avatar !== undefined && avatar.image === null
+  const provider = avatar?.provider === 'github' ? 'GitHub' : avatar?.provider === 'host' ? t('avatar.providerHost') : 'Gravatar'
+  const title = image !== undefined
+    ? t('avatar.source', { provider })
+    : missing ? t('avatar.missing', { email, name }) : name
+  return <span className={css.avatar} style={{ background: colour }} aria-hidden="true" title={title}
     data-avatar-provider={image === undefined ? 'initials' : avatar?.provider}>
     {image === undefined ? initial : <img src={image} alt="" loading="lazy" onError={() => setFailed(true)} />}
   </span>

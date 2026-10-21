@@ -29,17 +29,58 @@ export function githubRepository(remote: string | null): string | null {
 }
 
 export function gravatarUrl(email: string): string {
-  const hash = createHash('sha256').update(email.trim().toLowerCase()).digest('hex')
-  return `https://www.gravatar.com/avatar/${hash}?s=64&d=404&r=g`
+  return `https://www.gravatar.com/avatar/${emailDigest(email, 'sha256')}?s=64&d=404&r=g`
+}
+
+function emailDigest(email: string, algorithm: 'md5' | 'sha256'): string {
+  return createHash(algorithm).update(email.trim().toLowerCase()).digest('hex')
+}
+
+/**
+ * The web origin of the repository's own Git service (Gitea, Gogs, GitLab…).
+ * Those services answer the Gravatar-compatible `GET <origin>/avatar/<md5>` with
+ * the avatar the account uploaded there, so a self-hosted team gets real photos
+ * even when nobody registered with gravatar.com.
+ */
+export function gitHostOrigin(remote: string | null): string | null {
+  if (remote === null) return null
+  const ssh = /^(?:[\w.-]+@)?([\w.-]+):(?!\/\/)(.+)$/u.exec(remote)
+  const address = ssh !== null ? `https://${ssh[1]}` : remote
+  try {
+    const url = new URL(address)
+    if (!['https:', 'http:'].includes(url.protocol)) return null
+    if (url.username !== '' || url.password !== '') return null
+    return url.origin
+  } catch { return null }
+}
+
+/**
+ * GitHub writes `123456+user@users.noreply.github.com` as a commit email when the
+ * author hides their address. That address resolves to a public avatar without
+ * any repository context, so a repo hosted elsewhere still gets the photo.
+ */
+const GITHUB_NOREPLY_RE = /^(?<id>\d+)\+[^@\s]+@users\.noreply\.github\.com$/u
+
+export function githubNoreplyAvatarUrl(email: string): string | null {
+  const match = GITHUB_NOREPLY_RE.exec(email.trim().toLowerCase())
+  const id = match?.groups?.id
+  return id === undefined ? null : `https://avatars.githubusercontent.com/u/${id}?s=64`
 }
 
 function object(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined
 }
 
-/** Restrict every request and redirect, including URLs returned by GitHub. */
-function allowedUrl(url: URL): boolean {
-  return url.protocol === 'https:' && url.username === '' && url.password === '' && (url.port === '' || url.port === '443')
+/**
+ * Restrict every request and redirect, including URLs returned by GitHub. The
+ * repository's own Git host is allowed in addition, because its `/avatar/<hash>`
+ * endpoint is the team's own avatar store; `allowHostAvatar` limits it to the
+ * exact origin the repository is configured against.
+ */
+function allowedUrl(url: URL, hostOrigin: string | null): boolean {
+  if (url.username !== '' || url.password !== '') return false
+  if (hostOrigin !== null && url.origin === hostOrigin && /^\/avatar\/[0-9a-f]{32,64}$/u.test(url.pathname)) return true
+  return url.protocol === 'https:' && (url.port === '' || url.port === '443')
     && (url.hostname === 'api.github.com' || /^avatars\d*\.githubusercontent\.com$/u.test(url.hostname)
       || ['www.gravatar.com', 'gravatar.com', 'secure.gravatar.com'].includes(url.hostname))
 }
@@ -77,11 +118,11 @@ export class AvatarStore {
 
   constructor(private readonly fetcher: typeof fetch = fetch, private readonly now: () => number = Date.now) {}
 
-  private async request(address: string, signal: AbortSignal, accept: string): Promise<Response> {
+  private async request(address: string, signal: AbortSignal, accept: string, hostOrigin: string | null = null): Promise<Response> {
     let url = new URL(address)
     const timeout = AbortSignal.any([signal, AbortSignal.timeout(4000)])
     for (let redirects = 0; redirects <= 2; redirects += 1) {
-      if (!allowedUrl(url)) throw new Error('Unsupported avatar URL')
+      if (!allowedUrl(url, hostOrigin)) throw new Error('Unsupported avatar URL')
       const response = await this.fetcher(url, { signal: timeout, redirect: 'manual',
         headers: { Accept: accept, 'User-Agent': 'dsh-git-graph' } })
       if (response.status < 300 || response.status >= 400) return response
@@ -89,20 +130,40 @@ export class AvatarStore {
       await response.body?.cancel()
       if (location === null) throw new Error('Avatar redirect has no location')
       const next = new URL(location, url)
-      // GitHub API redirects stay on its API; images stay on the same provider.
-      const provider = (host: string) => host.endsWith('gravatar.com') ? 'gravatar' : host === 'api.github.com' ? 'api' : 'github-image'
-      if (provider(next.hostname) !== provider(url.hostname)) throw new Error('Avatar redirect changed provider')
+      // A redirect must stay inside one provider: the Git host, GitHub's API,
+      // GitHub's image CDN, or Gravatar. Anything else is refused.
+      const provider = (candidate: URL): string => {
+        if (hostOrigin !== null && candidate.origin === hostOrigin) return 'host'
+        if (candidate.hostname.endsWith('gravatar.com')) return 'gravatar'
+        return candidate.hostname === 'api.github.com' ? 'api' : 'github-image'
+      }
+      if (provider(next) !== provider(url)) throw new Error('Avatar redirect changed provider')
       url = next
     }
     throw new Error('Too many avatar redirects')
   }
 
-  private async image(url: string, signal: AbortSignal): Promise<string | null> {
-    const response = await this.request(url, signal, 'image/png,image/jpeg,image/webp,image/gif')
+  private async image(url: string, signal: AbortSignal, hostOrigin: string | null = null): Promise<string | null> {
+    const response = await this.request(url, signal, 'image/png,image/jpeg,image/webp,image/gif', hostOrigin)
     if (!response.ok) { await response.body?.cancel(); return null }
     const body = await boundedBody(response, AVATAR_MAX_BYTES)
     const type = rasterType(body)
     return type === null ? null : `data:image/${type};base64,${body.toString('base64')}`
+  }
+
+  /**
+   * Ask the repository's own Git service for the avatar of this email. Gitea and
+   * Gogs expose `/avatar/<md5>` (Gravatar compatible) and answer with the photo
+   * uploaded in that account, so a self-hosted team resolves avatars even when
+   * nobody registered with gravatar.com.
+   */
+  private async hostImage(origin: string, email: string, signal: AbortSignal): Promise<string | null> {
+    // Gitea/Gogs index the MD5 form; some deployments also accept the SHA256 form.
+    for (const hash of [emailDigest(email, 'md5'), emailDigest(email, 'sha256')]) {
+      const image = await this.image(`${origin}/avatar/${hash}?s=64&d=404`, signal, origin)
+      if (image !== null) return image
+    }
+    return null
   }
 
   private async githubImage(repo: string, author: AvatarAuthor, signal: AbortSignal): Promise<string | null> {
@@ -125,17 +186,30 @@ export class AvatarStore {
     return this.image(imageUrl.href, signal)
   }
 
-  private async author(author: AvatarAuthor, repo: string | null, source: GitGraphAvatarRequest['source'], signal: AbortSignal): Promise<GitGraphAvatar> {
+  private async author(author: AvatarAuthor, repo: string | null, host: string | null, source: GitGraphAvatarRequest['source'], signal: AbortSignal): Promise<GitGraphAvatar> {
     const email = author.email.trim().toLowerCase()
-    const key = `${source}:${repo ?? ''}:${email}`
+    const key = `${source}:${repo ?? host ?? ''}:${email}`
     const cached = this.cache.get(key)
     if (cached !== undefined && cached.expires > this.now()) return cached.avatar
     let image: string | null = null
     let provider: GitGraphAvatar['provider'] = null
     if (/^[^\s@<>]+@[^\s@<>]+$/u.test(email)) {
-      if (source === 'auto' && repo !== null) {
+      // A GitHub noreply address identifies the account on its own, so it works
+      // even when the repository has no GitHub remote to search.
+      const noreply = source === 'auto' ? githubNoreplyAvatarUrl(email) : null
+      if (noreply !== null) {
+        try { image = await this.image(noreply, signal) } catch { signal.throwIfAborted() }
+        if (image !== null) provider = 'github'
+      }
+      if (image === null && source === 'auto' && repo !== null) {
         try { image = await this.githubImage(repo, author, signal) } catch { signal.throwIfAborted() }
         if (image !== null) provider = 'github'
+      }
+      // The repository's own Git service knows its members, so ask it before the
+      // public Gravatar directory. GitHub remotes are already covered above.
+      if (image === null && source === 'auto' && repo === null && host !== null) {
+        try { image = await this.hostImage(host, email, signal) } catch { signal.throwIfAborted() }
+        if (image !== null) provider = 'host'
       }
       if (image === null) {
         try { image = await this.image(gravatarUrl(email), signal) } catch { signal.throwIfAborted() }
@@ -155,6 +229,7 @@ export class AvatarStore {
 
   async read(authors: readonly AvatarAuthor[], remote: string | null, source: GitGraphAvatarRequest['source'], signal: AbortSignal): Promise<GitGraphAvatar[]> {
     const repo = githubRepository(remote)
+    const host = gitHostOrigin(remote)
     const unique = [...new Map(authors.map(author => [author.email.trim().toLowerCase(), author])).values()]
     const result: GitGraphAvatar[] = []
     let next = 0
@@ -162,7 +237,7 @@ export class AvatarStore {
       while (next < unique.length) {
         signal.throwIfAborted()
         const author = unique[next++]
-        if (author !== undefined) result.push(await this.author(author, repo, source, signal))
+        if (author !== undefined) result.push(await this.author(author, repo, host, source, signal))
       }
     }))
     return result
