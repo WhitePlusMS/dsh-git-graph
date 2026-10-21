@@ -808,20 +808,39 @@ export async function loadWorkingTree(ctx: Context, cwd: string, includeUntracke
 /** Per-file content cap for `gitGraph/readFile`. */
 export const FILE_MAX_BYTES = 1 * 1024 * 1024
 
-/** Reject absolute paths, NUL bytes and path traversal outside the workspace. */
-export function assertRepoRelativePath(path: string, cwd: string): void {
+/**
+ * Reject absolute paths, NUL bytes and path traversal outside the repository.
+ * Git reports every path in its output relative to the repository root, so
+ * `root` is that top level — never the session working directory, which may be
+ * a subdirectory of it.
+ */
+export function assertRepoRelativePath(path: string, root: string): void {
   if (path.length === 0) throw new GitGraphError('文件路径不能为空')
   if (path.includes('\u0000')) throw new GitGraphError('文件路径不能包含 NUL 字节')
   if (path.startsWith('/') || path.startsWith('\\')) throw new GitGraphError('文件路径不能是绝对路径')
   if (/^[A-Za-z]:/u.test(path)) throw new GitGraphError('文件路径不能包含盘符')
   const parts = path.split(/[/\\]+/u)
   if (parts.includes('..')) throw new GitGraphError('文件路径不能包含路径穿越')
-  const resolved = resolve(cwd, path)
-  const within = relative(resolve(cwd), resolved)
+  const resolved = resolve(root, path)
+  const within = relative(resolve(root), resolved)
   if (within === '..' || within.startsWith(`..${sep}`) || isAbsolute(within)) {
     throw new GitGraphError('文件路径超出工作区范围')
   }
   if (within.length === 0) throw new GitGraphError('文件路径不能指向工作区本身')
+}
+
+/**
+ * Resolve the repository top level for a working directory that may be any
+ * subdirectory of it. Every path Git prints — and every path this module uses
+ * as a pathspec or file-system path — is relative to that root, while a bare
+ * pathspec is resolved against the process working directory. Reading files and
+ * diffs therefore run at the root, so both sides agree.
+ */
+async function repositoryRoot(ctx: Context, cwd: string, signal: AbortSignal): Promise<string> {
+  const result = await runGit(ctx, cwd, ['rev-parse', '--show-toplevel'], signal)
+  const root = result.stdout.trim()
+  // A worktree-less (bare) or unusual layout still resolves paths the old way.
+  return root.length === 0 ? cwd : resolve(root)
 }
 
 /**
@@ -848,15 +867,16 @@ export async function loadFile(
 ): Promise<GitGraphFileContent> {
   // The Typert schema already enforces a full 40-char hash.
   assertValidHash(request.hash)
-  assertRepoRelativePath(request.path, cwd)
+  const root = await repositoryRoot(ctx, cwd, signal)
+  assertRepoRelativePath(request.path, root)
   const specifier = `${request.hash}:${request.path}`
-  const sizeResult = await runGit(ctx, cwd, ['cat-file', '-s', specifier], signal)
+  const sizeResult = await runGit(ctx, root, ['cat-file', '-s', specifier], signal)
   const size = Number.parseInt(sizeResult.stdout.trim(), 10)
   if (Number.isNaN(size) || size < 0) throw new GitGraphError('无法读取文件大小')
   if (size > FILE_MAX_BYTES) {
     return { hash: request.hash, path: request.path, kind: 'binary', text: null, size, truncated: true }
   }
-  const content = await runGit(ctx, cwd, ['cat-file', 'blob', specifier], signal)
+  const content = await runGit(ctx, root, ['cat-file', 'blob', specifier], signal)
   const text = content.stdout
   return {
     hash: request.hash,
@@ -934,7 +954,10 @@ export async function loadFileDiff(
   signal: AbortSignal,
 ): Promise<GitGraphFileDiff> {
   assertValidHash(request.hash)
-  assertRepoRelativePath(request.path, cwd)
+  // Paths in the file list are repository-root-relative, so they are resolved
+  // (and read) at the top level rather than at the session working directory.
+  const root = await repositoryRoot(ctx, cwd, signal)
+  assertRepoRelativePath(request.path, root)
   let base: string
   let changes: readonly GitGraphFileChange[]
   if (request.baseHash !== undefined) {
@@ -942,16 +965,16 @@ export async function loadFileDiff(
     base = request.baseHash
     // The target's last commit may not touch this file. Resolve status and
     // rename paths from the selected pair, never from its first-parent diff.
-    changes = (await loadCompare(ctx, cwd, { baseHash: base, targetHash: request.hash }, signal)).changes
+    changes = (await loadCompare(ctx, root, { baseHash: base, targetHash: request.hash }, signal)).changes
   } else {
-    const details = await loadCommitDetails(ctx, cwd, request.hash, signal)
+    const details = await loadCommitDetails(ctx, root, request.hash, signal)
     base = details.parents[0] ?? EMPTY_TREE_HASH
     changes = details.fileChanges
   }
   const change = changes.find(file => file.newPath === request.path || file.oldPath === request.path)
   if (change === undefined) throw new GitGraphError(`文件在所选比较范围内不存在或没有变更：${request.path}`)
   // Keep both rename paths in the pathspec so Git can recognize the rename.
-  const diff = await runGit(ctx, cwd, [
+  const diff = await runGit(ctx, root, [
     'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--find-renames', '--unified=3',
     base, request.hash, '--', change.oldPath, change.newPath,
   ], signal)
@@ -1009,22 +1032,27 @@ export async function loadWorkingTreeFile(
   request: GitGraphWorkingTreeFileRequest,
   signal: AbortSignal,
 ): Promise<GitGraphFileDiff> {
-  assertRepoRelativePath(request.path, cwd)
+  // The path came from the change inventory, which Git reports relative to the
+  // repository root; a pathspec, by contrast, is resolved against the process
+  // working directory. Resolve both at the root so a session that runs in a
+  // subdirectory still matches its own files.
+  const root = await repositoryRoot(ctx, cwd, signal)
+  assertRepoRelativePath(request.path, root)
   const { changes } = await loadWorkingTreeChanges(ctx, cwd, signal)
   const change = changes.find(file => file.newPath === request.path || file.oldPath === request.path)
   if (change === undefined) throw new GitGraphError(`文件在工作区不存在或没有变更：${request.path}`)
-  const statusResult = await runGit(ctx, cwd, ['status', '--porcelain', '--untracked-files=all', '-z'], signal)
+  const statusResult = await runGit(ctx, root, ['status', '--porcelain', '--untracked-files=all', '-z'], signal)
   const isUntracked = parseWorkingTreeStatus(statusResult.stdout).untracked.includes(request.path)
   let diff: GitCommandResult
   if (isUntracked) {
-    diff = await runGit(ctx, cwd, [
+    diff = await runGit(ctx, root, [
       'diff', '--no-index', '--no-color', '--no-ext-diff', '--no-textconv', '--unified=3',
-      '/dev/null', resolve(cwd, request.path),
+      '/dev/null', resolve(root, request.path),
     ], signal, [0, 1])
   } else {
-    const headResult = await runGit(ctx, cwd, ['rev-parse', '--verify', 'HEAD'], signal, [0, 1, 128])
+    const headResult = await runGit(ctx, root, ['rev-parse', '--verify', 'HEAD'], signal, [0, 1, 128])
     const base = headResult.exitCode === 0 ? 'HEAD' : EMPTY_TREE_HASH
-    diff = await runGit(ctx, cwd, [
+    diff = await runGit(ctx, root, [
       'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--find-renames', '--unified=3',
       base, '--', change.oldPath, change.newPath,
     ], signal)
