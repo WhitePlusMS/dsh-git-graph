@@ -50,6 +50,7 @@ GIF 录制于 0.4.0；0.5.0 的两提交 Diff 与完整原文见下方截图，0
 ## 功能
 
 - **提交历史**：提交拓扑、分支、Tag、HEAD，以及提交搜索和历史筛选。
+- **分支查看**：点标题栏的分支名打开分支面板，本地 / 远端分组，可搜索名字，选中即只显示该分支的提交并定位到它的最新提交；只读，不切换工作区。
 - **提交详情**：行内展示作者与提交者日期、父提交、引用、签名状态和复制操作。
 - **引用显示**：同一提交上的引用全部展示，同名本地 / 远端分支可合并；放不下时换行、行高自适应，另有两种引用布局可选。
 - **文件变更**：文件树 / 列表、逐文件 Diff、未提交变更；选择两次提交后，可以打开每个变更文件的 Diff。
@@ -126,6 +127,7 @@ dsh plugin --profile web remove dsh-git-graph
 | --- | --- |
 | `Ctrl/Cmd+F` | 在已加载结果中查找 |
 | `Ctrl/Cmd+Shift+F` | 切换显示设置 |
+| `Esc` | 逐层关闭浮层：先关分支 / 筛选 / 设置面板，再关查找条 |
 | `↑` / `↓` | 关闭并清空查找后，选择提交 |
 | `H` | 定位 HEAD，超出范围则提示 |
 | 行或节点上的 `Enter` / `Space` | 选择提交 |
@@ -170,12 +172,14 @@ dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releas
 ## 使用范围
 
 - 初始加载 100 条提交，手动加载最多 500 条；搜索最多扫描 2000 条，查找仅针对已加载结果。引用类型筛选只显示直接带对应标签的提交。
+- 分支面板只做只读导航：选中分支等于把它变成查询范围并定位到它的最新提交。插件不执行 `checkout`、`merge`、`rebase`、`cherry-pick`、`reset`、`fetch`、`pull`、`push`，也不会改写暂存区或引用。
 - 历史文件查看器提供统一 Diff 和完整文本，单文件读取上限为 1 MiB。二进制和超限文件会显示状态，不会将截断文本当作完整内容；重命名、新增和删除按实际存在的版本及对应路径读取。
 - 尚无左右 Diff、语法高亮、Tag 签名验证或 Stash Diff；Tag / Stash 条目提供摘要和复制。
 
 ## 更多文档
 
 - [llms.txt](llms.txt)——供 AI 助手与索引读取的精简摘要
+- [与 vscode-git-graph 的功能差距报告](docs/FEATURE_GAP_VS_VSCODE.md)——逐项对比、可只读补齐清单与「不做」边界
 - [开发、本地安装与 API 说明](docs/DEVELOPMENT.md)
 - [版本说明](CHANGELOG.md) · [引用与头像验收报告](docs/REFS_AVATAR_TEST_REPORT.md)
 - [提交比较与完整原文验收报告](docs/COMPARE_SOURCE_TEST_REPORT.md)
