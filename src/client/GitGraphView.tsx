@@ -83,16 +83,20 @@ function CopyButton({ value, label, className = css.secondaryButton, children, h
     }}><span aria-live="polite">{state === 'copied' ? t('common.copied') : state === 'failed' ? t('common.copyFailed') : children ?? label}</span></button>
 }
 
-function RefBadges({ refs, compact = false, currentBranch, onShowAll, remotes, combine }: {
-  readonly refs: readonly GitGraphRef[]; readonly compact?: boolean; readonly currentBranch?: string | null; readonly onShowAll?: () => void
+/**
+ * Draws every reference on the commit, never a "+N" summary: the row trades
+ * subject width for reference width, and each chip ellipsizes its own name when
+ * the row is too narrow, so no reference is silently hidden.
+ */
+function RefBadges({ refs, currentBranch, remotes, combine }: {
+  readonly refs: readonly GitGraphRef[]; readonly currentBranch?: string | null
   readonly remotes: readonly string[]; readonly combine: boolean
 }) {
   const t = useText()
   const ordered = referenceLabels(refs, remotes, combine, currentBranch ?? null)
-  const shown = compact ? ordered.slice(0, 1) : ordered
   return refs.length === 0 ? null : (
     <span className={css.refs} aria-label={t('refs.aria')}>
-      {shown.map(({ ref, remotes: joined }) => (
+      {ordered.map(({ ref, remotes: joined }) => (
         <span key={`${ref.kind}:${ref.name}`} className={css.ref} data-kind={ref.kind} data-combined={joined.length > 0} title={[ref.name, ...joined.map(remote => remote.name)].join('\n')}>
           <CopyButton value={ref.name} label={t('refs.copy', { name: ref.name })} className={css.refCopy}
             hint={`${ref.kind === 'remote' ? t('refs.remoteHint') : ref.kind === 'head' ? t('toolbar.localBranches') : t('metadata.tags')} · ${ref.name}${ref.kind === 'head' && ref.name === currentBranch ? ` · ${t('refs.current')}` : ''}`}>
@@ -118,19 +122,62 @@ function RefBadges({ refs, compact = false, currentBranch, onShowAll, remotes, c
             hint={`${t('refs.remoteHint')} · ${remote.name}`}>{remote.name.slice(0, -ref.name.length - 1)}</CopyButton>)}
         </span>
       ))}
-      {compact && ordered.length > shown.length && <button type="button" className={css.refsMore} title={refs.map(ref => ref.name).join('\n')} aria-label={t('refs.showAll', { count: refs.length })} onClick={event => { event.stopPropagation(); onShowAll?.() }}>+{ordered.length - shown.length}</button>}
     </span>
   )
+}
+
+/** One rendered row's vertical box inside the commit list. */
+interface RowBox {
+  readonly top: number
+  readonly height: number
+}
+
+/**
+ * Measured boxes of the rendered rows. `rows[0]` is the first commit row and
+ * `workingTree` the uncommitted-changes row above it; rows grow when a commit
+ * carries enough references to wrap the labels onto a second line.
+ */
+interface RowMetrics {
+  readonly workingTree: RowBox | undefined
+  readonly rows: readonly RowBox[]
+  readonly total: number
+}
+
+function rowBox(metrics: RowMetrics, row: number, rowHeight: number): RowBox {
+  const box = row < 0 ? metrics.workingTree : metrics.rows[row]
+  if (box !== undefined) return box
+  const shift = metrics.workingTree === undefined ? 0 : rowHeight
+  return row < 0 ? { top: 0, height: rowHeight } : { top: shift + row * rowHeight, height: rowHeight }
+}
+
+/** Geometry to draw with before the first measurement lands. */
+function uniformRowMetrics(rowCount: number, workingTreeChanged: boolean, rowHeight: number): RowMetrics {
+  const shift = workingTreeChanged ? rowHeight : 0
+  return {
+    workingTree: workingTreeChanged ? { top: 0, height: rowHeight } : undefined,
+    rows: Array.from({ length: rowCount }, (_, index) => ({ top: shift + index * rowHeight, height: rowHeight })),
+    total: shift + rowCount * rowHeight,
+  }
+}
+
+/** Same geometry within half a pixel, so the measuring effect settles. */
+function sameRowBox(left: RowBox | undefined, right: RowBox | undefined): boolean {
+  if (left === undefined || right === undefined) return left === right
+  return Math.abs(left.top - right.top) < 0.5 && Math.abs(left.height - right.height) < 0.5
+}
+
+function sameRowMetrics(left: RowMetrics, right: RowMetrics): boolean {
+  if (!sameRowBox(left.workingTree, right.workingTree) || Math.abs(left.total - right.total) >= 0.5) return false
+  if (left.rows.length !== right.rows.length) return false
+  return left.rows.every((box, index) => sameRowBox(box, right.rows[index]))
 }
 
 interface GraphSvgProps {
   readonly layout: GraphLayout
   readonly workingTreeChanged: boolean
   readonly selectedHash: string | undefined
-  /** Layout row after which an inline expansion sits; -1 means above all rows. */
-  readonly gapAfterRow: number | undefined
-  /** Pixel height reserved for the inline expansion; 0 when nothing is open. */
-  readonly gapHeight: number
+  /** Measured vertical box of every row, so wrapping reference labels stay aligned. */
+  readonly metrics: RowMetrics
   readonly onSelect: (hash: string) => void
   readonly rowHeight: number
   readonly lineStyle: GraphLineStyle
@@ -139,22 +186,18 @@ interface GraphSvgProps {
   readonly onHover: (hash: string | undefined) => void
 }
 
-function GraphSvg({ layout, workingTreeChanged, selectedHash, gapAfterRow, gapHeight, onSelect, rowHeight, lineStyle, palette, hoveredHash, onHover }: GraphSvgProps) {
+function GraphSvg({ layout, workingTreeChanged, selectedHash, metrics, onSelect, rowHeight, lineStyle, palette, hoveredHash, onHover }: GraphSvgProps) {
   const t = useText()
   const laneWidth = 16
   const graphPadding = 16
   const graphWidth = graphDisplayWidth(layout.laneCount)
-  const rowOffset = workingTreeChanged ? 1 : 0
-  const gap = gapAfterRow === undefined ? 0 : gapHeight
-  const graphHeight = Math.max(rowHeight, (layout.nodes.length + rowOffset) * rowHeight) + gap
+  const graphHeight = Math.max(rowHeight, metrics.total)
   const colours = palette === 'accessible' ? ['#0072b2', '#d55e00', '#009e73', '#cc79a7', '#e69f00', '#56b4e9'] : ['#0085d9', '#d9008f', '#00a86b', '#d98500', '#7b4bc4', '#e138e8', '#00a7a0', '#dc5b23', '#6f24d6', '#b38b00']
   const headNode = layout.nodes.find(node => node.commit.isHead)
   const pointX = (lane: number) => graphPadding + lane * laneWidth
-  // Rows below the expanded row are pushed down so the graph keeps lining up
-  // with the commit rows next to the inline details view.
   const pointY = (row: number) => {
-    const base = (row + rowOffset) * rowHeight + rowHeight / 2
-    return gapAfterRow !== undefined && row > gapAfterRow ? base + gap : base
+    const box = rowBox(metrics, row, rowHeight)
+    return box.top + box.height / 2
   }
   const pathForEdge = (edge: GraphLayout['edges'][number]) => {
     const x1 = pointX(edge.fromLane)
@@ -163,8 +206,12 @@ function GraphSvg({ layout, workingTreeChanged, selectedHash, gapAfterRow, gapHe
     const y2 = pointY(edge.row + 1)
     if (x1 === x2) return `M ${x1} ${y1} L ${x2} ${y2}`
     if (lineStyle === 'straight') return `M ${x1} ${y1} L ${x2} ${y2}`
+    const from = rowBox(metrics, edge.row, rowHeight)
+    const to = rowBox(metrics, edge.row + 1, rowHeight)
     const span = y2 - y1
-    const curve = span > rowHeight * 1.5 ? span * 0.4 : rowHeight * 0.8
+    // A tall row (wrapped labels) or an open inline panel gets a longer, gentler
+    // curve instead of a fixed radius measured in rows.
+    const curve = span > Math.min(from.height, to.height) * 1.5 ? span * 0.4 : Math.min(from.height, to.height) * 0.8
     return `M ${x1} ${y1} C ${x1} ${y1 + curve}, ${x2} ${y2 - curve}, ${x2} ${y2}`
   }
 
@@ -180,7 +227,7 @@ function GraphSvg({ layout, workingTreeChanged, selectedHash, gapAfterRow, gapHe
       {workingTreeChanged && headNode !== undefined && (
         <path
           className={css.workingTreeEdge}
-          d={`M ${pointX(0)} ${pointY(-1)} C ${pointX(0)} ${pointY(-1) + rowHeight * 0.8}, ${pointX(headNode.lane)} ${pointY(headNode.row) - rowHeight * 0.8}, ${pointX(headNode.lane)} ${pointY(headNode.row)}`}
+          d={`M ${pointX(0)} ${pointY(-1)} C ${pointX(0)} ${pointY(-1) + rowBox(metrics, -1, rowHeight).height * 0.8}, ${pointX(headNode.lane)} ${pointY(headNode.row) - rowBox(metrics, headNode.row, rowHeight).height * 0.8}, ${pointX(headNode.lane)} ${pointY(headNode.row)}`}
         />
       )}
       {layout.edges.map((edge, index) => {
@@ -245,47 +292,69 @@ function commitMatchesFind(commit: GitGraphCommit, text: string, caseSensitive: 
   return haystack.includes(needle)
 }
 
-/** Labels use the same row/gap geometry as the SVG and follow their own node. */
-function GraphReferenceLabels({ layout, workingTreeChanged, gapAfterRow, gapHeight, rowHeight, remotes, currentBranch, combine, onSelect }: {
-  readonly layout: GraphLayout; readonly workingTreeChanged: boolean; readonly gapAfterRow: number | undefined
-  readonly gapHeight: number; readonly rowHeight: number; readonly remotes: readonly string[]
-  readonly currentBranch: string | null; readonly combine: boolean; readonly onSelect: (hash: string) => void
+/**
+ * Labels use the same measured row boxes as the SVG and follow their own node.
+ * They report how far right their widest row reaches, so the graph column can
+ * reserve exactly that much room and keep every label at its natural size.
+ */
+function GraphReferenceLabels({ layout, metrics, remotes, currentBranch, combine, onExtent }: {
+  readonly layout: GraphLayout; readonly metrics: RowMetrics; readonly remotes: readonly string[]
+  readonly currentBranch: string | null; readonly combine: boolean
+  readonly onExtent: (extent: number) => void
 }) {
-  const offset = workingTreeChanged ? 1 : 0
-  return <div className={css.graphRefs} style={{ width: 'calc(var(--git-graph-svg-width) + var(--git-graph-ref-width))',
-    height: (layout.nodes.length + offset) * rowHeight + (gapAfterRow === undefined ? 0 : gapHeight) }} data-graph-reference-labels>
+  const layerRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const layer = layerRef.current
+    if (layer === null) return
+    let extent = 0
+    for (const row of layer.querySelectorAll<HTMLElement>(`.${css.graphRefRow}`)) {
+      const container = row.querySelector<HTMLElement>(`.${css.refs}`)
+      if (container === null) continue
+      // The chips never shrink here, so this is the natural label width.
+      extent = Math.max(extent, Number.parseFloat(row.style.left) + container.getBoundingClientRect().width)
+    }
+    onExtent(extent)
+  }, [layout, combine, remotes, onExtent])
+  return <div className={css.graphRefs} ref={layerRef} style={{ width: 'calc(var(--git-graph-svg-width) + var(--git-graph-ref-width))',
+    height: metrics.total }} data-graph-reference-labels>
     {layout.nodes.map(node => <div key={node.commit.hash} className={css.graphRefRow} data-ref-commit={node.commit.hash}
-      style={{ left: 30 + node.lane * 16, top: (node.row + offset) * rowHeight + (gapAfterRow !== undefined && node.row > gapAfterRow ? gapHeight : 0), height: rowHeight }}>
-      <RefBadges refs={node.commit.refs.filter(ref => ref.kind !== 'tag')} compact remotes={remotes} combine={combine}
-        currentBranch={currentBranch} onShowAll={() => onSelect(node.commit.hash)} />
+      style={{ left: 30 + node.lane * 16, top: (metrics.rows[node.row] ?? metrics.workingTree)?.top ?? 0, height: (metrics.rows[node.row] ?? metrics.workingTree)?.height }}>
+      <RefBadges refs={node.commit.refs.filter(ref => ref.kind !== 'tag')} remotes={remotes} combine={combine} currentBranch={currentBranch} />
     </div>)}
   </div>
 }
 
-function CommitRow({ commit, selected, display, findActive, onSelect, onShowRefs, currentBranch, hovered, onHover, remotes, avatar }: {
+function CommitRow({ commit, selected, display, findActive, onSelect, currentBranch, hovered, onHover, remotes, avatar, rowRef }: {
   readonly commit: GitGraphCommit
   readonly selected: boolean
   readonly display: GitGraphDisplaySettings
   readonly findActive: boolean
   readonly onSelect: () => void
-  readonly onShowRefs: () => void
   readonly currentBranch: string | null
   readonly hovered: boolean
   readonly onHover: (hash: string | undefined) => void
   readonly remotes: readonly string[]
   readonly avatar: GitGraphAvatar | undefined
+  /** Measured by the graph so a row that wraps its labels still lines up. */
+  readonly rowRef: (element: HTMLDivElement | null) => void
 }) {
   const t = useText()
   return (
-    <div role="button" tabIndex={0} data-commit-hash={commit.hash} data-hovered={hovered} className={selected ? `${css.commit} ${css.commitSelected}` : css.commit} aria-pressed={selected} onClick={onSelect}
+    <div role="button" tabIndex={0} ref={rowRef} data-commit-hash={commit.hash} data-hovered={hovered} className={selected ? `${css.commit} ${css.commitSelected}` : css.commit} aria-pressed={selected} onClick={onSelect}
       onMouseEnter={() => onHover(commit.hash)} onMouseLeave={() => onHover(undefined)}
       onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onSelect() } }}>
       <span className={css.commitDescription}>
-        {commit.isHead && <span className={css.headDot} title={t('graph.head')} aria-label={t('graph.head')} />}
-        <Avatar email={commit.email} name={commit.author} avatar={avatar} />
-        {display.referenceAlignment !== 'graph' && <RefBadges refs={display.referenceAlignment === 'normal' ? commit.refs : commit.refs.filter(ref => ref.kind !== 'tag')} compact currentBranch={currentBranch} onShowAll={onShowRefs} remotes={remotes} combine={display.combineReferences} />}
-        <span className={findActive ? `${css.subject} ${css.findHighlight}` : css.subject} title={commit.subject}>{commit.subject || t('common.noSubject')}</span>
-        {display.referenceAlignment !== 'normal' && <span className={css.tagsRight}><RefBadges refs={commit.refs.filter(ref => ref.kind === 'tag')} compact currentBranch={currentBranch} onShowAll={onShowRefs} remotes={remotes} combine={false} /></span>}
+        {/* The head dot and avatar stay centred beside the whole two-line body:
+            when the references wrap, the subject drops below them as one block. */}
+        <span className={css.commitLead}>
+          {commit.isHead && <span className={css.headDot} title={t('graph.head')} aria-label={t('graph.head')} />}
+          <Avatar email={commit.email} name={commit.author} avatar={avatar} />
+        </span>
+        <span className={css.commitBody}>
+          {display.referenceAlignment !== 'graph' && <RefBadges refs={display.referenceAlignment === 'normal' ? commit.refs : commit.refs.filter(ref => ref.kind !== 'tag')} currentBranch={currentBranch} remotes={remotes} combine={display.combineReferences} />}
+          <span className={findActive ? `${css.subject} ${css.findHighlight}` : css.subject} title={commit.subject}>{commit.subject || t('common.noSubject')}</span>
+          {display.referenceAlignment !== 'normal' && <span className={css.tagsRight}><RefBadges refs={commit.refs.filter(ref => ref.kind === 'tag')} currentBranch={currentBranch} remotes={remotes} combine={false} /></span>}
+        </span>
       </span>
       {display.showDate && <span className={css.commitDate} title={`${t(display.dateSource === 'author' ? 'details.authorDate' : 'details.committerDate')} · ${formatDate(commitDate(commit, display.dateSource))}`}>{formatDateValue(commitDate(commit, display.dateSource), display.dateFormat)}</span>}
       {display.showAuthor && <span className={css.commitAuthor} title={`${commit.author} <${commit.email}>`}>{commit.author}</span>}
@@ -1096,8 +1165,12 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
   const sectionRef = useRef<HTMLElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const [settingsRepo, setSettingsRepo] = useState<string>()
-  const inlineRef = useRef<HTMLDivElement>(null)
-  const [inlineHeight, setInlineHeight] = useState(0)
+  // Rows are measured, not assumed to be one line tall: a commit with many
+  // references wraps its labels, so the graph column follows the real boxes.
+  const listRef = useRef<HTMLDivElement>(null)
+  const workingTreeRowRef = useRef<HTMLButtonElement>(null)
+  const rowNodes = useRef<Array<HTMLDivElement | null>>([])
+  const [measured, setMeasured] = useState<{ key: string; metrics: RowMetrics }>()
   // Only the newest query may replace the graph, including after unmount.
   const querySequence = useRef(0)
   const loadedPath = useRef<string>()
@@ -1218,25 +1291,52 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
     setShowWorkingTree(current => !current)
   }
 
-  // Layout row after which the inline expansion is inserted; the graph SVG
-  // reserves this much vertical space so its lines stay aligned with rows.
-  const expandedRow = showWorkingTree ? -1 : layout.nodes.find(node => node.commit.hash === selectedHash)?.row
+  const rowHeight = graphRowHeight(display)
+  const workingTreeChanged = snapshot?.workingTree.changed === true
+  const metricKey = `${layout.nodes.length}:${workingTreeChanged ? 1 : 0}`
+  // Until the current rows have been measured, draw with uniform rows. The
+  // layout effect measures before paint, so this is never visible for long.
+  const rowMetrics = measured?.key === metricKey && measured.metrics.rows.length === layout.nodes.length
+    ? measured.metrics
+    : uniformRowMetrics(layout.nodes.length, workingTreeChanged, rowHeight)
 
-  // Measure the inline expansion (it grows as details/diffs stream in) so the
-  // graph column can keep pace with the commit list column.
+  // Measure every row (including the working-tree row and any open inline
+  // panel) so the SVG and the graph-aligned labels track the real list.
   useLayoutEffect(() => {
-    const element = inlineRef.current
-    if (element === null) {
-      setInlineHeight(0)
-      return
+    const list = listRef.current
+    if (list === null) return undefined
+    const measure = () => {
+      const listRect = list.getBoundingClientRect()
+      const boxOf = (element: HTMLElement): RowBox => {
+        const rect = element.getBoundingClientRect()
+        return { top: Math.round(rect.top - listRect.top), height: Math.round(rect.height) }
+      }
+      const rows: RowBox[] = []
+      for (let index = 0; index < layout.nodes.length; index += 1) {
+        const element = rowNodes.current[index]
+        rows.push(element === undefined || element === null
+          ? { top: (workingTreeChanged ? rowHeight : 0) + index * rowHeight, height: rowHeight }
+          : boxOf(element))
+      }
+      const workingTree = workingTreeRowRef.current === null ? undefined : boxOf(workingTreeRowRef.current)
+      const last = rows[rows.length - 1]
+      // Derive the height from the rows only: reading the list's own scroll
+      // height would feed the SVG height back into the row layout and keep the
+      // graph stretched after a tall inline panel closes.
+      const total = Math.max(
+        last === undefined ? 0 : last.top + last.height,
+        workingTree === undefined ? 0 : workingTree.top + workingTree.height)
+      const metrics: RowMetrics = { workingTree, rows, total }
+      const key = `${layout.nodes.length}:${workingTreeChanged ? 1 : 0}`
+      setMeasured(current => current !== undefined && current.key === key && sameRowMetrics(current.metrics, metrics)
+        ? current : { key, metrics })
     }
-    const update = () => setInlineHeight(element.offsetHeight)
-    update()
-    if (typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(update)
-    observer.observe(element)
+    measure()
+    if (typeof ResizeObserver === 'undefined') return undefined
+    const observer = new ResizeObserver(measure)
+    observer.observe(list)
     return () => observer.disconnect()
-  }, [selectedHash, showWorkingTree, expandedRow, snapshot?.workingTree.changed])
+  }, [layout, workingTreeChanged, rowHeight, selectedHash, showWorkingTree, display])
 
   const loadMore = () => {
     const nextMax = Math.min(MAX_COMMITS, maxCommits + PAGE_SIZE)
@@ -1342,12 +1442,19 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
 
   // Share the exact column definition with the header, commits and worktree row.
   const columns = visibleColumns(display)
-  const rowHeight = graphRowHeight(display)
   const rowMin = columns.reduce((sum, column) => sum + display.columnWidths[column], 12 + (columns.length - 1) * 8)
   const resizeColumn = (column: CommitColumn, width: number) => setDisplay(current => ({ ...current,
     fitDescription: column === 'description' ? false : current.fitDescription,
     columnWidths: { ...current.columnWidths, [column]: clampColumnWidth(column, width) } }))
-  const extraGraphWidth = display.referenceAlignment === 'graph' ? 160 : 0
+  // Graph-aligned labels ask for the width their widest row reaches; every other
+  // alignment keeps the plain commit row and reserves nothing.
+  const [graphRefWidth, setGraphRefWidth] = useState(160)
+  const graphSvgWidth = graphDisplayWidth(layout.laneCount) + 8
+  const reserveGraphRefs = useCallback((extent: number) => {
+    const width = Math.min(360, Math.max(160, Math.ceil(extent - graphSvgWidth)))
+    setGraphRefWidth(current => Math.abs(current - width) < 1 ? current : width)
+  }, [graphSvgWidth])
+  const extraGraphWidth = display.referenceAlignment === 'graph' ? graphRefWidth : 0
   const columnStyle: CSSProperties & { '--git-graph-columns': string; '--git-graph-row-min': string; '--git-graph-row-height': string; '--git-graph-svg-width': string; '--git-graph-ref-width': string } = {
     '--git-graph-columns': columns.map(column => column === 'description' && display.fitDescription ? `minmax(${display.columnWidths[column]}px, 1fr)` : `${display.columnWidths[column]}px`).join(' '),
     '--git-graph-row-min': `${rowMin}px`,
@@ -1446,31 +1553,31 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
             <div className={css.commitHeader}>
               {columns.map(column => <span key={column} className={css.headerCell}>{t(column === 'date' ? display.dateSource === 'author' ? 'details.authorDate' : 'details.committerDate' : column === 'hash' ? 'column.commit' : `column.${column}`)}<ColumnResizer column={column} width={display.columnWidths[column]} onChange={resizeColumn} /></span>)}
             </div>
-            <GraphSvg layout={layout} workingTreeChanged={snapshot.workingTree.changed} selectedHash={selectedHash} gapAfterRow={expandedRow} gapHeight={inlineHeight} onSelect={selectCommit} rowHeight={rowHeight} lineStyle={display.lineStyle} palette={display.palette} hoveredHash={hoveredHash} onHover={setHoveredHash} />
-            {display.referenceAlignment === 'graph' && <GraphReferenceLabels layout={layout} workingTreeChanged={snapshot.workingTree.changed}
-              gapAfterRow={expandedRow} gapHeight={inlineHeight} rowHeight={rowHeight} remotes={snapshot.remotes} currentBranch={snapshot.branch}
-              combine={display.combineReferences} onSelect={setSelectedHash} />}
-            <div className={css.commitList}>
+            <GraphSvg layout={layout} workingTreeChanged={snapshot.workingTree.changed} selectedHash={selectedHash} metrics={rowMetrics} onSelect={selectCommit} rowHeight={rowHeight} lineStyle={display.lineStyle} palette={display.palette} hoveredHash={hoveredHash} onHover={setHoveredHash} />
+            {display.referenceAlignment === 'graph' && <GraphReferenceLabels layout={layout} metrics={rowMetrics} onExtent={reserveGraphRefs}
+              remotes={snapshot.remotes} currentBranch={snapshot.branch} combine={display.combineReferences} />}
+            <div className={css.commitList} ref={listRef}>
               {snapshot.workingTree.changed && (
                 <>
-                  <button type="button" className={css.workingTreeRow} title={t('worktree.open')} onClick={toggleWorkingTree} aria-expanded={showWorkingTree}>
+                  <button type="button" className={css.workingTreeRow} ref={workingTreeRowRef} title={t('worktree.open')} onClick={toggleWorkingTree} aria-expanded={showWorkingTree}>
                     <span className={css.commitDescription}><span className={css.headDot} />{t('worktree.title')}</span>
                     {display.showDate && <span className={css.commitDate}>—</span>}
                     {display.showAuthor && <span className={css.commitAuthor}>—</span>}
                     {display.showHash && <span className={`${css.hash} ${css.commitHash}`}>WORKTREE</span>}
                   </button>
                   {showWorkingTree && (
-                    <div className={css.inlineDetails} ref={inlineRef} data-inline-details>
+                    <div className={css.inlineDetails} data-inline-details>
                       {expansion}
                     </div>
                   )}
                 </>
               )}
-              {visibleCommits.map(commit => (
+              {visibleCommits.map((commit, index) => (
                 <Fragment key={commit.hash}>
-                  <CommitRow commit={commit} selected={commit.hash === selectedHash} display={display} findActive={findMatches.length > 0 && findMatches.some(match => match.hash === commit.hash)} onSelect={() => selectCommit(commit.hash)} currentBranch={snapshot.branch} hovered={hoveredHash === commit.hash} onHover={setHoveredHash} onShowRefs={() => setSelectedHash(commit.hash)} remotes={snapshot.remotes} avatar={display.showAvatars ? authorAvatars.images.get(avatarEmail(commit.email)) : undefined} />
+                  <CommitRow commit={commit} selected={commit.hash === selectedHash} display={display} findActive={findMatches.length > 0 && findMatches.some(match => match.hash === commit.hash)} onSelect={() => selectCommit(commit.hash)} currentBranch={snapshot.branch} hovered={hoveredHash === commit.hash} onHover={setHoveredHash} remotes={snapshot.remotes} avatar={display.showAvatars ? authorAvatars.images.get(avatarEmail(commit.email)) : undefined}
+                    rowRef={element => { rowNodes.current[index] = element }} />
                   {commit.hash === selectedHash && (
-                    <div className={css.inlineDetails} ref={inlineRef} data-inline-details>
+                    <div className={css.inlineDetails} data-inline-details>
                       {expansion}
                     </div>
                   )}

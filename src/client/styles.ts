@@ -39,6 +39,8 @@ export const css = {
   commit: 'dsh-git-graph-commit',
   commitSelected: 'dsh-git-graph-commit-selected',
   commitDescription: 'dsh-git-graph-commit-description',
+  commitLead: 'dsh-git-graph-commit-lead',
+  commitBody: 'dsh-git-graph-commit-body',
   commitDate: 'dsh-git-graph-commit-date',
   commitAuthor: 'dsh-git-graph-commit-author',
   commitHash: 'dsh-git-graph-commit-hash',
@@ -51,7 +53,6 @@ export const css = {
   refIcon: 'dsh-git-graph-ref-icon',
   refName: 'dsh-git-graph-ref-name',
   refCopy: 'dsh-git-graph-ref-copy',
-  refsMore: 'dsh-git-graph-refs-more',
   currentBranch: 'dsh-git-graph-current-branch',
   remoteJoined: 'dsh-git-graph-remote-joined',
   tagsRight: 'dsh-git-graph-tags-right',
@@ -323,11 +324,12 @@ const CSS = `
   grid-row: 2;
   min-width: 0;
 }
+/* A row is at least one line tall and grows when its reference chips wrap;
+   the graph column is measured from the rendered rows, not from a constant. */
 .dsh-git-graph-working-tree-row,
 .dsh-git-graph-commit {
   box-sizing: border-box;
   width: 100%;
-  height: var(--git-graph-row-height);
   min-height: var(--git-graph-row-height);
   border: 0;
   border-bottom: 1px solid var(--git-graph-border);
@@ -369,13 +371,21 @@ const CSS = `
 .dsh-git-graph-commit-selected { background: var(--git-graph-hover); }
 .dsh-git-graph-commit-selected { box-shadow: inset 2px 0 var(--dsw-alias-button-primary-fill); }
 .dsh-git-graph-commit-description {
-  display: flex;
-  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 5px;
+  min-width: 0;
   overflow: hidden;
 }
-.dsh-git-graph-commit-description .dsh-git-graph-refs { flex: 0 1 auto; max-width: 60%; min-width: 0; }
+.dsh-git-graph-commit-lead { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.dsh-git-graph-commit-body { display: flex; flex-wrap: wrap; align-items: center; align-content: center; gap: 4px 5px; min-width: 0; }
+/* Every reference of the commit is rendered at its natural size. Chips wrap to a
+   second line inside their own box; when the labels no longer leave room for the
+   subject, the subject drops to a full-width line instead of being squeezed, and
+   the row grows (the graph column is measured from the rendered rows). */
+.dsh-git-graph-commit-description .dsh-git-graph-refs { flex: 0 1 auto; max-width: 100%; min-width: 0; flex-wrap: wrap; row-gap: 2px; }
+.dsh-git-graph-commit-description .dsh-git-graph-ref { flex: 0 0 auto; }
 .dsh-git-graph-avatar {
   display: inline-flex;
   align-items: center;
@@ -391,11 +401,12 @@ const CSS = `
 }
 .dsh-git-graph-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
 .dsh-git-graph-graph-refs { grid-column: 1; grid-row: 2; position: relative; pointer-events: none; }
-.dsh-git-graph-graph-ref-row { position: absolute; width: 160px; display: flex; align-items: center; pointer-events: auto; }
-.dsh-git-graph-graph-ref-row .dsh-git-graph-refs { max-width: 160px; }
+.dsh-git-graph-graph-ref-row { position: absolute; width: var(--git-graph-ref-width, 160px); display: flex; align-items: center; pointer-events: auto; overflow: hidden; }
+.dsh-git-graph-graph-ref-row .dsh-git-graph-refs { flex: 0 0 auto; max-width: none; }
+.dsh-git-graph-graph-ref-row .dsh-git-graph-ref { flex: 0 0 auto; }
 .dsh-git-graph-graph-ref-row .dsh-git-graph-current-branch { display: none; }
 .dsh-git-graph-tags-right { margin-left: auto; flex: 0 1 auto; min-width: 0; max-width: 40%; }
-.dsh-git-graph-tags-right .dsh-git-graph-refs { max-width: 100%; }
+.dsh-git-graph-tags-right .dsh-git-graph-refs { max-width: 100%; flex-wrap: wrap; row-gap: 2px; }
 .dsh-git-graph-remote-joined { flex: none; max-width: 64px; border: 0; border-left: 1px solid var(--git-graph-border); padding: 0 4px; overflow: hidden; text-overflow: ellipsis; color: var(--dsw-alias-state-business-primary); background: transparent; font: inherit; cursor: pointer; }
 .dsh-git-graph-ref > .dsh-git-graph-ref-copy { flex: 1; }
 .dsh-git-graph-settings-hint { flex: 1 1 100%; color: var(--git-graph-tertiary); font-size: 11px; }
@@ -448,8 +459,10 @@ const CSS = `
 }
 .dsh-git-graph-mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
 .dsh-git-graph-subject {
-  flex: 1 1 auto;
-  min-width: 0;
+  /* A zero basis keeps the subject on the reference line while a readable slice
+     still fits; only when it cannot, the wrapping body moves it to its own line. */
+  flex: 1 1 0;
+  min-width: min(14ch, 100%);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -460,7 +473,6 @@ const CSS = `
 .dsh-git-graph-ref-copy > span { display: inline-flex; align-items: center; min-width: 0; }
 .dsh-git-graph-current-branch { padding: 0 4px; font-size: 9px; color: var(--git-graph-ref-color); }
 .dsh-git-graph-commit-description .dsh-git-graph-current-branch { display: none; }
-.dsh-git-graph-refs-more { flex: none; min-width: 25px; border: 1px solid var(--git-graph-border); border-radius: 5px; background: var(--git-graph-layer); color: var(--git-graph-secondary); cursor: pointer; font: inherit; padding: 0 3px; }
 .dsh-git-graph-ref {
   --git-graph-ref-color: var(--dsw-alias-state-business-primary);
   display: inline-flex;
