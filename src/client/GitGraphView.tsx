@@ -5,7 +5,7 @@ import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { GitGraphAvatar, GitGraphAvatarRequest, GitGraphAvatarResult } from '../domain.ts'
 import type { GitGraphCommit, GitGraphCommitDetails, GitGraphCompareRequest, GitGraphCompareResult, GitGraphFileChange, GitGraphFileContent, GitGraphFileDiff, GitGraphFileDiffRequest, GitGraphFileRequest, GitGraphQuery, GitGraphMetadata, GitGraphRef, GitGraphSnapshot, GitGraphWorkingTreeChanges, GitGraphWorkingTreeFileRequest } from '../domain.ts'
 import { layoutGraph, type GraphLayout } from './graph-layout.ts'
-import { loadDisplaySettings, saveDisplaySettings, DEFAULT_DISPLAY_SETTINGS, COLUMN_LIMITS, clampColumnWidth, type AvatarSource, type DateSource, type ReferenceAlignment, type CommitColumn, type GitGraphDisplaySettings, type GraphDateFormat, type GraphStyle, type GraphLineStyle, type GraphPalette } from './settings.ts'
+import { loadDisplaySettings, saveDisplaySettings, DEFAULT_DISPLAY_SETTINGS, COLUMN_LIMITS, clampColumnWidth, type CommitColumn, type GitGraphDisplaySettings, type GraphDateFormat, type GraphLineStyle, type GraphPalette } from './settings.ts'
 import { commitDate, displayHunks, graphDisplayWidth, graphRowHeight, referenceLabels, visibleColumns } from './presentation.ts'
 import { avatarEmail, useAvatars } from './avatars.ts'
 import { RichMessage } from './RichMessage.tsx'
@@ -1051,58 +1051,114 @@ function ColumnResizer({ column, width, onChange }: {
     onKeyDown={event => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); event.stopPropagation(); onChange(column, actualWidth + (event.key === 'ArrowRight' ? 10 : -10)) } }} />
 }
 
+/**
+ * Settings are grouped by the question they answer, not by the order the fields
+ * happen to exist: one section per decision keeps a flat run of fifteen
+ * controls from reading as a wall.
+ */
+function SettingsSection({ title, className = '', children }: {
+  readonly title: string
+  readonly className?: string
+  readonly children: ReactNode
+}) {
+  return (
+    <div className={`${css.settingsSection} ${className}`.trim()} role="group" aria-label={title}>
+      <span className={css.settingsSectionTitle}>{title}</span>
+      {children}
+    </div>
+  )
+}
+
+/** One labelled select: the caption keeps a shared width, the control fills the rest. */
+function SettingsSelect<T extends string>({ label, value, options, onChange }: {
+  readonly label: string
+  readonly value: T
+  readonly options: ReadonlyArray<readonly [T, string]>
+  readonly onChange: (value: T) => void
+}) {
+  return (
+    <label className={css.settingsField}>
+      <span className={css.settingsLabel}>{label}</span>
+      <select className={`${css.select} ${css.settingsControl}`} value={value} onChange={event => onChange(event.target.value as T)}>
+        {options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}
+      </select>
+    </label>
+  )
+}
+
+function SettingsToggle({ label, checked, onChange }: {
+  readonly label: string
+  readonly checked: boolean
+  readonly onChange: (checked: boolean) => void
+}) {
+  return (
+    <label className={css.settingsCheck}>
+      <input type="checkbox" checked={checked} onChange={event => onChange(event.target.checked)} />
+      <span>{label}</span>
+    </label>
+  )
+}
+
 function SettingsPanel({ settings, onChange, onClose }: {
   readonly settings: GitGraphDisplaySettings
   readonly onChange: (next: GitGraphDisplaySettings) => void
   readonly onClose: () => void
 }) {
   const t = useText()
-  const toggle = (key: 'showDate' | 'showAuthor' | 'showHash') => onChange({ ...settings, [key]: !settings[key] })
   return (
     <div className={css.settingsPanel} data-settings-panel>
-      <div className={css.settingsField}><label>{t('settings.referenceAlignment')}<select className={css.select} value={settings.referenceAlignment} onChange={event => onChange({ ...settings, referenceAlignment: event.target.value as ReferenceAlignment })}>
-        <option value="normal">{t('settings.refsNormal')}</option><option value="tags-right">{t('settings.refsTagsRight')}</option><option value="graph">{t('settings.refsGraph')}</option>
-      </select></label></div>
-      <div className={css.settingsField}><label><input type="checkbox" checked={settings.combineReferences} onChange={event => onChange({ ...settings, combineReferences: event.target.checked })} />{t('settings.combineReferences')}</label></div>
-      <div className={css.settingsField}><label>{t('settings.dateSource')}<select className={css.select} value={settings.dateSource} onChange={event => onChange({ ...settings, dateSource: event.target.value as DateSource })}>
-        <option value="author">{t('details.authorDate')}</option><option value="committer">{t('details.committerDate')}</option>
-      </select></label></div>
-      <div className={css.settingsField}><label><input type="checkbox" checked={settings.richText} onChange={event => onChange({ ...settings, richText: event.target.checked })} />{t('settings.richText')}</label></div>
-      <div className={css.settingsField}><label><input type="checkbox" checked={settings.showAvatars} onChange={event => onChange({ ...settings, showAvatars: event.target.checked })} />{t('settings.showAvatars')}</label></div>
-      <div className={css.settingsField}><label>{t('settings.avatarSource')}<select className={css.select} value={settings.avatarSource} onChange={event => onChange({ ...settings, avatarSource: event.target.value as AvatarSource })}>
-        <option value="auto">{t('settings.avatarAuto')}</option><option value="gravatar">Gravatar</option>
-      </select></label></div>
-      <div className={css.settingsHint}>{t('settings.avatarHint')}</div>
-      <div className={css.settingsField}><label><input type="checkbox" checked={settings.showDate} onChange={() => toggle('showDate')} />{t('settings.showDate')}</label></div>
-      <div className={css.settingsField}><label><input type="checkbox" checked={settings.showAuthor} onChange={() => toggle('showAuthor')} />{t('settings.showAuthor')}</label></div>
-      <div className={css.settingsField}><label><input type="checkbox" checked={settings.showHash} onChange={() => toggle('showHash')} />{t('settings.showHash')}</label></div>
-      <div className={css.settingsField}>
-        <label>{t('settings.dateFormat')}
-          <select className={css.select} value={settings.dateFormat} onChange={event => onChange({ ...settings, dateFormat: event.target.value as GraphDateFormat })}>
-            <option value="short">{t('settings.short')}</option>
-            <option value="full">{t('settings.full')}</option>
-            <option value="local">{t('settings.local')}</option>
-          </select>
-        </label>
+      <SettingsSection title={t('settings.groupRefs')}>
+        <SettingsSelect label={t('settings.referenceAlignment')} value={settings.referenceAlignment}
+          options={[['normal', t('settings.refsNormal')], ['tags-right', t('settings.refsTagsRight')], ['graph', t('settings.refsGraph')]] as const}
+          onChange={referenceAlignment => onChange({ ...settings, referenceAlignment })} />
+        <SettingsToggle label={t('settings.combineReferences')} checked={settings.combineReferences}
+          onChange={combineReferences => onChange({ ...settings, combineReferences })} />
+      </SettingsSection>
+      <SettingsSection title={t('settings.groupDate')}>
+        <SettingsSelect label={t('settings.dateSource')} value={settings.dateSource}
+          options={[['author', t('details.authorDate')], ['committer', t('details.committerDate')]] as const}
+          onChange={dateSource => onChange({ ...settings, dateSource })} />
+        <SettingsSelect label={t('settings.dateFormat')} value={settings.dateFormat}
+          options={[['short', t('settings.short')], ['full', t('settings.full')], ['local', t('settings.local')]] as const}
+          onChange={dateFormat => onChange({ ...settings, dateFormat })} />
+      </SettingsSection>
+      <SettingsSection title={t('settings.groupAuthor')}>
+        <SettingsToggle label={t('settings.showAvatars')} checked={settings.showAvatars}
+          onChange={showAvatars => onChange({ ...settings, showAvatars })} />
+        <SettingsSelect label={t('settings.avatarSource')} value={settings.avatarSource}
+          options={[['auto', t('settings.avatarAuto')], ['gravatar', t('settings.avatarGravatar')]] as const}
+          onChange={avatarSource => onChange({ ...settings, avatarSource })} />
+      </SettingsSection>
+      <SettingsSection title={t('settings.groupColumns')}>
+        <div className={css.settingsToggles}>
+          <SettingsToggle label={t('settings.showDate')} checked={settings.showDate}
+            onChange={showDate => onChange({ ...settings, showDate })} />
+          <SettingsToggle label={t('settings.showAuthor')} checked={settings.showAuthor}
+            onChange={showAuthor => onChange({ ...settings, showAuthor })} />
+          <SettingsToggle label={t('settings.showHash')} checked={settings.showHash}
+            onChange={showHash => onChange({ ...settings, showHash })} />
+          <SettingsToggle label={t('settings.richText')} checked={settings.richText}
+            onChange={richText => onChange({ ...settings, richText })} />
+        </div>
+      </SettingsSection>
+      <SettingsSection title={t('settings.groupGraph')} className={css.settingsWide}>
+        <div className={css.settingsInline}>
+          <SettingsSelect label={t('settings.graphStyle')} value={settings.graphStyle}
+            options={[['full', t('settings.full')], ['compact', t('settings.compact')]] as const}
+            onChange={graphStyle => onChange({ ...settings, graphStyle })} />
+          <SettingsSelect label={t('settings.lineStyle')} value={settings.lineStyle}
+            options={[['curved', t('settings.curved')], ['straight', t('settings.straight')]] as const}
+            onChange={lineStyle => onChange({ ...settings, lineStyle })} />
+          <SettingsSelect label={t('settings.palette')} value={settings.palette}
+            options={[['classic', t('settings.classic')], ['accessible', t('settings.accessible')]] as const}
+            onChange={palette => onChange({ ...settings, palette })} />
+        </div>
+      </SettingsSection>
+      <p className={css.settingsNote}>{t('settings.avatarHint')}</p>
+      <div className={css.settingsActions}>
+        <button type="button" className={css.secondaryButton} onClick={() => onChange(DEFAULT_DISPLAY_SETTINGS)}>{t('settings.reset')}</button>
+        <button type="button" className={css.secondaryButton} onClick={onClose}>{t('settings.close')}</button>
       </div>
-      <div className={css.settingsField}>
-        <label>{t('settings.graphStyle')}
-          <select className={css.select} value={settings.graphStyle} onChange={event => onChange({ ...settings, graphStyle: event.target.value as GraphStyle })}>
-            <option value="full">{t('settings.full')}</option>
-            <option value="compact">{t('settings.compact')}</option>
-          </select>
-        </label>
-      </div>
-      <div className={css.settingsField}><label>{t('settings.lineStyle')}
-        <select className={css.select} value={settings.lineStyle} onChange={event => onChange({ ...settings, lineStyle: event.target.value as GraphLineStyle })}>
-          <option value="curved">{t('settings.curved')}</option><option value="straight">{t('settings.straight')}</option>
-        </select></label></div>
-      <div className={css.settingsField}><label>{t('settings.palette')}
-        <select className={css.select} value={settings.palette} onChange={event => onChange({ ...settings, palette: event.target.value as GraphPalette })}>
-          <option value="classic">{t('settings.classic')}</option><option value="accessible">{t('settings.accessible')}</option>
-        </select></label></div>
-      <button type="button" className={css.secondaryButton} onClick={() => onChange(DEFAULT_DISPLAY_SETTINGS)}>{t('settings.reset')}</button>
-      <button type="button" className={css.secondaryButton} onClick={onClose}>{t('settings.close')}</button>
     </div>
   )
 }
@@ -1510,8 +1566,8 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
         <label className={css.check}><input type="checkbox" checked={includeAll} onChange={event => setIncludeAll(event.target.checked)} />{t('toolbar.includeAll')}</label>
         <label className={css.check}><input type="checkbox" checked={firstParent} onChange={event => setFirstParent(event.target.checked)} />{t('toolbar.firstParent')}</label>
         </div><div className={css.toolbarActions}>
-        <button type="button" className={css.secondaryButton} onClick={() => setFindOpen(current => !current)}>{t('toolbar.find')}</button>
-        <button type="button" className={css.secondaryButton} onClick={() => setShowSettings(current => !current)}>{t('toolbar.settings')}</button>
+        <button type="button" className={css.secondaryButton} onClick={() => setFindOpen(current => !current)} aria-expanded={findOpen}>{t('toolbar.find')}</button>
+        <button type="button" className={css.secondaryButton} onClick={() => setShowSettings(current => !current)} aria-pressed={showSettings}>{t('toolbar.settings')}</button>
         <button type="button" className={css.primaryButton} onClick={refresh} disabled={loading}>{loading ? t('toolbar.loading') : t('toolbar.refresh')}</button>
         </div>
       </div>

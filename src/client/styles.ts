@@ -58,7 +58,6 @@ export const css = {
   tagsRight: 'dsh-git-graph-tags-right',
   graphRefs: 'dsh-git-graph-graph-refs',
   graphRefRow: 'dsh-git-graph-graph-ref-row',
-  settingsHint: 'dsh-git-graph-settings-hint',
   avatar: 'dsh-git-graph-avatar',
   metadataStrip: 'dsh-git-graph-metadata-strip',
   metadataGroup: 'dsh-git-graph-metadata-group',
@@ -128,7 +127,17 @@ export const css = {
   selectWide: 'dsh-git-graph-select-wide',
   loadMore: 'dsh-git-graph-load-more',
   settingsPanel: 'dsh-git-graph-settings-panel',
+  settingsSection: 'dsh-git-graph-settings-section',
+  settingsSectionTitle: 'dsh-git-graph-settings-section-title',
   settingsField: 'dsh-git-graph-settings-field',
+  settingsLabel: 'dsh-git-graph-settings-label',
+  settingsControl: 'dsh-git-graph-settings-control',
+  settingsCheck: 'dsh-git-graph-settings-check',
+  settingsNote: 'dsh-git-graph-settings-note',
+  settingsActions: 'dsh-git-graph-settings-actions',
+  settingsWide: 'dsh-git-graph-settings-wide',
+  settingsInline: 'dsh-git-graph-settings-inline',
+  settingsToggles: 'dsh-git-graph-settings-toggles',
   findContainer: 'dsh-git-graph-find-container',
   findInputRow: 'dsh-git-graph-find-input-row',
   findInput: 'dsh-git-graph-find-input',
@@ -247,6 +256,13 @@ const CSS = `
 .dsh-git-graph-primary-button:hover,
 .dsh-git-graph-secondary-button:hover,
 .dsh-git-graph-load-more:hover { filter: brightness(.96); }
+/* Open find/settings keep their button lit, so the panel above has an owner. */
+.dsh-git-graph-secondary-button[aria-pressed='true'],
+.dsh-git-graph-secondary-button[aria-expanded='true'] {
+  border-color: color-mix(in srgb, var(--dsw-alias-link) 55%, var(--git-graph-border));
+  background: color-mix(in srgb, var(--dsw-alias-link) 14%, var(--git-graph-layer));
+  color: var(--git-graph-text);
+}
 .dsh-git-graph-primary-button:focus-visible,
 .dsh-git-graph-secondary-button:focus-visible,
 .dsh-git-graph-load-more:focus-visible,
@@ -839,22 +855,57 @@ const CSS = `
 .dsh-git-graph-compare-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 11px; }
 .dsh-git-graph-compare-hint { color: var(--git-graph-tertiary); }
 .dsh-git-graph-select-wide { flex: 1 1 220px; min-width: 160px; }
+/* Settings read as named decisions, not one long run of controls: every
+   section owns a single question and its captions share one column width. */
 .dsh-git-graph-settings-panel {
   margin: 0 12px 10px;
-  padding: 10px 12px;
+  padding: 11px 12px 0;
   border: 1px solid var(--git-graph-border);
   border-radius: 8px;
   background: var(--git-graph-layer);
-  display: flex;
-  flex-wrap: wrap;
-  max-height: 200px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(212px, 1fr));
+  max-height: min(52vh, 380px);
   overflow: auto;
   flex: none;
-  gap: 8px;
+  gap: 12px 16px;
   font-size: 11px;
 }
-.dsh-git-graph-settings-field,
-.dsh-git-graph-settings-field label { display: flex; align-items: center; gap: 6px; }
+.dsh-git-graph-settings-section {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding-left: 9px;
+  border-left: 2px solid color-mix(in srgb, var(--dsw-alias-link) 30%, transparent);
+  gap: 4px;
+}
+.dsh-git-graph-settings-section-title { color: var(--git-graph-secondary); font-size: 11px; font-weight: 600; letter-spacing: .04em; }
+.dsh-git-graph-settings-field { display: flex; align-items: center; min-width: 0; gap: 8px; }
+.dsh-git-graph-settings-label { flex: 0 0 auto; min-width: 5.6em; color: var(--git-graph-tertiary); }
+.dsh-git-graph-settings-control { flex: 1 1 0; min-width: 0; min-height: 28px; }
+.dsh-git-graph-settings-check { display: flex; align-items: center; min-width: 0; color: var(--git-graph-secondary); cursor: pointer; white-space: nowrap; gap: 6px; }
+.dsh-git-graph-settings-check input { margin: 0; flex: none; }
+/* Short control pairs and toggles wrap inside their section instead of
+   stacking into a column taller than the section beside them. */
+.dsh-git-graph-settings-inline { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); min-width: 0; gap: 4px 14px; }
+.dsh-git-graph-settings-toggles { display: flex; flex-wrap: wrap; min-width: 0; gap: 4px 12px; }
+.dsh-git-graph-settings-wide { min-width: 0; }
+.dsh-git-graph-settings-note { grid-column: 1 / -1; margin: 0; color: var(--git-graph-tertiary); line-height: 1.55; }
+.dsh-git-graph-settings-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 9px;
+  border-top: 1px solid var(--git-graph-border);
+  gap: 8px;
+  /* In a narrow pane the panel scrolls; its actions must not scroll away.
+     The row carries the panel's bottom spacing so nothing shows under it. */
+  position: sticky;
+  bottom: 0;
+  padding-bottom: 10px;
+  background: inherit;
+}
 .dsh-git-graph-find-container {
   margin: 0 12px 10px;
   padding: 8px 10px;
@@ -884,6 +935,11 @@ const CSS = `
 .dsh-git-graph-error .dsh-git-graph-secondary-button { margin-left: 8px; }
 .dsh-git-graph-card button:focus-visible { outline: 2px solid var(--dsw-alias-link); outline-offset: -2px; }
 .dsh-git-graph-load-more { display: block; margin: 10px auto; padding: 0 12px; border: 1px solid var(--git-graph-border); background: var(--git-graph-layer); color: var(--git-graph-secondary); }
+/* Two panel columns are guaranteed from this width on, so one section may span
+   both and still leave its neighbour a real column. */
+@container git-graph (min-width: 500px) {
+  .dsh-git-graph-settings-wide { grid-column: span 2; }
+}
 @container git-graph (max-width: 480px) {
   .dsh-git-graph-header { align-items: flex-start; flex-direction: column; }
   .dsh-git-graph-toolbar-group:first-child { flex-direction: column; align-items: stretch; }
