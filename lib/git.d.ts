@@ -81,8 +81,13 @@ export declare function parseWorkingTreeStatus(text: string): GitGraphWorkingTre
 export declare function loadWorkingTree(ctx: Context, cwd: string, includeUntracked: boolean, signal: AbortSignal): Promise<GitGraphWorkingTree>;
 /** Per-file content cap for `gitGraph/readFile`. */
 export declare const FILE_MAX_BYTES: number;
-/** Reject absolute paths, NUL bytes and path traversal outside the workspace. */
-export declare function assertRepoRelativePath(path: string, cwd: string): void;
+/**
+ * Reject absolute paths, NUL bytes and path traversal outside the repository.
+ * Git reports every path in its output relative to the repository root, so
+ * `root` is that top level — never the session working directory, which may be
+ * a subdirectory of it.
+ */
+export declare function assertRepoRelativePath(path: string, root: string): void;
 /** Read one version of a repo-relative file at a full commit hash. */
 export declare function loadFile(ctx: Context, cwd: string, request: GitGraphFileRequest, signal: AbortSignal): Promise<GitGraphFileContent>;
 /** Parse a `git diff` hunk header like `@@ -a,b +c,d @@` into base/new heads. */

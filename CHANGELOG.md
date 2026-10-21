@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.5.2 — 2026-10-21
+
+- **文件 Diff 路径修正**：会话工作目录位于仓库子目录时，文件 Diff 不再匹配错路径。此前 `git diff` 静默返回空，界面显示「该文件在工作区没有行级变更」，旁边却仍是正确的增删行数；现在先按 `rev-parse --show-toplevel` 取仓库根再校验路径并读取，未提交变更、未跟踪文件与提交内文件 Diff 一并修正。
+- **引用全量显示**：提交行不再用「+N」折叠引用。徽标保持原尺寸，放不下时换行；说明文字能留一行就留一行，挤不下才整行下移，行高随之增长。
+- **图形跟随实测行高**：图列按每行实际高度绘制顶点与连线（含未提交行与行内展开面板），`引用对齐 = graph` 模式按最宽标签动态预留列宽，标签不再被压成图标。
+- **头像来源扩充**：新增仓库所在 Git 服务（Gitea/Gogs 的 `/avatar/<md5>`，含 SHA256 回退）与 GitHub noreply 邮箱直取；查不到时首字母提示区分「没有公开头像」与「加载失败」。
+
+适配 DSH **0.2.0-rc.2**。头像请求仍限制在固定域名、仓库自身 origin 与 `/avatar/<32~64 位十六进制>` 路径，跨服务重定向与带凭据的 remote 被拒绝。
+
+验证：三个 TypeScript 程序类型检查通过；新增的仓库子目录 Diff 回归测试 6 项通过；Git 读取校验 12 项、头像解析校验 18 项通过；组件级渲染逐行核对图形顶点与行中心偏差为 0。本次未在真实 DSH 中重做浏览器点击验收，详见[验收记录](docs/REFS_AVATAR_TEST_REPORT.md)。
+
+### English
+
+- Fix file diffs when the session working directory is a subdirectory of the repository: resolve the path against `rev-parse --show-toplevel` instead of reading with a pathspec that no longer matches. Previously the diff silently came back empty while the `+14 −2` counters stayed correct.
+- Show every reference on a commit row instead of collapsing the rest into `+N`; chips keep their size and wrap, and the subject moves to its own line only when a readable slice no longer fits.
+- Draw the graph from measured row heights (including the working-tree row and inline panels), and reserve the widest label width for the graph-aligned layout so labels are no longer squeezed into icons.
+- Resolve avatars from the repository's own Git service (Gitea/Gogs `/avatar/<md5>`, with an SHA256 fallback) and from GitHub noreply addresses; initials now explain whether an avatar is missing or the request failed.
+
+Requires DSH **0.2.0-rc.2**. Avatar requests stay limited to known hosts, the repository's own origin, and `/avatar/<32-64 hex>` paths; cross-provider redirects and remotes with embedded credentials are refused.
+
 ## 0.5.1 — 2026-10-19
 
 - **命名修正**：组合包注册 ID、Host 插件名称、中英文侧栏标题与插件元数据统一为 `dsh-git-graph`，移除早期的 `ui-git-graph` 注册标识。

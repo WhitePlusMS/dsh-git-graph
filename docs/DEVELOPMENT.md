@@ -2,7 +2,7 @@
 
 [使用说明](../README.zh.md) · [English README](../README.md)
 
-本项目当前版本为 0.5.1，适配 DSH 0.2.0-rc.2。这里记录本地安装、构建、内部数据接口及验收依据。
+本项目当前版本为 0.5.2，适配 DSH 0.2.0-rc.2。这里记录本地安装、构建、内部数据接口及验收依据。
 
 ## 本地安装与自定义 profile
 
@@ -12,7 +12,7 @@
 pnpm install --frozen-lockfile
 pnpm run typecheck
 pnpm pack --pack-destination .scratch/release
-dsh plugin --profile web add ./.scratch/release/dsh-git-graph-0.5.1.tgz
+dsh plugin --profile web add ./.scratch/release/dsh-git-graph-0.5.2.tgz
 dsh web
 ```
 
@@ -22,7 +22,7 @@ dsh web
 
 ```powershell
 dsh --profile my-web --from-default-profile web --dump-config
-dsh plugin --profile my-web add ./.scratch/release/dsh-git-graph-0.5.1.tgz
+dsh plugin --profile my-web add ./.scratch/release/dsh-git-graph-0.5.2.tgz
 dsh --profile my-web
 ```
 
@@ -44,7 +44,7 @@ pnpm run build
 
 ## 发布 GitHub Release 成品包
 
-同步 `package.json` 版本、源码、`lib/` 和 `CHANGELOG.md` 后，将以 `release:` 开头的发布提交合入 `master`，例如 `release: publish dsh-git-graph v0.5.1`。也可在 GitHub Actions 网页手动运行 `Package release`。
+同步 `package.json` 版本、源码、`lib/` 和 `CHANGELOG.md` 后，将以 `release:` 开头的发布提交合入 `master`，例如 `release: publish dsh-git-graph v0.5.2`。也可在 GitHub Actions 网页手动运行 `Package release`。
 
 `.github/workflows/release.yml` 执行类型检查和 `pnpm pack`，成功后以本次提交创建对应版本标签与 Release，附带含 `lib/` 的 `.tgz` 和 `SHA256SUMS.txt`；发布说明取自 `CHANGELOG.md` 的当前版本。普通提交不会发布，已发布版本不会被覆盖。检查 Actions 成功且附件可下载后，再用 README 中的地址安装。该过程不发布到 npm，也不自动完成市场目录收录。
 
@@ -74,9 +74,13 @@ git_graph({
 
 ## 真实头像
 
-浏览器只提交当前会话的提交 Hash 和头像来源；Host 从 Git 读取原始 / mailmap 作者身份。GitHub 以原始作者邮箱查询 GitHub `origin` 仓库的公开提交，Gravatar 使用映射邮箱的 SHA-256 摘要。浏览器接收栅格图片数据 URL。
+浏览器只提交当前会话的提交 Hash 和头像来源；Host 从 Git 读取原始 / mailmap 作者身份。取图顺序为：GitHub noreply 邮箱（`<id>+user@users.noreply.github.com` 直接取账号头像）→ 仓库所在 Git 服务（`{remote 的 origin}/avatar/<邮箱md5>`，Gitea/Gogs 的 Gravatar 兼容接口，未命中再试 SHA256）→ GitHub 公开提交（仅 `github.com` 远端，用原始作者邮箱）→ Gravatar（映射邮箱的 SHA-256 摘要）。浏览器接收栅格图片数据 URL。
 
-缓存最多 128 条，成功缓存 24 小时、失败缓存 15 分钟；缓存仅存在于 Host 内存，重启清空，不写仓库文件。关闭头像、切换仓库或来源会取消旧请求，失败使用首字母头像。域名、大小、时间、并发限制及实际联网验证范围见[显示功能报告](DISPLAY_TEST_REPORT.md)。
+请求只允许已知域名、仓库自身 origin 及 `/avatar/<32~64 位十六进制>` 路径；跨服务重定向被拒绝，remote 中带账号密码时直接忽略该来源。缓存最多 128 条，成功缓存 24 小时、失败缓存 15 分钟；缓存仅存在于 Host 内存，重启清空，不写仓库文件。关闭头像、切换仓库或来源会取消旧请求，失败使用首字母头像。域名、大小、时间、并发限制及实际联网验证范围见[显示功能报告](DISPLAY_TEST_REPORT.md)与[0.5.2 验收记录](REFS_AVATAR_TEST_REPORT.md)。
+
+## 引用显示与行高
+
+提交行的引用不再折叠为「+N」：徽标保持原尺寸，放不下时在容器内换行；说明文字使用 `flex: 1 1 0` 与 `min-width: min(14ch, 100%)`，能保留一行就保留一行，挤不下才整行下移，行高随内容增长。因此行高不是常量：`GitGraphContent` 用 `useLayoutEffect` + `ResizeObserver` 量出每行（含未提交行、行内展开面板）的 `top` / `height`，`GraphSvg` 的顶点、连线与 `引用对齐 = graph` 的标签层都按这份实测数据定位；该模式还会按最宽标签动态预留标签列宽（160–360px）。新增可折叠内容时不需要再单独上报空档高度。
 
 ## 验收依据
 
@@ -88,5 +92,6 @@ git_graph({
 | 0.3.0 的 P0 显示优化 | 88 项通过 | 56 项通过 | [P0 报告](P0_TEST_REPORT.md) |
 | 0.4.0 的显示更新 | 106 项通过 | 26 项通过 | [显示功能报告](DISPLAY_TEST_REPORT.md) |
 | 0.5.0 的两提交 Diff 与完整原文 | 115 项通过 | 18 项通过 | [提交比较与原文报告](COMPARE_SOURCE_TEST_REPORT.md) |
+| 0.5.2 的引用显示、头像来源与子目录 Diff | 回归 6 项 + 校验 30 项通过 | 未执行（改用组件级渲染测量） | [引用与头像验收记录](REFS_AVATAR_TEST_REPORT.md) |
 
-各阶段数量不相加。P0 验收时临时包为 0.1.0，后纳入 0.3.0；0.4.0 显示实现验收时临时包仍为 0.3.0；0.5.0 比较与原文实现验收时临时包仍为 0.4.0。版本调整另行通过类型检查、构建和打包，未因版本号变化重复浏览器验收。正式版本记录见[版本说明](../CHANGELOG.md)。
+各阶段数量不相加。P0 验收时临时包为 0.1.0，后纳入 0.3.0；0.4.0 显示实现验收时临时包仍为 0.3.0；0.5.0 比较与原文实现验收时临时包仍为 0.4.0。0.5.2 的验收在检出中缺少历史测试集的情况下进行，未重做真实 DSH 浏览器检查。版本调整另行通过类型检查、构建和打包，未因版本号变化重复浏览器验收。正式版本记录见[版本说明](../CHANGELOG.md)。

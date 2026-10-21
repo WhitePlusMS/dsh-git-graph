@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>Version 0.5.1</strong> · DSH 0.2.0-rc.2 · <a href="LICENSE">MIT</a><br>
+  <strong>Version 0.5.2</strong> · DSH 0.2.0-rc.2 · <a href="LICENSE">MIT</a><br>
   <a href="README.zh.md">中文说明</a> · <a href="docs/screenshots/readme-header.svg">Static title</a>
 </p>
 
@@ -17,7 +17,7 @@
 
 ![Native sidebar, commit graph, and filtering demo](docs/screenshots/demo.gif)
 
-The GIFs were recorded with 0.4.0. Screenshots of the new 0.5.0 comparison and full-source views are included below.
+The GIFs were recorded with 0.4.0. Screenshots of the 0.5.0 comparison and full-source views are below; the 0.5.2 reference and avatar changes are covered by the [acceptance record](docs/REFS_AVATAR_TEST_REPORT.md).
 
 <details>
 <summary>More screenshots: commit comparison, full source, English, and narrow screens</summary>
@@ -40,10 +40,10 @@ The GIFs were recorded with 0.4.0. Screenshots of the new 0.5.0 comparison and f
 
 - **History** — Commit topology, branches, tags, HEAD, search, and history filters.
 - **Commit details** — Inline details with author/committer dates, parents, references, signature status, and copying.
-- **References** — Three reference layouts and combined labels for matching local/remote branches at the same commit.
+- **References** — Every reference on a commit is shown; matching local/remote labels combine, chips wrap onto another line, and the row height follows. Two alternative layouts remain.
 - **File changes** — File tree/list views, per-file diffs, and uncommitted changes; select two commits and open each changed file's diff.
 - **Historical source** — Read and copy the complete text of an old or new file version, with its path, commit hash, line numbers, and size.
-- **Messages & authors** — Commit messages with links, bold, italic, and inline code; real GitHub/Gravatar author avatars.
+- **Messages & authors** — Commit messages with links, bold, italic, and inline code; real author avatars from GitHub, Gravatar, and the repository's own Git service (Gitea/Gogs).
 - **Display settings** — Resizable columns, date display options, compact rows, line styles, and colour presets, saved per repository.
 - **Interface** — Chinese/English, light/dark themes, pane fullscreen, and narrow-screen support.
 
@@ -59,25 +59,25 @@ The GIFs were recorded with 0.4.0. Screenshots of the new 0.5.0 comparison and f
 
 Requires DSH **0.2.0-rc.2**, the `dsh` CLI, pnpm for plugin installation, and Git installed on the DSH Host.
 
-Install the prebuilt `v0.5.1` Release package through either DSH's plugin page or the CLI. Both accept the same package source. See the official [plugin manager guide](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/packages/client/ui-plugin-manager/README.md) and [packaging guide](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/docs/user/develop/basic/publish.md).
+Install the prebuilt `v0.5.2` Release package through either DSH's plugin page or the CLI. Both accept the same package source. See the official [plugin manager guide](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/packages/client/ui-plugin-manager/README.md) and [packaging guide](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/docs/user/develop/basic/publish.md).
 
 In DSH, open **Plugins → Add plugin**, paste this URL, install it, and choose **Enable now**:
 
 ```text
-https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.1/dsh-git-graph-0.5.1.tgz
+https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.2/dsh-git-graph-0.5.2.tgz
 ```
 
 Or install from the terminal:
 
 ```powershell
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.1/dsh-git-graph-0.5.1.tgz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.2/dsh-git-graph-0.5.2.tgz
 ```
 
 The archive includes the built `lib/` entry points. You do not need to clone this repository, build it locally, or keep a development folder at a fixed path.
 
 This `.tgz` is built with `pnpm pack` and uploaded as a GitHub Release asset; it is separate from GitHub's automatically generated source archives. DSH supports installing this package URL in both the UI and CLI. Publishing a release does not automatically list the plugin in a marketplace; installing by package name alone requires an npm publication.
 
-Check that `dsh-git-graph` is installed at version `0.5.1`:
+Check that `dsh-git-graph` is installed at version `0.5.2`:
 
 ```powershell
 dsh plugin --profile web list dsh-git-graph
@@ -96,7 +96,7 @@ For a custom profile, local `.tgz` installation, or source builds, see the [deve
 
 Use **Settings** to adjust the display. Settings are saved separately for each repository.
 
-Real avatars are enabled by default and access GitHub/Gravatar. GitHub queries use the commit author's email; Gravatar uses an email hash. You can disable them in Settings; missing images or failed requests retain initials.
+Real avatars are enabled by default and access external avatar services: GitHub repositories search public commits by author email; other repositories ask their own Git service first (Gitea/Gogs `/avatar` endpoint) and then Gravatar; GitHub noreply addresses resolve directly. You can disable them in Settings; missing images or failed requests retain initials.
 
 ## Uninstall
 
@@ -132,7 +132,7 @@ A previous local-directory installation may still link to a folder that was move
 
 ```powershell
 dsh plugin --profile web remove dsh-git-graph
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.1/dsh-git-graph-0.5.1.tgz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.2/dsh-git-graph-0.5.2.tgz
 ```
 
 Restart that DSH Web instance afterward. Running `dsh plugin --profile web install` alone reuses the saved package source and cannot repair a link to a missing folder.
@@ -154,7 +154,8 @@ No. The plugin is read-only; refreshing the graph does not fetch remote changes 
 ## Documentation
 
 - [Development, local installation, and API details](docs/DEVELOPMENT.md)
-- [Release notes](CHANGELOG.md) · [Commit comparison and full source report](docs/COMPARE_SOURCE_TEST_REPORT.md)
+- [Release notes](CHANGELOG.md) · [References and avatar report](docs/REFS_AVATAR_TEST_REPORT.md)
+- [Commit comparison and full source report](docs/COMPARE_SOURCE_TEST_REPORT.md)
 - [Display acceptance report](docs/DISPLAY_TEST_REPORT.md)
 - [P0 report](docs/P0_TEST_REPORT.md) · [DSH adaptation report](docs/DSH_0.2_TEST_REPORT.md)
 

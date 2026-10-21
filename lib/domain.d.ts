@@ -264,7 +264,8 @@ export interface GitGraphAvatar {
     readonly email: string;
     /** Only bounded raster data URLs are sent; null keeps the local initials. */
     readonly image: string | null;
-    readonly provider: 'github' | 'gravatar' | null;
+    /** `host` is the repository's own Git service (Gitea/Gogs avatar endpoint). */
+    readonly provider: 'github' | 'gravatar' | 'host' | null;
 }
 export interface GitGraphAvatarResult {
     readonly avatars: GitGraphAvatar[];

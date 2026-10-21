@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>当前版本 0.5.1</strong> · 适配 DSH 0.2.0-rc.2 · <a href="LICENSE">MIT</a><br>
+  <strong>当前版本 0.5.2</strong> · 适配 DSH 0.2.0-rc.2 · <a href="LICENSE">MIT</a><br>
   <a href="README.md">English</a> · <a href="docs/screenshots/readme-header.svg">静态标题</a>
 </p>
 
@@ -17,7 +17,7 @@
 
 ![原生侧栏、提交图与筛选演示](docs/screenshots/demo.gif)
 
-GIF 录制于 0.4.0；0.5.0 新增的两提交 Diff 与完整原文效果见下方截图。
+GIF 录制于 0.4.0；0.5.0 的两提交 Diff 与完整原文见下方截图，0.5.2 的引用显示与头像来源见[验收记录](docs/REFS_AVATAR_TEST_REPORT.md)。
 
 <details>
 <summary>更多截图：两提交比较、完整原文、英文及窄屏</summary>
@@ -40,10 +40,10 @@ GIF 录制于 0.4.0；0.5.0 新增的两提交 Diff 与完整原文效果见下�
 
 - **提交历史**：提交拓扑、分支、Tag、HEAD，以及提交搜索和历史筛选。
 - **提交详情**：行内展示作者与提交者日期、父提交、引用、签名状态和复制操作。
-- **引用布局**：三种引用布局，同一提交上的同名本地 / 远端分支可合并显示。
+- **引用显示**：同一提交上的引用全部展示，同名本地 / 远端分支可合并；放不下时换行、行高自适应，另有两种引用布局可选。
 - **文件变更**：文件树 / 列表、逐文件 Diff、未提交变更；选择两次提交后，可以打开每个变更文件的 Diff。
 - **历史原文**：查看和复制旧 / 新版本的完整文本，显示对应路径、提交 Hash、行号及大小。
-- **正文与头像**：正文链接、粗体、斜体、行内代码，以及 GitHub / Gravatar 真实作者头像。
+- **正文与头像**：正文链接、粗体、斜体、行内代码，以及 GitHub、Gravatar、仓库所在 Git 服务（Gitea/Gogs）的真实作者头像。
 - **显示设置**：可调列宽、日期显示、紧凑行高、连线样式和配色，按仓库保存设置。
 - **界面适配**：中英文、明暗主题、面板全屏和窄屏显示。
 
@@ -59,25 +59,25 @@ GIF 录制于 0.4.0；0.5.0 新增的两提交 Diff 与完整原文效果见下�
 
 需要 **DSH 0.2.0-rc.2**、可用的 `dsh` CLI、用于安装插件的 pnpm，以及 DSH Host 上已安装的 Git。
 
-通过 DSH 内置插件页面或命令行安装 `v0.5.1` Release 成品包，两者接受同一安装来源。参见官方的[插件管理器说明](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/packages/client/ui-plugin-manager/README.zh.md)与[打包安装文档](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/docs/user/develop/basic/publish.zh.md)。
+通过 DSH 内置插件页面或命令行安装 `v0.5.2` Release 成品包，两者接受同一安装来源。参见官方的[插件管理器说明](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/packages/client/ui-plugin-manager/README.zh.md)与[打包安装文档](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/docs/user/develop/basic/publish.zh.md)。
 
 在 DSH 中打开 **插件 → 添加插件**，粘贴下面的地址，安装后选择**立即启用**：
 
 ```text
-https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.1/dsh-git-graph-0.5.1.tgz
+https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.2/dsh-git-graph-0.5.2.tgz
 ```
 
 也可以在终端安装：
 
 ```powershell
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.1/dsh-git-graph-0.5.1.tgz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.2/dsh-git-graph-0.5.2.tgz
 ```
 
 归档已包含构建后的 `lib/` 入口，无需克隆仓库、在本机构建，或保留固定路径的开发目录。
 
 这个 `.tgz` 由 `pnpm pack` 生成并作为 GitHub Release 附件发布，与 GitHub 自动生成的源码归档分开。DSH 官方支持在界面和命令行中使用这个包地址；发布 Release 不会自动完成插件市场收录。仅输入包名安装则需要先发布到 npm。
 
-检查 `dsh-git-graph` 是否已安装为 `0.5.1`：
+检查 `dsh-git-graph` 是否已安装为 `0.5.2`：
 
 ```powershell
 dsh plugin --profile web list dsh-git-graph
@@ -96,7 +96,7 @@ dsh plugin --profile web list dsh-git-graph
 
 通过 **设置** 调整显示效果，设置按仓库分别保存。
 
-真实头像默认开启，会访问 GitHub / Gravatar。GitHub 查询使用提交作者邮箱，Gravatar 使用邮箱摘要。可以在设置中关闭；无图片或请求失败时显示首字母头像。
+真实头像默认开启，会访问外部头像服务：GitHub 仓库按提交作者邮箱查询公开提交；其他仓库先问所在 Git 服务（Gitea/Gogs 的 `/avatar` 接口），再查 Gravatar；GitHub noreply 邮箱可直接取图。可以在设置中关闭；没有公开头像或请求失败时显示首字母头像。
 
 ## 卸载
 
@@ -132,7 +132,7 @@ dsh plugin --profile web remove dsh-git-graph
 
 ```powershell
 dsh plugin --profile web remove dsh-git-graph
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.1/dsh-git-graph-0.5.1.tgz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.2/dsh-git-graph-0.5.2.tgz
 ```
 
 之后重启该 DSH Web 实例。单独运行 `dsh plugin --profile web install` 会沿用已保存的安装来源，无法修复指向不存在目录的链接。
@@ -154,7 +154,8 @@ dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releas
 ## 更多文档
 
 - [开发、本地安装与 API 说明](docs/DEVELOPMENT.md)
-- [版本说明](CHANGELOG.md) · [提交比较与完整原文验收报告](docs/COMPARE_SOURCE_TEST_REPORT.md)
+- [版本说明](CHANGELOG.md) · [引用与头像验收报告](docs/REFS_AVATAR_TEST_REPORT.md)
+- [提交比较与完整原文验收报告](docs/COMPARE_SOURCE_TEST_REPORT.md)
 - [显示功能验收报告](docs/DISPLAY_TEST_REPORT.md)
 - [P0 报告](docs/P0_TEST_REPORT.md) · [DSH 适配报告](docs/DSH_0.2_TEST_REPORT.md)
 
