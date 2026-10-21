@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { Agent } from '@deepseek-ai/dsh-agent';
-import type { GitGraphCommit, GitGraphCommitDetails, GitGraphCompareRequest, GitGraphCompareResult, GitGraphDiffLine, GitGraphFileChange, GitGraphFileContent, GitGraphFileDiff, GitGraphFileDiffRequest, GitGraphFileRequest, GitGraphInput, GitGraphMetadata, GitGraphRepoConfig, GitGraphSignature, GitGraphSnapshot, GitGraphStash, GitGraphTag, GitGraphTagDetails, GitGraphWorkingTree, GitGraphWorkingTreeChanges, GitGraphWorkingTreeFileRequest } from './domain.js';
+import type { GitGraphBranch, GitGraphCommit, GitGraphCommitDetails, GitGraphCompareRequest, GitGraphCompareResult, GitGraphDiffLine, GitGraphFileChange, GitGraphFileContent, GitGraphFileDiff, GitGraphFileDiffRequest, GitGraphFileRequest, GitGraphInput, GitGraphMetadata, GitGraphRepoConfig, GitGraphSignature, GitGraphSnapshot, GitGraphStash, GitGraphTag, GitGraphTagDetails, GitGraphWorkingTree, GitGraphWorkingTreeChanges, GitGraphWorkingTreeFileRequest } from './domain.js';
 import type { AvatarAuthor } from './avatars.js';
 /** Minimal execution identity shared by the tool and the independent view. */
 export interface GitGraphExecutionContext {
@@ -26,6 +26,8 @@ export declare function parseGitStatus(text: string): {
  * is case-sensitive.
  */
 export declare function branchNameMatches(name: string, pattern: string): boolean;
+/** Pure parser for the branch listing, exported so it can be tested alone. */
+export declare function parseBranches(stdout: string, currentBranch: string | null): GitGraphBranch[];
 /** Load the bounded graph snapshot used by the model result and Client renderer. */
 export declare function loadGitGraph(ctx: Context, input: GitGraphInput, exec: GitGraphExecutionContext): Promise<GitGraphSnapshot>;
 /** Parse an empty-or-status signature string ("", or G/U/X/Y/R/E/B) into a signature. */

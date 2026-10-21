@@ -33,6 +33,21 @@ export interface GitGraphCommit {
  */
 export type GitGraphRepoState = 'not-git' | 'empty' | 'ready'
 
+/**
+ * One local or remote-tracking branch with its tip commit. This is what makes
+ * read-only branch navigation possible: the Client can jump to a tip and ask
+ * for exactly that branch without ever running a write command.
+ */
+export interface GitGraphBranch {
+  /** Short name: `main` locally, `origin/main` for a remote-tracking branch. */
+  readonly name: string
+  /** Commit the branch points at. */
+  readonly hash: string
+  readonly kind: 'local' | 'remote'
+  /** True for the checked-out local branch. */
+  readonly isCurrent: boolean
+}
+
 /** The bounded, replayable result sent from the Host tool to the Client view. */
 export interface GitGraphSnapshot {
   readonly path: string
@@ -42,6 +57,14 @@ export interface GitGraphSnapshot {
   readonly head: string | null
   /** Actual configured remote names; names may contain slashes. */
   readonly remotes: string[]
+  /**
+   * Local branches followed by remote-tracking branches; symbolic refs excluded.
+   * Always populated by the Host. Optional only so a Client bundle and a Host
+   * from adjacent versions still interoperate: an absent list means "this Host
+   * cannot list branches", which the view renders by hiding branch navigation
+   * instead of showing an empty picker.
+   */
+  readonly branches?: GitGraphBranch[]
   readonly workingTree: {
     readonly changed: boolean
     readonly summary: string
@@ -62,6 +85,11 @@ export interface GitGraphInput {
   readonly firstParent?: boolean
   /** Branch-name glob filters (OR). Normalized by the Host. */
   readonly glob?: string[]
+  /**
+   * Exact short branch names to restrict history to (OR). Unlike `glob` this is
+   * an equality match, so focusing `main` never drags in `main-old`.
+   */
+  readonly branches?: string[]
   /** Free-text search applied to hash, subject, author, email, ref name and date. */
   readonly search?: string
   readonly sort?: GitGraphSort
@@ -185,6 +213,8 @@ export interface GitGraphWorkingTree {
 
 /** Upper bound for persisted graph metadata in one tool result. */
 export const MAX_COMMITS = 500
+/** Upper bound on exact branch names accepted in one query. */
+export const MAX_BRANCH_FILTER = 64
 
 /* ------------------------------------------------------------------ *
  * On-demand detail protocol DTOs (readCommit / readFile / compare).

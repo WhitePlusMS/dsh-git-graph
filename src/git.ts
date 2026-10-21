@@ -7,6 +7,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SubprocessHandle, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import type {
+  GitGraphBranch,
   GitGraphCommit,
   GitGraphCommitDetails,
   GitGraphCompareRequest,
@@ -31,7 +32,7 @@ import type {
   GitGraphWorkingTreeChanges,
   GitGraphWorkingTreeFileRequest,
 } from './domain.ts'
-import { MAX_AVATAR_BATCH, MAX_COMMITS } from './domain.ts'
+import { MAX_AVATAR_BATCH, MAX_BRANCH_FILTER, MAX_COMMITS } from './domain.ts'
 import type { AvatarAuthor } from './avatars.ts'
 
 const LOG_FORMAT = '%H%x00%P%x00%aN%x00%aE%x00%aI%x00%cI%x00%s%x00%D%x00%x1e'
@@ -198,7 +199,7 @@ export function parseGitStatus(text: string): { branch: string | null; changed: 
   }
 }
 
-function validateInput(input: GitGraphInput): Required<Pick<GitGraphInput, 'maxCommits' | 'all' | 'firstParent' | 'sort' | 'glob' | 'search'>> & GitGraphInput {
+function validateInput(input: GitGraphInput): Required<Pick<GitGraphInput, 'maxCommits' | 'all' | 'firstParent' | 'sort' | 'glob' | 'branches' | 'search'>> & GitGraphInput {
   const maxCommits = input.maxCommits ?? 100
   if (!Number.isSafeInteger(maxCommits) || maxCommits < 1 || maxCommits > MAX_COMMITS) {
     throw new GitGraphError(`max_commits 必须是 1 到 ${MAX_COMMITS} 之间的整数`)
@@ -208,6 +209,12 @@ function validateInput(input: GitGraphInput): Required<Pick<GitGraphInput, 'maxC
     throw new GitGraphError('sort 必须是 date、author-date 或 topological')
   }
   const glob = (input.glob ?? []).map(item => item.trim()).filter(item => item.length > 0)
+  // Exact branch focus is bounded for the same reason as globs: the value is
+  // joined into one bounded query, not an unbounded selector list.
+  const branches = (input.branches ?? []).map(item => item.trim()).filter(item => item.length > 0)
+  if (branches.length > MAX_BRANCH_FILTER) {
+    throw new GitGraphError(`branches 最多 ${MAX_BRANCH_FILTER} 项`)
+  }
   const search = (input.search ?? '').trim()
   return {
     ...input,
@@ -216,6 +223,7 @@ function validateInput(input: GitGraphInput): Required<Pick<GitGraphInput, 'maxC
     firstParent: input.firstParent ?? false,
     sort,
     glob,
+    branches,
     search,
   }
 }
@@ -272,10 +280,31 @@ function globToRegexSource(glob: string): string {
   return out
 }
 
-/** Enumerate short local branch names (`refs/heads/*`). */
-async function listBranches(ctx: Context, cwd: string, signal: AbortSignal): Promise<string[]> {
-  const result = await runGit(ctx, cwd, ['for-each-ref', '--format=%(refname:short)', 'refs/heads'], signal)
-  return result.stdout.split(/\r?\n/u).filter(name => name.length > 0)
+/** Wire format for one branch row: full ref, tip, short name, symbolic target. */
+const BRANCH_FORMAT = '%(refname)%00%(objectname)%00%(refname:short)%00%(symref)'
+
+/** Pure parser for the branch listing, exported so it can be tested alone. */
+export function parseBranches(stdout: string, currentBranch: string | null): GitGraphBranch[] {
+  const branches: GitGraphBranch[] = []
+  for (const line of stdout.split(/\r?\n/u)) {
+    if (line.length === 0) continue
+    const [refname, hash, short, symref] = line.split('\u0000')
+    if (refname === undefined || hash === undefined || short === undefined) continue
+    if (short.length === 0 || hash.length === 0) continue
+    if (symref !== undefined && symref.length > 0) continue
+    const kind = refname.startsWith('refs/heads/') ? 'local'
+      : refname.startsWith('refs/remotes/') ? 'remote'
+        : undefined
+    if (kind === undefined) continue
+    branches.push({ name: short, hash, kind, isCurrent: kind === 'local' && short === currentBranch })
+  }
+  return branches
+}
+
+/** Load every branch once per snapshot; one command covers local and remote. */
+async function loadBranches(ctx: Context, cwd: string, currentBranch: string | null, signal: AbortSignal): Promise<GitGraphBranch[]> {
+  const result = await runGit(ctx, cwd, ['for-each-ref', `--format=${BRANCH_FORMAT}`, 'refs/heads', 'refs/remotes'], signal)
+  return parseBranches(result.stdout, currentBranch)
 }
 
 function workingDirectory(input: GitGraphInput, exec: GitGraphExecutionContext): string {
@@ -295,6 +324,7 @@ function nonGitRepositorySnapshot(cwd: string): GitGraphSnapshot {
     branch: null,
     head: null,
     remotes: [],
+    branches: [],
     workingTree: {
       changed: false,
       summary: '不是 Git 仓库',
@@ -327,30 +357,37 @@ export async function loadGitGraph(
   const head = headText.length > 0 ? headText : null
   const remoteResult = await runGit(ctx, cwd, ['remote'], exec.signal)
   const remotes = remoteResult.stdout.split(/\r?\n/u).filter(name => name.length > 0)
+  // Listed once per snapshot so the Client can jump to a branch tip and focus
+  // exactly that branch without running any write command of its own.
+  const branches = await loadBranches(ctx, cwd, statusInfo.branch, exec.signal)
   const orderFlag = validated.sort === 'author-date' ? '--author-date-order'
     : validated.sort === 'topological' ? '--topo-order'
     : '--date-order'
-  // Branch-name glob filters select exact branches (OR across globs) by
-  // resolving `refs/heads/*` and passing matched refs as fixed rev arguments.
-  // Without globs we fall back to `--all` (all refs) or HEAD only when
-  // `all=false`.
-  const selectedBranches =
-    validated.glob.length > 0
-      ? (await listBranches(ctx, cwd, exec.signal)).filter(name => validated.glob.some(glob => branchNameMatches(name, glob)))
-      : []
+  // Two filters select branches by resolving the real ref list and passing the
+  // matched names as fixed rev arguments. Exact names win when both are sent:
+  // focusing one branch must never silently widen into a glob.
+  const nameFilterActive = validated.branches.length > 0 || validated.glob.length > 0
+  const selectedBranches = nameFilterActive
+    ? branches
+      .map(branch => branch.name)
+      .filter(name => validated.branches.length > 0
+        ? validated.branches.includes(name)
+        : validated.glob.some(glob => branchNameMatches(name, glob)))
+    : []
   const refArgs =
-    validated.glob.length > 0
+    nameFilterActive
       ? selectedBranches
       : validated.all ? ['--all'] : []
-  // A glob that matches no branch yields an empty graph rather than falling
-  // back to HEAD history. The repository itself may still be non-empty.
-  if (validated.glob.length > 0 && selectedBranches.length === 0) {
+  // A branch filter that matches nothing yields an empty graph rather than
+  // falling back to HEAD history. The repository itself may still be non-empty.
+  if (nameFilterActive && selectedBranches.length === 0) {
     return {
       path: cwd,
       state: head === null ? 'empty' : 'ready',
       branch: statusInfo.branch,
       head,
       remotes,
+      branches,
       workingTree: {
         changed: statusInfo.changed,
         summary: statusInfo.summary,
@@ -396,6 +433,7 @@ export async function loadGitGraph(
     branch: statusInfo.branch,
     head,
     remotes,
+    branches,
     workingTree: {
       changed: statusInfo.changed,
       summary: statusInfo.summary,

@@ -1,7 +1,7 @@
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { InvocationDescriptor, TypertSchema } from '@deepseek-ai/dsh-typert-protocol'
-import type { GitGraphCommit, GitGraphDiffLine, GitGraphFileDiff, GitGraphQuery, GitGraphRef, GitGraphRepoState, GitGraphSnapshot, GitGraphSort } from './domain.ts'
-import { MAX_AVATAR_BATCH, MAX_COMMITS } from './domain.ts'
+import type { GitGraphBranch, GitGraphCommit, GitGraphDiffLine, GitGraphFileDiff, GitGraphQuery, GitGraphRef, GitGraphRepoState, GitGraphSnapshot, GitGraphSort } from './domain.ts'
+import { MAX_AVATAR_BATCH, MAX_BRANCH_FILTER, MAX_COMMITS } from './domain.ts'
 
 export const TYPERT_PACKAGE = 'dsh-git-graph'
 const SESSION_ID_TYPE = '@deepseek-ai/dsh-session/types#SessionId'
@@ -84,13 +84,18 @@ function parseCommit(value: unknown, path: string): GitGraphCommit {
 
 function parseInput(value: unknown): GitGraphQuery {
   const object = objectAt(value, '$')
-  rejectUnknown(object, ['maxCommits', 'all', 'firstParent', 'glob', 'search', 'sort'], '$')
-  const result: { maxCommits?: number; all?: boolean; firstParent?: boolean; glob?: string[]; search?: string; sort?: GitGraphSort } = {}
+  rejectUnknown(object, ['maxCommits', 'all', 'firstParent', 'glob', 'branches', 'search', 'sort'], '$')
+  const result: { maxCommits?: number; all?: boolean; firstParent?: boolean; glob?: string[]; branches?: string[]; search?: string; sort?: GitGraphSort } = {}
   if (Object.hasOwn(object, 'maxCommits')) result.maxCommits = integerAt(object.maxCommits, '$.maxCommits', 1, MAX_COMMITS)
   if (Object.hasOwn(object, 'all')) result.all = booleanAt(object.all, '$.all')
   if (Object.hasOwn(object, 'firstParent')) result.firstParent = booleanAt(object.firstParent, '$.firstParent')
   if (Object.hasOwn(object, 'glob')) {
     result.glob = arrayAt(object.glob, '$.glob').map((item, index) => stringAt(item, `$.glob[${index}]`))
+  }
+  if (Object.hasOwn(object, 'branches')) {
+    const branches = arrayAt(object.branches, '$.branches').map((item, index) => stringAt(item, `$.branches[${index}]`))
+    if (branches.length > MAX_BRANCH_FILTER) fail('$.branches', `at most ${MAX_BRANCH_FILTER} branch names`)
+    result.branches = branches
   }
   if (Object.hasOwn(object, 'search')) result.search = stringAt(object.search, '$.search')
   if (Object.hasOwn(object, 'sort')) {
@@ -101,9 +106,22 @@ function parseInput(value: unknown): GitGraphQuery {
   return result
 }
 
+function parseBranch(value: unknown, path: string): GitGraphBranch {
+  const object = objectAt(value, path)
+  rejectUnknown(object, ['name', 'hash', 'kind', 'isCurrent'], path)
+  const kind = stringAt(object.kind, `${path}.kind`)
+  if (kind !== 'local' && kind !== 'remote') fail(`${path}.kind`, 'local or remote')
+  return {
+    name: stringAt(object.name, `${path}.name`),
+    hash: stringAt(object.hash, `${path}.hash`),
+    kind,
+    isCurrent: booleanAt(object.isCurrent, `${path}.isCurrent`),
+  }
+}
+
 function parseSnapshot(value: unknown): GitGraphSnapshot {
   const object = objectAt(value, '$')
-  rejectUnknown(object, ['path', 'state', 'branch', 'head', 'remotes', 'workingTree', 'commits', 'hasMore'], '$')
+  rejectUnknown(object, ['path', 'state', 'branch', 'head', 'remotes', 'branches', 'workingTree', 'commits', 'hasMore'], '$')
   const workingTree = objectAt(object.workingTree, '$.workingTree')
   rejectUnknown(workingTree, ['changed', 'summary'], '$.workingTree')
   const state = stringAt(object.state, '$.state')
@@ -114,6 +132,11 @@ function parseSnapshot(value: unknown): GitGraphSnapshot {
     branch: nullableStringAt(object.branch, '$.branch'),
     head: nullableStringAt(object.head, '$.head'),
     remotes: arrayAt(object.remotes, '$.remotes').map((remote, index) => stringAt(remote, `$.remotes[${index}]`)),
+    // Left undefined when the Host does not send it, so the view can hide branch
+    // navigation rather than render a picker that can never list anything.
+    ...(object.branches === undefined
+      ? {}
+      : { branches: arrayAt(object.branches, '$.branches').map((branch, index) => parseBranch(branch, `$.branches[${index}]`)) }),
     workingTree: {
       changed: booleanAt(workingTree.changed, '$.workingTree.changed'),
       summary: stringAt(workingTree.summary, '$.workingTree.summary'),
