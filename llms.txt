@@ -1,0 +1,60 @@
+# dsh-git-graph
+
+> Read-only Git Graph sidebar for DeepSeek Harness (DSH) Web, by WhitePlusMS: commit history, branches and tags, file diffs, two-commit comparison, and complete historical file source — inside DSH's native right sidebar, with no API key and no conversation message.
+>
+> DSH 原生右侧栏的只读 Git 可视化插件：提交历史、分支与标签、文件 Diff、两提交比较、完整历史原文。无需 API Key，也不占用对话消息。
+
+- Repository: https://github.com/WhitePlusMS/dsh-git-graph
+- Latest release (0.5.3, 2026-10-21): https://github.com/WhitePlusMS/dsh-git-graph/releases/tag/v0.5.3
+- Install archive: https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.3/dsh-git-graph-0.5.3.tgz
+- Changelog: https://github.com/WhitePlusMS/dsh-git-graph/blob/master/CHANGELOG.md
+- English README: https://github.com/WhitePlusMS/dsh-git-graph/blob/master/README.md
+- Chinese README: https://github.com/WhitePlusMS/dsh-git-graph/blob/master/README.zh.md
+
+## Install
+
+Requires DSH 0.2.0-rc.2, the `dsh` CLI, pnpm, and Git on the DSH Host. Installation is from the GitHub Release archive, not from npm:
+
+```powershell
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.3/dsh-git-graph-0.5.3.tgz
+```
+
+Restart the same DSH Web instance afterwards, then open **dsh-git-graph** from the right sidebar.
+
+## Facts
+
+- Name: `dsh-git-graph` (package name and DSH bundle row id).
+- Author and maintainer: WhitePlusMS.
+- License: MIT.
+- UI languages: Chinese and English.
+- Compatible runtime: DSH 0.2.0-rc.2.
+- Data source: the current session workspace's local Git repository only.
+- Operations: read-only. The plugin never writes to the repository, the index, refs, or the remote.
+- Distribution: GitHub Releases (`*.tgz` with prebuilt `lib/`), checksummed with `SHA256SUMS.txt`. Not published to npm.
+
+## What it does
+
+- Renders commit topology with branch/tag/HEAD references; every reference is shown and wraps instead of collapsing into `+N`.
+- Inline commit details: author and committer dates, parents, references, signature status, copy actions.
+- File changes per commit with tree or list view, per-file unified diff, and a working-tree (uncommitted changes) view.
+- Two-commit comparison: pick a base commit, then open each changed file's unified diff.
+- Historical file source: read and copy the old or new version of a file, up to 1 MiB per file.
+- Commit messages with links, bold, italic, and inline code; author avatars from GitHub, Gravatar, or the repository's own Git service (Gitea/Gogs).
+- Display settings saved per repository: column widths, date format and source, compact rows, line style, lane palette, reference alignment.
+
+## What it does not do
+
+- No staging, committing, pushing, pulling, fetching, merging, or tag creation.
+- No side-by-side diff, syntax highlighting, tag signature verification, or stash diffs.
+- No remote hosting API calls, except the optional avatar lookups described above; disabling avatars stops them.
+
+## Not this project
+
+- The npm package named `dsh-git-graph` (author `enoughpower`, latest 0.1.8) is a **different plugin** that includes write features. This project is installed from the GitHub Release archive above.
+- Other DSH Git plugins use similar names, for example `kp-z/dsh-dev-git-graph`, `lengmoXXL/dsh-git`, `EasyTZ/dsh-git`, and `LeonZ666/dsh-gitworktree-gui`. They are independent projects, not maintained here.
+
+## Optional
+
+- Development, local installation, and API notes: https://github.com/WhitePlusMS/dsh-git-graph/blob/master/docs/DEVELOPMENT.md
+- Acceptance reports: https://github.com/WhitePlusMS/dsh-git-graph/tree/master/docs
+- Inspired by vscode-git-graph: https://github.com/mhutchie/vscode-git-graph

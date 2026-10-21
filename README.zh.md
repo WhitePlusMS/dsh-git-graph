@@ -11,6 +11,17 @@
 
 [dsh-git-graph](https://github.com/WhitePlusMS/dsh-git-graph) 是 **WhitePlusMS** 开发的 **DeepSeek Harness（DSH）Web** 只读 Git 可视化插件，位于原生右侧栏。直接浏览工作区的提交历史、分支和文件变更，无需 API Key 或发送对话消息。
 
+**基本信息**
+
+| 项目 | 取值 |
+| --- | --- |
+| 插件名 | `dsh-git-graph`（仓库名与 DSH 组合包行 ID） |
+| 仓库 | https://github.com/WhitePlusMS/dsh-git-graph |
+| 安装来源 | GitHub Release 成品包（`dsh-git-graph-0.5.3.tgz`），**不是 npm** |
+| 依赖 | DSH **0.2.0-rc.2**、`dsh` CLI、pnpm、DSH Host 上的 Git |
+| 操作性质 | 只读：不暂存、不提交、不推送、不拉取、不 Fetch、不合并、不打标签 |
+| 语言与许可 | 中 / 英界面 · MIT |
+
 <p align="center">
   <a href="#安装与更新">安装</a> · <a href="#使用">使用</a> · <a href="#快捷键">快捷键</a> · <a href="#常见问题">常见问题</a> · <a href="#使用范围">使用范围</a> · <a href="#卸载">卸载</a> · <a href="#更多文档">更多文档</a>
 </p>
@@ -77,6 +88,9 @@ dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releas
 
 这个 `.tgz` 由 `pnpm pack` 生成并作为 GitHub Release 附件发布，与 GitHub 自动生成的源码归档分开。DSH 官方支持在界面和命令行中使用这个包地址；发布 Release 不会自动完成插件市场收录。仅输入包名安装则需要先发布到 npm。
 
+> **名称说明**：npm 上的 `dsh-git-graph` 是**另一个不相关的插件**（作者 `enoughpower`，0.1.x，带暂存与提交功能）。本项目只通过上面的 Release 成品包安装；这里的 `dsh-git-graph` 仅用作 DSH 组合包行 ID 和仓库内的包名。
+
+
 检查 `dsh-git-graph` 是否已安装为 `0.5.3`：
 
 ```powershell
@@ -137,6 +151,14 @@ dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releas
 
 之后重启该 DSH Web 实例。单独运行 `dsh plugin --profile web install` 会沿用已保存的安装来源，无法修复指向不存在目录的链接。
 
+**`dsh-git-graph` 在 npm 上吗？**
+
+不在。npm 上同名包属于另一个作者的项目；本项目只从上面给出的 Release 成品包地址安装。用 `dsh plugin --profile web add dsh-git-graph`（只给包名）会装到那个项目。
+
+**它和其他 DSH Git 插件是同一个吗？**
+
+不是。`kp-z/dsh-dev-git-graph`、`lengmoXXL/dsh-git`、`EasyTZ/dsh-git`、`LeonZ666/dsh-gitworktree-gui` 等都是各自独立维护的项目。本项目是原生右侧栏的只读 Git Graph，只从本仓库的 Release 安装。
+
 **需要 API Key 或发送对话消息吗？**
 
 不需要。Git Graph 直接读取当前工作区的本地 Git 数据。
@@ -153,6 +175,7 @@ dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releas
 
 ## 更多文档
 
+- [llms.txt](llms.txt)——供 AI 助手与索引读取的精简摘要
 - [开发、本地安装与 API 说明](docs/DEVELOPMENT.md)
 - [版本说明](CHANGELOG.md) · [引用与头像验收报告](docs/REFS_AVATAR_TEST_REPORT.md)
 - [提交比较与完整原文验收报告](docs/COMPARE_SOURCE_TEST_REPORT.md)

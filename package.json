@@ -6,6 +6,30 @@
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
+  "author": "WhitePlusMS",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WhitePlusMS/dsh-git-graph.git"
+  },
+  "homepage": "https://github.com/WhitePlusMS/dsh-git-graph#readme",
+  "bugs": {
+    "url": "https://github.com/WhitePlusMS/dsh-git-graph/issues"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "git",
+    "git-graph",
+    "git-history",
+    "commit-graph",
+    "diff-viewer",
+    "sidebar",
+    "read-only"
+  ],
+  "engines": {
+    "dsh": "0.2.0-rc.2"
+  },
   "exports": {
     ".": {
       "types": "./lib/index.d.ts",

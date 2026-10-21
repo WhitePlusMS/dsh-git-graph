@@ -11,6 +11,17 @@
 
 [dsh-git-graph](https://github.com/WhitePlusMS/dsh-git-graph) by **WhitePlusMS** is a read-only Git visualization plugin for the native right sidebar of **DeepSeek Harness (DSH) Web**. Browse your workspace's commit history, branches, and file changes without an API key or conversation message.
 
+**Quick facts**
+
+| Item | Value |
+| --- | --- |
+| Plugin name | `dsh-git-graph` (repository and DSH bundle row id) |
+| Repository | https://github.com/WhitePlusMS/dsh-git-graph |
+| Install source | GitHub Release archive (`dsh-git-graph-0.5.3.tgz`), **not** npm |
+| Requires | DSH **0.2.0-rc.2**, `dsh` CLI, pnpm, Git on the DSH Host |
+| Operations | Read-only — no stage, commit, push, pull, fetch, merge, or tag |
+| Languages and license | Chinese / English UI · MIT |
+
 <p align="center">
   <a href="#install-or-update">Install</a> · <a href="#usage">Usage</a> · <a href="#keyboard-controls">Keyboard controls</a> · <a href="#faq">FAQ</a> · <a href="#scope">Scope</a> · <a href="#uninstall">Uninstall</a> · <a href="#documentation">Documentation</a>
 </p>
@@ -77,6 +88,9 @@ The archive includes the built `lib/` entry points. You do not need to clone thi
 
 This `.tgz` is built with `pnpm pack` and uploaded as a GitHub Release asset; it is separate from GitHub's automatically generated source archives. DSH supports installing this package URL in both the UI and CLI. Publishing a release does not automatically list the plugin in a marketplace; installing by package name alone requires an npm publication.
 
+> **Name note.** The npm package named `dsh-git-graph` is a **different, unrelated plugin** (author `enoughpower`, version 0.1.x, with staging and commit features). This project is installed from the Release archive above; `dsh-git-graph` is used here only as the DSH bundle row id and the package name inside this repository.
+
+
 Check that `dsh-git-graph` is installed at version `0.5.3`:
 
 ```powershell
@@ -137,6 +151,14 @@ dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releas
 
 Restart that DSH Web instance afterward. Running `dsh plugin --profile web install` alone reuses the saved package source and cannot repair a link to a missing folder.
 
+**Is `dsh-git-graph` on npm?**
+
+No. The npm package with this name belongs to a different project by another author. Install this plugin from the Release archive URL shown above; `dsh plugin --profile web add dsh-git-graph` (a bare package name) would resolve to that other project.
+
+**Is this the same as other DSH Git plugins?**
+
+No. Plugins such as `kp-z/dsh-dev-git-graph`, `lengmoXXL/dsh-git`, `EasyTZ/dsh-git`, and `LeonZ666/dsh-gitworktree-gui` are independent projects. This one is a read-only Git Graph for the native right sidebar, installed only from this repository's Releases.
+
 **Do I need an API key or a conversation message?**
 
 No. Git Graph reads the current workspace's local Git data directly.
@@ -153,6 +175,7 @@ No. The plugin is read-only; refreshing the graph does not fetch remote changes 
 
 ## Documentation
 
+- [llms.txt](llms.txt) — compact machine-readable summary for AI assistants and indexes
 - [Development, local installation, and API details](docs/DEVELOPMENT.md)
 - [Release notes](CHANGELOG.md) · [References and avatar report](docs/REFS_AVATAR_TEST_REPORT.md)
 - [Commit comparison and full source report](docs/COMPARE_SOURCE_TEST_REPORT.md)
