@@ -3,11 +3,12 @@ import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { GitGraphAvatar, GitGraphAvatarRequest, GitGraphAvatarResult } from '../domain.ts'
-import type { GitGraphCommit, GitGraphCommitDetails, GitGraphCompareRequest, GitGraphCompareResult, GitGraphFileChange, GitGraphFileContent, GitGraphFileDiff, GitGraphFileDiffRequest, GitGraphFileRequest, GitGraphQuery, GitGraphMetadata, GitGraphRef, GitGraphSnapshot, GitGraphWorkingTreeChanges, GitGraphWorkingTreeFileRequest } from '../domain.ts'
+import type { GitGraphBranch, GitGraphCommit, GitGraphCommitDetails, GitGraphCompareRequest, GitGraphCompareResult, GitGraphFileChange, GitGraphFileContent, GitGraphFileDiff, GitGraphFileDiffRequest, GitGraphFileRequest, GitGraphQuery, GitGraphMetadata, GitGraphRef, GitGraphSnapshot, GitGraphWorkingTreeChanges, GitGraphWorkingTreeFileRequest } from '../domain.ts'
 import { layoutGraph, type GraphLayout } from './graph-layout.ts'
 import { loadDisplaySettings, saveDisplaySettings, DEFAULT_DISPLAY_SETTINGS, COLUMN_LIMITS, clampColumnWidth, type CommitColumn, type GitGraphDisplaySettings, type GraphDateFormat, type GraphLineStyle, type GraphPalette } from './settings.ts'
 import { commitDate, displayHunks, graphDisplayWidth, graphRowHeight, referenceLabels, visibleColumns } from './presentation.ts'
 import { avatarEmail, useAvatars } from './avatars.ts'
+import { BUILD_ID } from './build-info.ts'
 import { RichMessage } from './RichMessage.tsx'
 import { css } from './styles.ts'
 import { NS, type GitGraphTranslate } from './locales.ts'
@@ -26,6 +27,8 @@ export interface GitGraphViewInjected {
 
 type Props = PropsRuntime<'sidebar.right.pane.tab'> & PropsLocale<typeof NS> & GitGraphViewInjected
 type RefFilter = 'all' | GitGraphRef['kind']
+/** The secondary surfaces that cover the graph instead of stacking above it. */
+type SheetKind = 'branch' | 'filter' | 'settings'
 
 const MAX_COMMITS = 500
 const PAGE_SIZE = 100
@@ -324,7 +327,7 @@ function GraphReferenceLabels({ layout, metrics, remotes, currentBranch, combine
   </div>
 }
 
-function CommitRow({ commit, selected, display, findActive, onSelect, currentBranch, hovered, onHover, remotes, avatar, rowRef }: {
+function CommitRow({ commit, selected, display, findActive, onSelect, currentBranch, hovered, onHover, remotes, avatar }: {
   readonly commit: GitGraphCommit
   readonly selected: boolean
   readonly display: GitGraphDisplaySettings
@@ -335,12 +338,10 @@ function CommitRow({ commit, selected, display, findActive, onSelect, currentBra
   readonly onHover: (hash: string | undefined) => void
   readonly remotes: readonly string[]
   readonly avatar: GitGraphAvatar | undefined
-  /** Measured by the graph so a row that wraps its labels still lines up. */
-  readonly rowRef: (element: HTMLDivElement | null) => void
 }) {
   const t = useText()
   return (
-    <div role="button" tabIndex={0} ref={rowRef} data-commit-hash={commit.hash} data-hovered={hovered} className={selected ? `${css.commit} ${css.commitSelected}` : css.commit} aria-pressed={selected} onClick={onSelect}
+    <div role="button" tabIndex={0} data-commit-hash={commit.hash} data-hovered={hovered} className={selected ? `${css.commit} ${css.commitSelected}` : css.commit} aria-pressed={selected} onClick={onSelect}
       onMouseEnter={() => onHover(commit.hash)} onMouseLeave={() => onHover(undefined)}
       onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onSelect() } }}>
       <span className={css.commitDescription}>
@@ -1099,10 +1100,12 @@ function SettingsToggle({ label, checked, onChange }: {
   )
 }
 
-function SettingsPanel({ settings, onChange, onClose }: {
+function SettingsPanel({ settings, onChange, onClose, diagnostics }: {
   readonly settings: GitGraphDisplaySettings
   readonly onChange: (next: GitGraphDisplaySettings) => void
   readonly onClose: () => void
+  /** Which bundle is running and what geometry it measured; `undefined` hides it. */
+  readonly diagnostics?: string
 }) {
   const t = useText()
   return (
@@ -1155,6 +1158,7 @@ function SettingsPanel({ settings, onChange, onClose }: {
         </div>
       </SettingsSection>
       <p className={css.settingsNote}>{t('settings.avatarHint')}</p>
+      {diagnostics !== undefined && <p className={`${css.settingsNote} ${css.mono}`} data-build-id>{diagnostics}</p>}
       <div className={css.settingsActions}>
         <button type="button" className={css.secondaryButton} onClick={() => onChange(DEFAULT_DISPLAY_SETTINGS)}>{t('settings.reset')}</button>
         <button type="button" className={css.secondaryButton} onClick={onClose}>{t('settings.close')}</button>
@@ -1163,6 +1167,232 @@ function SettingsPanel({ settings, onChange, onClose }: {
   )
 }
 
+/* ------------------------------------------------------------------ *
+ * Chrome: icons, one sheet shell, and the panels that replace the old
+ * inline control wall. Sheets cover the graph instead of pushing it down.
+ * ------------------------------------------------------------------ */
+
+function BranchGlyph() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
+      <g fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+        <path d="M4.5 4.4v7.2" />
+        <path d="M4.5 8.2h3a2.4 2.4 0 0 1 2.4 2.4v.6" />
+      </g>
+      <circle cx="4.5" cy="3" r="1.6" fill="currentColor" />
+      <circle cx="4.5" cy="13" r="1.6" fill="currentColor" />
+      <circle cx="9.9" cy="13" r="1.6" fill="currentColor" />
+    </svg>
+  )
+}
+
+function ChevronGlyph({ direction = 'down' }: { readonly direction?: 'up' | 'down' }) {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+      <path d={direction === 'up' ? 'M2 6.5 5 3.5 8 6.5' : 'M2 3.5 5 6.5 8 3.5'} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function CloseGlyph() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true">
+      <path d="M2.6 2.6 9.4 9.4M9.4 2.6 2.6 9.4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function FunnelGlyph() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M2 3.2h12L9.4 8.4v4.2l-2.8 1.2V8.4L2 3.2Z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function SearchGlyph() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
+      <circle cx="7" cy="7" r="4.2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M10.2 10.2 13.4 13.4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function RefreshGlyph() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M13 8a5 5 0 1 1-1.7-3.8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M13.2 2.6v3.2H10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function SlidersGlyph() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+      <g fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+        <path d="M2.6 4.6h10.8M2.6 11.4h10.8" />
+      </g>
+      <circle cx="6" cy="4.6" r="1.9" fill="var(--git-graph-bg)" stroke="currentColor" strokeWidth="1.4" />
+      <circle cx="10.4" cy="11.4" r="1.9" fill="var(--git-graph-bg)" stroke="currentColor" strokeWidth="1.4" />
+    </svg>
+  )
+}
+
+/** Full-panel shell, used only for the settings form. */
+function Sheet({ title, onClose, children, footer }: {
+  readonly title: string
+  readonly onClose: () => void
+  readonly children: ReactNode
+  readonly footer?: ReactNode
+}) {
+  const t = useText()
+  return (
+    <div className={css.sheet} role="dialog" aria-modal="true" aria-label={title} data-sheet>
+      <div className={css.sheetHeader}>
+        <span className={css.sheetTitle}>{title}</span>
+        <button type="button" className={css.iconButton} onClick={onClose} title={t('common.close')} aria-label={t('common.close')}><CloseGlyph /></button>
+      </div>
+      {children}
+      {footer}
+    </div>
+  )
+}
+
+/**
+ * A menu that hangs under the bar it belongs to.
+ *
+ * A picker chooses one row, so it must not take the panel over: the list
+ * behind it is the context for the choice. Only settings is a page.
+ */
+function Dropdown({ label, children }: { readonly label: string; readonly children: ReactNode }) {
+  return (
+    <div className={css.dropdown} role="dialog" aria-label={label} data-git-graph-dropdown>
+      {children}
+    </div>
+  )
+}
+
+/**
+ * Read-only branch navigation. Selecting a branch focuses exactly that branch
+ * and jumps to its tip, so the graph answers "what is on this branch" without
+ * ever running a write command or touching the working tree.
+ */
+function BranchMenu({ branches, focused, onSelect, onShowAll }: {
+  readonly branches: readonly GitGraphBranch[]
+  readonly focused: string | undefined
+  readonly onSelect: (branch: GitGraphBranch) => void
+  readonly onShowAll: () => void
+}) {
+  const t = useText()
+  const [query, setQuery] = useState('')
+  const needle = query.trim().toLocaleLowerCase()
+  const matches = (branch: GitGraphBranch) => needle.length === 0 || branch.name.toLocaleLowerCase().includes(needle)
+  const local = branches.filter(branch => branch.kind === 'local' && matches(branch))
+  const remote = branches.filter(branch => branch.kind === 'remote' && matches(branch))
+  const row = (branch: GitGraphBranch) => (
+    <li key={`${branch.kind}:${branch.name}`}>
+      <button
+        type="button"
+        data-current={branch.isCurrent}
+        title={t('branch.jump', { name: branch.name })}
+        className={branch.name === focused ? `${css.branchRow} ${css.branchRowActive}` : css.branchRow}
+        onClick={() => onSelect(branch)}
+      >
+        <span className={css.branchRowName}>{branch.name}</span>
+        {branch.isCurrent && <span className={css.branchRowBadge}>{t('branch.current')}</span>}
+        <span className={css.branchRowMeta}>{shortHash(branch.hash)}</span>
+      </button>
+    </li>
+  )
+  return (
+    <Dropdown label={t('branch.title')}>
+      {branches.length > 0 && (
+        <input className={css.branchSearch} type="search" value={query} onChange={event => setQuery(event.target.value)}
+          placeholder={t('branch.search')} aria-label={t('branch.search')} autoFocus />
+      )}
+      <ul className={css.branchList}>
+        {focused !== undefined && (
+          <li>
+            <button type="button" className={css.branchRow} onClick={onShowAll} title={t('branch.showAll')}>
+              <span className={css.branchRowName}>{t('branch.showAll')}</span>
+              <CloseGlyph />
+            </button>
+          </li>
+        )}
+        {local.length > 0 && <li className={css.sheetGroupTitle}>{t('branch.local')}</li>}
+        {local.map(row)}
+        {remote.length > 0 && <li className={css.sheetGroupTitle}>{t('branch.remote')}</li>}
+        {remote.map(row)}
+        {local.length === 0 && remote.length === 0 && (
+          <li className={css.sheetNote}>{branches.length === 0 ? t('branch.empty') : t('find.noMatches')}</li>
+        )}
+      </ul>
+    </Dropdown>
+  )
+}
+
+/** Ref type, ordering and the raw glob live together, away from the graph. */
+function FilterMenu({ refFilter, sort, includeAll, firstParent, branchGlob, onRefFilter, onSort, onIncludeAll, onFirstParent, onBranchGlob, onReset, onClose }: {
+  readonly refFilter: RefFilter
+  readonly sort: 'date' | 'author-date' | 'topological'
+  readonly includeAll: boolean
+  readonly firstParent: boolean
+  readonly branchGlob: string
+  readonly onRefFilter: (value: RefFilter) => void
+  readonly onSort: (value: 'date' | 'author-date' | 'topological') => void
+  readonly onIncludeAll: (value: boolean) => void
+  readonly onFirstParent: (value: boolean) => void
+  readonly onBranchGlob: (value: string) => void
+  readonly onReset: () => void
+  readonly onClose: () => void
+}) {
+  const t = useText()
+  return (
+    <Dropdown label={t('filter.title')}>
+      <div className={css.dropdownBody}>
+        <div className={css.sheetGroup}>
+          <label className={css.sheetField}>
+            <span className={css.sheetLabel}>{t('toolbar.refFilter')}</span>
+            <select className={`${css.select} ${css.sheetControl}`} value={refFilter} onChange={event => onRefFilter(event.target.value as RefFilter)}>
+              <option value="all">{t('toolbar.allRefs')}</option>
+              <option value="head">{t('toolbar.localBranches')}</option>
+              <option value="remote">{t('toolbar.remoteBranches')}</option>
+              <option value="tag">{t('metadata.tags')}</option>
+            </select>
+          </label>
+          <label className={css.sheetField}>
+            <span className={css.sheetLabel}>{t('toolbar.sort')}</span>
+            <select className={`${css.select} ${css.sheetControl}`} value={sort} onChange={event => onSort(event.target.value as 'date' | 'author-date' | 'topological')}>
+              <option value="date">{t('toolbar.sortDate')}</option>
+              <option value="author-date">{t('toolbar.sortAuthorDate')}</option>
+              <option value="topological">{t('toolbar.sortTopological')}</option>
+            </select>
+          </label>
+        </div>
+        <div className={css.sheetGroup}>
+          <label className={css.sheetField}>
+            <span className={css.sheetLabel}>{t('filter.advanced')}</span>
+            <input className={`${css.search} ${css.sheetControl}`} type="text" value={branchGlob}
+              onChange={event => onBranchGlob(event.target.value)} placeholder={t('toolbar.branchPlaceholder')} aria-label={t('toolbar.branch')} />
+          </label>
+        </div>
+        <div className={css.sheetGroup}>
+          <label className={css.check}><input type="checkbox" checked={includeAll} onChange={event => onIncludeAll(event.target.checked)} />{t('toolbar.includeAll')}</label>
+          <label className={css.check}><input type="checkbox" checked={firstParent} onChange={event => onFirstParent(event.target.checked)} />{t('toolbar.firstParent')}</label>
+        </div>
+        <p className={css.sheetNote}>{t('filter.hint')}</p>
+      </div>
+      <div className={css.sheetFooter}>
+        <button type="button" className={css.secondaryButton} onClick={onReset}>{t('filter.reset')}</button>
+        <button type="button" className={css.secondaryButton} onClick={onClose}>{t('common.close')}</button>
+      </div>
+    </Dropdown>
+  )
+}
+
+/** Compact find controls: the count and three actions share one row. */
 function FindBar({ count, index, onPrev, onNext, onClear }: {
   readonly count: number
   readonly index: number
@@ -1172,12 +1402,12 @@ function FindBar({ count, index, onPrev, onNext, onClear }: {
 }) {
   const t = useText()
   return (
-    <div className={css.findBar} data-find-bar>
+    <span className={css.findBar} data-find-bar>
       <span className={css.findCount}>{count === 0 ? t('find.noMatches') : `${index + 1}/${count}`}</span>
-      <button type="button" className={css.secondaryButton} onClick={onPrev} disabled={count === 0}>{t('find.previous')}</button>
-      <button type="button" className={css.secondaryButton} onClick={onNext} disabled={count === 0}>{t('find.next')}</button>
-      <button type="button" className={css.secondaryButton} onClick={onClear}>{t('find.clear')}</button>
-    </div>
+      <button type="button" className={css.iconButton} onClick={onPrev} disabled={count === 0} title={t('find.previous')} aria-label={t('find.previous')}><ChevronGlyph direction="up" /></button>
+      <button type="button" className={css.iconButton} onClick={onNext} disabled={count === 0} title={t('find.next')} aria-label={t('find.next')}><ChevronGlyph direction="down" /></button>
+      <button type="button" className={css.iconButton} onClick={onClear} title={t('find.clear')} aria-label={t('find.clear')}><CloseGlyph /></button>
+    </span>
   )
 }
 
@@ -1210,7 +1440,9 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
   const [metadataError, setMetadataError] = useState<string>()
   const [readRevision, setReadRevision] = useState(0)
   const [display, setDisplay] = useState<GitGraphDisplaySettings>(DEFAULT_DISPLAY_SETTINGS)
-  const [showSettings, setShowSettings] = useState(false)
+  const [sheet, setSheet] = useState<SheetKind>()
+  // Exact branch focus: the graph shows one branch without any write command.
+  const [focusedBranch, setFocusedBranch] = useState<string>()
   const [findOpen, setFindOpen] = useState(false)
   const [findText, setFindText] = useState('')
   const [findCase, setFindCase] = useState(false)
@@ -1224,8 +1456,8 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
   // Rows are measured, not assumed to be one line tall: a commit with many
   // references wraps its labels, so the graph column follows the real boxes.
   const listRef = useRef<HTMLDivElement>(null)
-  const workingTreeRowRef = useRef<HTMLButtonElement>(null)
-  const rowNodes = useRef<Array<HTMLDivElement | null>>([])
+  /** Last measurement outcome, surfaced in the settings sheet for diagnosis. */
+  const measureLog = useRef('未测量')
   const [measured, setMeasured] = useState<{ key: string; metrics: RowMetrics }>()
   // Only the newest query may replace the graph, including after unmount.
   const querySequence = useRef(0)
@@ -1266,10 +1498,11 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
       ...(includeAll === true ? {} : { all: false }),
       ...(firstParent === true ? { firstParent: true } : {}),
       ...(globs.length > 0 ? { glob: globs } : {}),
+      ...(focusedBranch === undefined ? {} : { branches: [focusedBranch] }),
       ...(emittedSearch.length > 0 ? { search: emittedSearch } : {}),
       sort,
     }
-  }, [branchGlob, includeAll, firstParent, sort])
+  }, [branchGlob, firstParent, focusedBranch, includeAll, sort])
 
   const refresh = useCallback(() => {
     setReadRevision(current => current + 1)
@@ -1319,6 +1552,9 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
     return () => clearTimeout(timer)
   }, [searchText])
 
+  // A new branch scope always starts from the first page again.
+  useEffect(() => { setMaxCommits(PAGE_SIZE) }, [branchGlob, focusedBranch])
+
   const visibleCommits = useMemo(() => {
     if (snapshot === undefined) return []
     return snapshot.commits.filter(commit => refMatches(commit, refFilter))
@@ -1347,12 +1583,44 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
     setShowWorkingTree(current => !current)
   }
 
+  // Focusing a branch is a read-only navigation: it narrows the query to that
+  // exact branch and selects its tip. Nothing is checked out or written.
+  const selectBranch = (branch: GitGraphBranch) => {
+    // Choosing the branch that is already focused changes no state, so nothing
+    // would reload; treat the click as an explicit refresh instead of a no-op.
+    const alreadyFocused = branch.name === focusedBranch
+    setFocusedBranch(branch.name)
+    setBranchGlob('')
+    setRefFilter('all')
+    setSearchText('')
+    setSearch('')
+    setMaxCommits(PAGE_SIZE)
+    setViewingFile(undefined)
+    setCompareTarget(undefined)
+    setShowWorkingTree(false)
+    setSelectedHash(branch.hash)
+    setSheet(undefined)
+    if (alreadyFocused) void refresh()
+  }
+  const clearBranchFocus = () => {
+    setFocusedBranch(undefined)
+    setMaxCommits(PAGE_SIZE)
+  }
+  // The badge counts only the filters that live in the filter sheet; branch
+  // focus has its own visible line, so counting it twice would mislead.
+  const activeFilterCount = (refFilter === 'all' ? 0 : 1)
+    + (sort === 'date' ? 0 : 1)
+    + (includeAll ? 0 : 1)
+    + (firstParent ? 1 : 0)
+    + (branchGlob.trim().length === 0 ? 0 : 1)
+
   const rowHeight = graphRowHeight(display)
   const workingTreeChanged = snapshot?.workingTree.changed === true
   const metricKey = `${layout.nodes.length}:${workingTreeChanged ? 1 : 0}`
   // Until the current rows have been measured, draw with uniform rows. The
   // layout effect measures before paint, so this is never visible for long.
-  const rowMetrics = measured?.key === metricKey && measured.metrics.rows.length === layout.nodes.length
+  const measuredOk = measured !== undefined && measured.key === metricKey && measured.metrics.rows.length === layout.nodes.length
+  const rowMetrics = measured !== undefined && measuredOk
     ? measured.metrics
     : uniformRowMetrics(layout.nodes.length, workingTreeChanged, rowHeight)
 
@@ -1360,21 +1628,35 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
   // panel) so the SVG and the graph-aligned labels track the real list.
   useLayoutEffect(() => {
     const list = listRef.current
-    if (list === null) return undefined
-    const measure = () => {
+    if (list === null) { measureLog.current = '列表未挂载'; return undefined }
+    /**
+     * Re-read every rendered row box. The returned signature lets the settle
+     * loop below stop as soon as two consecutive passes agree; an empty
+     * signature means the rows were not all in the DOM yet, so the pass is
+     * skipped instead of publishing a mix of real and guessed boxes.
+     *
+     * Rows are read from the DOM in document order rather than from a ref
+     * array: an inline ref callback is detached and re-attached on every
+     * render, so a pass that runs mid-churn would see nulls for rows that are
+     * on screen, publish nothing, and leave the graph on stale geometry.
+     */
+    const measure = (): string => {
       const listRect = list.getBoundingClientRect()
-      const boxOf = (element: HTMLElement): RowBox => {
-        const rect = element.getBoundingClientRect()
-        return { top: Math.round(rect.top - listRect.top), height: Math.round(rect.height) }
+      const elements = list.querySelectorAll<HTMLElement>('[data-commit-hash]')
+      if (elements.length !== layout.nodes.length) {
+        measureLog.current = `行数不符 ${elements.length}/${layout.nodes.length}`
+        return ''
       }
       const rows: RowBox[] = []
-      for (let index = 0; index < layout.nodes.length; index += 1) {
-        const element = rowNodes.current[index]
-        rows.push(element === undefined || element === null
-          ? { top: (workingTreeChanged ? rowHeight : 0) + index * rowHeight, height: rowHeight }
-          : boxOf(element))
+      for (const element of elements) {
+        const rect = element.getBoundingClientRect()
+        rows.push({ top: Math.round(rect.top - listRect.top), height: Math.round(rect.height) })
       }
-      const workingTree = workingTreeRowRef.current === null ? undefined : boxOf(workingTreeRowRef.current)
+      const workingTreeElement = list.querySelector<HTMLElement>('[data-worktree-row]')
+      const workingTreeRect = workingTreeElement?.getBoundingClientRect()
+      const workingTree = workingTreeRect === undefined
+        ? undefined
+        : { top: Math.round(workingTreeRect.top - listRect.top), height: Math.round(workingTreeRect.height) }
       const last = rows[rows.length - 1]
       // Derive the height from the rows only: reading the list's own scroll
       // height would feed the SVG height back into the row layout and keep the
@@ -1384,15 +1666,36 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
         workingTree === undefined ? 0 : workingTree.top + workingTree.height)
       const metrics: RowMetrics = { workingTree, rows, total }
       const key = `${layout.nodes.length}:${workingTreeChanged ? 1 : 0}`
+      measureLog.current = `已测量 ${rows.length} 行 · 首行 ${rows[0]?.top ?? 0} · 总高 ${total}`
       setMeasured(current => current !== undefined && current.key === key && sameRowMetrics(current.metrics, metrics)
         ? current : { key, metrics })
+      return rows.map(box => `${box.top}/${box.height}`).join(',')
     }
     measure()
     if (typeof ResizeObserver === 'undefined') return undefined
-    const observer = new ResizeObserver(measure)
+    const observer = new ResizeObserver(() => { measure() })
     observer.observe(list)
-    return () => observer.disconnect()
-  }, [layout, workingTreeChanged, rowHeight, selectedHash, showWorkingTree, display])
+    // Inline details are siblings of commit rows. Their async content can move
+    // later rows without resizing either those rows or the constrained list box,
+    // so observe the panels themselves as well as wrapped reference rows.
+    for (const element of list.querySelectorAll('[data-commit-hash], [data-inline-details]')) observer.observe(element)
+    // A diff or source viewer settles several frames after it opens, and fonts
+    // or images can reflow a row in frames that carry no observer callback.
+    // Re-measure until two consecutive passes agree, with a bounded sweep so a
+    // permanently unstable layout still stops.
+    let previous = ''
+    let frames = 0
+    let frameId = requestAnimationFrame(function settle() {
+      frames += 1
+      const signature = measure()
+      if (signature.length > 0 && signature === previous) return
+      previous = signature
+      if (frames < 120) frameId = requestAnimationFrame(settle)
+    })
+    return () => { cancelAnimationFrame(frameId); observer.disconnect() }
+    // The inline panels are dependencies on purpose: opening a file diff or a
+    // comparison changes row heights without changing the row count.
+  }, [layout, workingTreeChanged, rowHeight, selectedHash, showWorkingTree, display, viewingFile, compareTarget, workingTreeFile])
 
   const loadMore = () => {
     const nextMax = Math.min(MAX_COMMITS, maxCommits + PAGE_SIZE)
@@ -1469,14 +1772,23 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
         event.preventDefault()
-        if (event.shiftKey) setShowSettings(current => !current)
+        if (event.shiftKey) setSheet(current => current === 'settings' ? undefined : 'settings')
         else { setFindOpen(true); setFindIndex(0) }
         return
       }
       const target = event.target
+      const inField = target instanceof HTMLElement
+        && target.closest('input, select, textarea, [contenteditable="true"], [role="separator"], [data-file-viewer]') !== null
+      // Escape unwinds one layer at a time: sheet first, then find.
+      if (event.key === 'Escape') {
+        if (sheet !== undefined) { event.preventDefault(); setSheet(undefined); return }
+        if (findOpen) { event.preventDefault(); setFindOpen(false); return }
+      }
       // Direction keys inside a historical viewer scroll its content, rather
       // than replacing the selected commit and discarding the open file.
-      if (target instanceof HTMLElement && target.closest('input, select, textarea, [contenteditable="true"], [role="separator"], [data-file-viewer]') !== null) return
+      if (inField) return
+      // An open sheet owns the panel, so graph navigation stays inert under it.
+      if (sheet !== undefined) return
       if (findOpen || findText.length > 0) return
       if (event.key.toLowerCase() === 'h') {
         const head = visibleCommits.find(commit => commit.isHead)
@@ -1494,7 +1806,20 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
     }
     section.addEventListener('keydown', onKeyDown)
     return () => section.removeEventListener('keydown', onKeyDown)
-  }, [visibleCommits, selectedHash, findOpen, findText, t])
+  }, [visibleCommits, selectedHash, findOpen, findText, sheet, t])
+
+  // A menu closes on a click anywhere else. The trigger and the menu itself are
+  // excluded so pressing the trigger toggles instead of closing and reopening.
+  useEffect(() => {
+    if (sheet === undefined) return undefined
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target
+      if (target instanceof Element && target.closest('[data-git-graph-dropdown], [data-git-graph-dropdown-trigger]') !== null) return
+      setSheet(undefined)
+    }
+    document.addEventListener('mousedown', onPointerDown, true)
+    return () => document.removeEventListener('mousedown', onPointerDown, true)
+  }, [sheet])
 
   // Share the exact column definition with the header, commits and worktree row.
   const columns = visibleColumns(display)
@@ -1536,115 +1861,154 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
       readFileDiff={readFileDiff} readFile={readFile} onClose={() => setCompareTarget(undefined)} />}
   </>
 
+  const branches = snapshot?.branches
+  const statusLabel = snapshot === undefined ? t('status.loadingWorkspace')
+    : snapshot.state === 'not-git' ? t('status.notGit')
+      : snapshot.workingTree.changed ? t('status.dirty') : t('status.clean')
+
   return (
     <section ref={sectionRef} tabIndex={0} aria-label={t('view.title')} aria-busy={loading} style={columnStyle} className={css.card} data-git-graph data-graph-style={display.graphStyle} data-ref-alignment={display.referenceAlignment} data-avatar-loading={authorAvatars.loading}>
+      {/* One line of orientation: which branch, whether the tree is dirty, where
+          we are, and the two actions that are not about narrowing the graph. */}
       <header className={css.header}>
-        <div className={css.titleBlock}>
-          <strong>{t('view.title')}</strong>
+        <div className={css.headerMain}>
+          {snapshot !== undefined && snapshot.state !== 'not-git' && (branches === undefined
+            ? <span className={css.branchLabel} title={t('branch.detached')}>
+              <BranchGlyph />
+              <span className={css.branchName}>{snapshot.branch ?? t('branch.detached')}</span>
+            </span>
+            : <button type="button" className={css.branchButton} data-detached={snapshot.branch === null}
+              data-git-graph-dropdown-trigger
+              onClick={() => setSheet(sheet === 'branch' ? undefined : 'branch')}
+              aria-expanded={sheet === 'branch'} aria-haspopup="dialog"
+              title={t('branch.title')} aria-label={`${t('branch.aria')}: ${snapshot.branch ?? t('branch.detached')}`}>
+              <BranchGlyph />
+              <span className={css.branchName}>{snapshot.branch ?? t('branch.detached')}</span>
+              <ChevronGlyph />
+            </button>)}
+          {snapshot !== undefined && (
+            <span className={snapshot.workingTree.changed ? css.dirty : css.clean} title={statusLabel} role="img" aria-label={statusLabel} />
+          )}
           <span className={css.path} title={snapshot?.path}>{snapshot?.path ?? t('status.loadingWorkspace')}</span>
         </div>
-        {snapshot !== undefined && <span className={snapshot.workingTree.changed ? css.dirty : css.clean}>{snapshot.state === 'not-git' ? t('status.notGit') : snapshot.workingTree.changed ? t('status.dirty') : t('status.clean')}</span>}
+        <div className={css.toolbarActions}>
+          <button type="button" className={css.iconButton} data-loading={loading} onClick={() => void refresh()} disabled={loading} title={t('toolbar.refresh')} aria-label={t('toolbar.refresh')}><RefreshGlyph /></button>
+          <button type="button" className={css.iconButton} onClick={() => setSheet(current => current === 'settings' ? undefined : 'settings')} aria-pressed={sheet === 'settings'} title={t('toolbar.settings')} aria-label={t('toolbar.settings')}><SlidersGlyph /></button>
+        </div>
+        {/* Menus are absolutely positioned children of the bar, so they hang
+            below it without disturbing its single-line layout, and the graph
+            stays visible behind them. Only settings is a full-panel surface. */}
+        {sheet === 'branch' && branches !== undefined && (
+          <BranchMenu branches={branches} focused={focusedBranch} onSelect={selectBranch} onShowAll={clearBranchFocus} />
+        )}
+        {sheet === 'filter' && (
+          <FilterMenu refFilter={refFilter} sort={sort} includeAll={includeAll} firstParent={firstParent} branchGlob={branchGlob}
+            // The reference-type filter runs in the browser over the loaded
+            // page, so it changes no query; re-ask the Host anyway so the
+            // choice always produces one visible refresh.
+            onRefFilter={value => { setRefFilter(value); void refresh() }}
+            onSort={setSort} onIncludeAll={setIncludeAll} onFirstParent={setFirstParent} onBranchGlob={setBranchGlob}
+            onReset={() => { setRefFilter('all'); setSort('date'); setIncludeAll(true); setFirstParent(false); setBranchGlob('') }}
+            onClose={() => setSheet(undefined)} />
+        )}
       </header>
 
       <div className={css.toolbar} role="toolbar" aria-label={t('toolbar.aria')}>
-        <div className={css.toolbarGroup}>
         <input className={css.search} type="search" value={searchText} onChange={event => setSearchText(event.target.value)} placeholder={t('toolbar.searchPlaceholder')} aria-label={t('toolbar.search')} />
-        <input className={css.search} type="text" value={branchGlob} onChange={event => setBranchGlob(event.target.value)} placeholder={t('toolbar.branchPlaceholder')} aria-label={t('toolbar.branch')} />
-        </div><div className={css.toolbarGroup}>
-        <select className={css.select} value={refFilter} onChange={event => setRefFilter(event.target.value as RefFilter)} aria-label={t('toolbar.refFilter')}>
-          <option value="all">{t('toolbar.allRefs')}</option>
-          <option value="head">{t('toolbar.localBranches')}</option>
-          <option value="remote">{t('toolbar.remoteBranches')}</option>
-          <option value="tag">{t('metadata.tags')}</option>
-        </select>
-        <select className={css.select} value={sort} onChange={event => setSort(event.target.value as 'date' | 'author-date' | 'topological')} aria-label={t('toolbar.sort')}>
-          <option value="date">{t('toolbar.sortDate')}</option>
-          <option value="author-date">{t('toolbar.sortAuthorDate')}</option>
-          <option value="topological">{t('toolbar.sortTopological')}</option>
-        </select>
-        </div><div className={css.toolbarGroup}>
-        <label className={css.check}><input type="checkbox" checked={includeAll} onChange={event => setIncludeAll(event.target.checked)} />{t('toolbar.includeAll')}</label>
-        <label className={css.check}><input type="checkbox" checked={firstParent} onChange={event => setFirstParent(event.target.checked)} />{t('toolbar.firstParent')}</label>
-        </div><div className={css.toolbarActions}>
-        <button type="button" className={css.secondaryButton} onClick={() => setFindOpen(current => !current)} aria-expanded={findOpen}>{t('toolbar.find')}</button>
-        <button type="button" className={css.secondaryButton} onClick={() => setShowSettings(current => !current)} aria-pressed={showSettings}>{t('toolbar.settings')}</button>
-        <button type="button" className={css.primaryButton} onClick={refresh} disabled={loading}>{loading ? t('toolbar.loading') : t('toolbar.refresh')}</button>
-        </div>
+        <button type="button" className={css.iconButton} onClick={() => setFindOpen(current => !current)} aria-pressed={findOpen} title={t('toolbar.find')} aria-label={t('toolbar.find')}><SearchGlyph /></button>
+        <button type="button" className={css.filterButton} data-git-graph-dropdown-trigger onClick={() => setSheet(current => current === 'filter' ? undefined : 'filter')} aria-expanded={sheet === 'filter'} aria-haspopup="dialog" title={t('filter.title')}>
+          <FunnelGlyph />
+          <span className={css.filterLabel}>{t('toolbar.filter')}</span>
+          {activeFilterCount > 0 && <span className={css.filterBadge}>{activeFilterCount}</span>}
+        </button>
       </div>
-      {refFilter !== 'all' && <div className={css.hint} role="status">{t('refs.filterHint')}</div>}
-      {refFilter === 'remote' && <div className={css.hint}>{t('refs.remoteHint')}</div>}
+
+      {focusedBranch !== undefined && (
+        <div className={css.hint} role="status">
+          <span>{t('branch.focusActive', { name: focusedBranch })}</span>
+          <button type="button" className={css.linkButton} onClick={clearBranchFocus}>{t('branch.showAll')}</button>
+        </div>
+      )}
 
       {findOpen && (
-        <div className={css.findContainer}>
-          <div className={css.findInputRow}>
-            <input className={css.findInput} type="search" value={findText} onChange={event => { setFindText(event.target.value); setFindIndex(0) }} placeholder={t('find.placeholder')} autoFocus aria-label={t('find.aria')} />
-            <label className={css.check}><input type="checkbox" checked={findCase} onChange={event => setFindCase(event.target.checked)} />{t('find.case')}</label>
-            <label className={css.check}><input type="checkbox" checked={findRegex} onChange={event => { setFindRegex(event.target.checked); setFindIndex(0) }} />{t('find.regex')}</label>
-            <button type="button" className={css.primaryButton} onClick={() => setFindOpen(false)}>{t('common.close')}</button>
-          </div>
+        <div className={css.findStrip}>
+          <input className={css.findStripInput} type="search" value={findText} onChange={event => { setFindText(event.target.value); setFindIndex(0) }} placeholder={t('find.placeholder')} autoFocus aria-label={t('find.aria')} />
+          <button type="button" className={css.iconButton} aria-pressed={findCase} title={t('find.case')} aria-label={t('find.case')} onClick={() => setFindCase(current => !current)}>Aa</button>
+          <button type="button" className={css.iconButton} aria-pressed={findRegex} title={t('find.regex')} aria-label={t('find.regex')} onClick={() => { setFindRegex(current => !current); setFindIndex(0) }}>.*</button>
           <FindBar count={findMatches.length} index={findMatches.length === 0 ? 0 : findIndex} onPrev={() => findStep(-1)} onNext={() => findStep(1)} onClear={() => { setFindText(''); setFindIndex(0) }} />
-          {findError !== undefined && <div className={css.error} role="alert">{findError}</div>}
         </div>
       )}
-      {showSettings && snapshot !== undefined && (
-        <SettingsPanel settings={display} onChange={setDisplay} onClose={() => setShowSettings(false)} />
-      )}
+      {findOpen && findError !== undefined && <div className={css.error} role="alert">{findError}</div>}
 
-      {error !== undefined && <div className={css.error} role="alert">{t('error.graph', { message: error })}<button type="button" className={css.secondaryButton} onClick={refresh} disabled={loading}>{t('common.retry')}</button></div>}
-      {navigationHint !== undefined && <div className={css.hint} role="status">{navigationHint}<button type="button" className={css.linkButton} onClick={() => setNavigationHint(undefined)}>{t('common.close')}</button></div>}
-      {display.showAvatars && authorAvatars.error !== undefined && <div className={css.hint} role="status">{t('avatar.error')}</div>}
-      {loading && snapshot === undefined && <div className={css.pending}>{t('status.loadingGraph')}</div>}
-      {!loading && error === undefined && snapshot !== undefined && visibleCommits.length === 0 && (
-        <div className={css.pending}>
-          {snapshot.state === 'not-git' && t('status.notGit')}
-          {snapshot.state === 'empty' && t('status.empty')}
-          {snapshot.state === 'ready' && t('status.noMatches')}
-        </div>
-      )}
+      {/* Everything below the chrome. Only the settings form covers the graph;
+          the menus are anchored to the header above. */}
+      <div className={css.body}>
+        {sheet === 'settings' && (
+          <Sheet title={t('toolbar.settings')} onClose={() => setSheet(undefined)}>
+            <div className={css.sheetBody}>
+              <SettingsPanel settings={display} onChange={setDisplay} onClose={() => setSheet(undefined)}
+                diagnostics={`build ${BUILD_ID} · ${measuredOk ? '已测量' : '等距回退'} · ${measureLog.current} · 节点 ${layout.nodes.length}`} />
+            </div>
+          </Sheet>
+        )}
 
-      {hasGraphRows && snapshot !== undefined && (
-        <>
-          <div className={css.graphPanel} ref={panelRef}>
-            <div className={css.graphHeader}>{t('column.graph')}</div>
-            <div className={css.commitHeader}>
-              {columns.map(column => <span key={column} className={css.headerCell}>{t(column === 'date' ? display.dateSource === 'author' ? 'details.authorDate' : 'details.committerDate' : column === 'hash' ? 'column.commit' : `column.${column}`)}<ColumnResizer column={column} width={display.columnWidths[column]} onChange={resizeColumn} /></span>)}
-            </div>
-            <GraphSvg layout={layout} workingTreeChanged={snapshot.workingTree.changed} selectedHash={selectedHash} metrics={rowMetrics} onSelect={selectCommit} rowHeight={rowHeight} lineStyle={display.lineStyle} palette={display.palette} hoveredHash={hoveredHash} onHover={setHoveredHash} />
-            {display.referenceAlignment === 'graph' && <GraphReferenceLabels layout={layout} metrics={rowMetrics} onExtent={reserveGraphRefs}
-              remotes={snapshot.remotes} currentBranch={snapshot.branch} combine={display.combineReferences} />}
-            <div className={css.commitList} ref={listRef}>
-              {snapshot.workingTree.changed && (
-                <>
-                  <button type="button" className={css.workingTreeRow} ref={workingTreeRowRef} title={t('worktree.open')} onClick={toggleWorkingTree} aria-expanded={showWorkingTree}>
-                    <span className={css.commitDescription}><span className={css.headDot} />{t('worktree.title')}</span>
-                    {display.showDate && <span className={css.commitDate}>—</span>}
-                    {display.showAuthor && <span className={css.commitAuthor}>—</span>}
-                    {display.showHash && <span className={`${css.hash} ${css.commitHash}`}>WORKTREE</span>}
-                  </button>
-                  {showWorkingTree && (
-                    <div className={css.inlineDetails} data-inline-details>
-                      {expansion}
-                    </div>
-                  )}
-                </>
-              )}
-              {visibleCommits.map((commit, index) => (
-                <Fragment key={commit.hash}>
-                  <CommitRow commit={commit} selected={commit.hash === selectedHash} display={display} findActive={findMatches.length > 0 && findMatches.some(match => match.hash === commit.hash)} onSelect={() => selectCommit(commit.hash)} currentBranch={snapshot.branch} hovered={hoveredHash === commit.hash} onHover={setHoveredHash} remotes={snapshot.remotes} avatar={display.showAvatars ? authorAvatars.images.get(avatarEmail(commit.email)) : undefined}
-                    rowRef={element => { rowNodes.current[index] = element }} />
-                  {commit.hash === selectedHash && (
-                    <div className={css.inlineDetails} data-inline-details>
-                      {expansion}
-                    </div>
-                  )}
-                </Fragment>
-              ))}
-            </div>
+        {error !== undefined && <div className={css.error} role="alert">{t('error.graph', { message: error })}<button type="button" className={css.secondaryButton} onClick={() => void refresh()} disabled={loading}>{t('common.retry')}</button></div>}
+        {navigationHint !== undefined && <div className={css.hint} role="status">{navigationHint}<button type="button" className={css.linkButton} onClick={() => setNavigationHint(undefined)}>{t('common.close')}</button></div>}
+        {display.showAvatars && authorAvatars.error !== undefined && <div className={css.hint} role="status">{t('avatar.error')}</div>}
+        {refFilter !== 'all' && <div className={css.hint} role="status">{t('refs.filterHint')}</div>}
+        {refFilter === 'remote' && <div className={css.hint}>{t('refs.remoteHint')}</div>}
+        {loading && snapshot === undefined && <div className={css.pending}>{t('status.loadingGraph')}</div>}
+        {!loading && error === undefined && snapshot !== undefined && visibleCommits.length === 0 && (
+          <div className={css.pending}>
+            {snapshot.state === 'not-git' && t('status.notGit')}
+            {snapshot.state === 'empty' && t('status.empty')}
+            {snapshot.state === 'ready' && t('status.noMatches')}
           </div>
-          {canLoadMore && <button type="button" className={css.loadMore} onClick={loadMore} disabled={loading}>{loading ? t('toolbar.loading') : t('toolbar.loadMore')}</button>}
-          <MetadataStrip metadata={repoMetadata} error={metadataError} onRetry={refresh} />
-        </>
-      )}
+        )}
+
+        {hasGraphRows && snapshot !== undefined && (
+          <>
+            <div className={css.graphPanel} ref={panelRef}>
+              <div className={css.graphHeader}>{t('column.graph')}</div>
+              <div className={css.commitHeader}>
+                {columns.map(column => <span key={column} className={css.headerCell}>{t(column === 'date' ? display.dateSource === 'author' ? 'details.authorDate' : 'details.committerDate' : column === 'hash' ? 'column.commit' : `column.${column}`)}<ColumnResizer column={column} width={display.columnWidths[column]} onChange={resizeColumn} /></span>)}
+              </div>
+              <GraphSvg layout={layout} workingTreeChanged={snapshot.workingTree.changed} selectedHash={selectedHash} metrics={rowMetrics} onSelect={selectCommit} rowHeight={rowHeight} lineStyle={display.lineStyle} palette={display.palette} hoveredHash={hoveredHash} onHover={setHoveredHash} />
+              {display.referenceAlignment === 'graph' && <GraphReferenceLabels layout={layout} metrics={rowMetrics} onExtent={reserveGraphRefs}
+                remotes={snapshot.remotes} currentBranch={snapshot.branch} combine={display.combineReferences} />}
+              <div className={css.commitList} ref={listRef}>
+                {snapshot.workingTree.changed && (
+                  <>
+                    <button type="button" className={css.workingTreeRow} data-worktree-row title={t('worktree.open')} onClick={toggleWorkingTree} aria-expanded={showWorkingTree}>
+                      <span className={css.commitDescription}><span className={css.headDot} />{t('worktree.title')}</span>
+                      {display.showDate && <span className={css.commitDate}>—</span>}
+                      {display.showAuthor && <span className={css.commitAuthor}>—</span>}
+                      {display.showHash && <span className={`${css.hash} ${css.commitHash}`}>WORKTREE</span>}
+                    </button>
+                    {showWorkingTree && (
+                      <div className={css.inlineDetails} data-inline-details>
+                        {expansion}
+                      </div>
+                    )}
+                  </>
+                )}
+                {visibleCommits.map(commit => (
+                  <Fragment key={commit.hash}>
+                    <CommitRow commit={commit} selected={commit.hash === selectedHash} display={display} findActive={findMatches.length > 0 && findMatches.some(match => match.hash === commit.hash)} onSelect={() => selectCommit(commit.hash)} currentBranch={snapshot.branch} hovered={hoveredHash === commit.hash} onHover={setHoveredHash} remotes={snapshot.remotes} avatar={display.showAvatars ? authorAvatars.images.get(avatarEmail(commit.email)) : undefined} />
+                    {commit.hash === selectedHash && (
+                      <div className={css.inlineDetails} data-inline-details>
+                        {expansion}
+                      </div>
+                    )}
+                  </Fragment>
+                ))}
+              </div>
+            </div>
+            {canLoadMore && <button type="button" className={css.loadMore} onClick={loadMore} disabled={loading}>{loading ? t('toolbar.loading') : t('toolbar.loadMore')}</button>}
+            <MetadataStrip metadata={repoMetadata} error={metadataError} onRetry={() => void refresh()} />
+          </>
+        )}
+      </div>
     </section>
   )
 }

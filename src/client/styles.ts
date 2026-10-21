@@ -146,6 +146,40 @@ export const css = {
   findHighlight: 'dsh-git-graph-find-highlight',
   error: 'dsh-git-graph-error',
   pending: 'dsh-git-graph-pending',
+  headerMain: 'dsh-git-graph-header-main',
+  branchButton: 'dsh-git-graph-branch-button',
+  branchLabel: 'dsh-git-graph-branch-label',
+  branchName: 'dsh-git-graph-branch-name',
+  iconButton: 'dsh-git-graph-icon-button',
+  filterButton: 'dsh-git-graph-filter-button',
+  filterLabel: 'dsh-git-graph-filter-label',
+  filterBadge: 'dsh-git-graph-filter-badge',
+  activeFilter: 'dsh-git-graph-active-filter',
+  activeFilterClear: 'dsh-git-graph-active-filter-clear',
+  body: 'dsh-git-graph-body',
+  dropdown: 'dsh-git-graph-dropdown',
+  dropdownBody: 'dsh-git-graph-dropdown-body',
+  sheet: 'dsh-git-graph-sheet',
+  sheetHeader: 'dsh-git-graph-sheet-header',
+  sheetTitle: 'dsh-git-graph-sheet-title',
+  sheetBody: 'dsh-git-graph-sheet-body',
+  sheetGroup: 'dsh-git-graph-sheet-group',
+  sheetGroupTitle: 'dsh-git-graph-sheet-group-title',
+  sheetField: 'dsh-git-graph-sheet-field',
+  sheetLabel: 'dsh-git-graph-sheet-label',
+  sheetControl: 'dsh-git-graph-sheet-control',
+  sheetNote: 'dsh-git-graph-sheet-note',
+  sheetFooter: 'dsh-git-graph-sheet-footer',
+  branchList: 'dsh-git-graph-branch-list',
+  branchRow: 'dsh-git-graph-branch-row',
+  branchRowActive: 'dsh-git-graph-branch-row-active',
+  branchRowName: 'dsh-git-graph-branch-row-name',
+  branchRowMeta: 'dsh-git-graph-branch-row-meta',
+  branchRowBadge: 'dsh-git-graph-branch-row-badge',
+  branchRowActions: 'dsh-git-graph-branch-row-actions',
+  branchSearch: 'dsh-git-graph-branch-search',
+  findStrip: 'dsh-git-graph-find-strip',
+  findStripInput: 'dsh-git-graph-find-strip-input',
 } as const
 
 const STYLE_ID = 'dsh-git-graph-styles'
@@ -173,66 +207,387 @@ const CSS = `
   color: var(--git-graph-text);
   outline: none;
 }
+/* ---- Repo bar: one line. The branch is the entry point, not a text field. ---- */
 .dsh-git-graph-header {
+  position: relative;
   flex: none;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
+  gap: 6px;
+  min-height: 40px;
+  padding: 6px 8px 6px 10px;
   border-bottom: 1px solid var(--git-graph-border);
-  font-size: 13px;
+  background: var(--git-graph-bg);
 }
-.dsh-git-graph-title-block { min-width: 0; flex: 1; width: 100%; }
-.dsh-git-graph-title-block strong { display: block; margin-bottom: 2px; }
-.dsh-git-graph-path {
-  display: block;
+/* A picker is a menu, not a page: it hangs under the bar it belongs to and
+   leaves the graph visible behind it. */
+.dsh-git-graph-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 8px;
+  right: 8px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  max-height: min(58vh, 400px);
+  margin-top: 2px;
+  overflow: hidden;
+  border: 1px solid var(--git-graph-border);
+  border-radius: 8px;
+  background: var(--git-graph-layer);
+  box-shadow: 0 14px 30px color-mix(in srgb, #000 34%, transparent);
+}
+.dsh-git-graph-dropdown-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  gap: 4px;
+  min-height: 0;
+  padding: 8px 10px 10px;
+  overflow: auto;
+}
+.dsh-git-graph-header-main { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1 1 auto; }
+.dsh-git-graph-branch-button {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 1 auto;
+  gap: 5px;
+  min-width: 0;
   max-width: 100%;
+  min-height: 26px;
+  padding: 0 7px;
+  border: 1px solid var(--git-graph-border);
+  border-radius: 6px;
+  background: var(--git-graph-layer);
+  color: var(--git-graph-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.dsh-git-graph-branch-button:hover { background: var(--git-graph-hover); }
+.dsh-git-graph-branch-button > svg { flex: none; color: var(--git-graph-secondary); }
+.dsh-git-graph-branch-button[data-detached='true'] { color: var(--dsw-alias-state-warn-label); }
+/* Same identity as the button, but not interactive: used when the Host cannot
+   list branches, so the current branch stays readable without a dead control. */
+.dsh-git-graph-branch-label {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 1 auto;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 26px;
+  padding: 0 2px;
+  color: var(--git-graph-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+.dsh-git-graph-branch-label > svg { flex: none; }
+.dsh-git-graph-branch-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dsh-git-graph-path {
+  flex: 1 1 0;
+  min-width: 0;
   overflow: hidden;
   color: var(--git-graph-tertiary);
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The working-tree state is a dot, not a pill: the commit list already carries
+   a "uncommitted changes" row, so the bar only needs a status light. */
 .dsh-git-graph-clean,
-.dsh-git-graph-dirty { padding: 3px 8px; border: 1px solid var(--git-graph-border); border-radius: 999px; font-size: 11px; }
-.dsh-git-graph-clean { color: var(--dsw-alias-state-success-primary); }
-.dsh-git-graph-dirty { color: var(--dsw-alias-state-warn-label); }
+.dsh-git-graph-dirty {
+  flex: none;
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.dsh-git-graph-clean { background: var(--dsw-alias-state-success-primary); }
+.dsh-git-graph-dirty { background: var(--dsw-alias-state-warn-primary); }
+
+/* ---- Controls: one search field, one filter entry, one icon per action ---- */
 .dsh-git-graph-toolbar {
   flex: none;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 7px;
-  padding: 9px 12px;
+  gap: 6px;
+  padding: 6px 10px 8px;
   border-bottom: 1px solid var(--git-graph-border);
-  background: var(--git-graph-layer);
+  background: var(--git-graph-bg);
 }
 .dsh-git-graph-toolbar-group,
-.dsh-git-graph-toolbar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
-.dsh-git-graph-toolbar-group:first-child { flex: 1 1 100%; }
-.dsh-git-graph-toolbar-actions { margin-left: auto; }
+.dsh-git-graph-toolbar-actions { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.dsh-git-graph-toolbar-actions { margin-left: auto; flex: none; }
 .dsh-git-graph-hint { display: flex; gap: 8px; align-items: center; padding: 6px 12px; font-size: 11px; color: var(--git-graph-secondary); flex: none; }
 .dsh-git-graph-search,
 .dsh-git-graph-select {
-  min-height: 30px;
+  min-height: 28px;
   border: 1px solid var(--git-graph-border);
   border-radius: 6px;
   background: var(--git-graph-layer);
   color: inherit;
   font-size: 12px;
 }
-.dsh-git-graph-search { flex: 1 1 180px; min-width: 140px; padding: 0 8px; }
+.dsh-git-graph-search { flex: 1 1 auto; min-width: 0; padding: 0 8px; }
 .dsh-git-graph-select { padding: 0 6px; }
+.dsh-git-graph-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--git-graph-secondary);
+  cursor: pointer;
+}
+.dsh-git-graph-icon-button:hover { background: var(--git-graph-hover); color: var(--git-graph-text); }
+.dsh-git-graph-icon-button:disabled { cursor: wait; opacity: .6; }
+/* A reload must be visible: the graph can come back byte-identical, and
+   "nothing changed" then reads as "the click did nothing". */
+.dsh-git-graph-icon-button[data-loading='true'] > svg { animation: dsh-git-graph-spin .9s linear infinite; }
+@keyframes dsh-git-graph-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .dsh-git-graph-icon-button[data-loading='true'] > svg { animation: none; }
+}
+.dsh-git-graph-icon-button[aria-pressed='true'],
+.dsh-git-graph-icon-button[aria-expanded='true'] {
+  border-color: color-mix(in srgb, var(--dsw-alias-link) 55%, var(--git-graph-border));
+  background: color-mix(in srgb, var(--dsw-alias-link) 14%, var(--git-graph-layer));
+  color: var(--git-graph-text);
+}
+.dsh-git-graph-filter-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 4px;
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--git-graph-border);
+  border-radius: 6px;
+  background: var(--git-graph-layer);
+  color: var(--git-graph-secondary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.dsh-git-graph-filter-button:hover { background: var(--git-graph-hover); color: var(--git-graph-text); }
+.dsh-git-graph-filter-button[aria-expanded='true'] {
+  border-color: color-mix(in srgb, var(--dsw-alias-link) 55%, var(--git-graph-border));
+  background: color-mix(in srgb, var(--dsw-alias-link) 14%, var(--git-graph-layer));
+  color: var(--git-graph-text);
+}
+/* The count is the only always-visible evidence that a filter is narrowing the
+   graph, so it sits on the button rather than in a separate line of text. */
+.dsh-git-graph-filter-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--dsw-alias-button-primary-fill);
+  color: var(--dsw-alias-label-primary-inverted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+.dsh-git-graph-active-filter {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 4px;
+  max-width: 46%;
+  min-height: 28px;
+  padding: 0 4px 0 8px;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-link) 45%, var(--git-graph-border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--dsw-alias-link) 12%, var(--git-graph-layer));
+  color: var(--git-graph-text);
+  font: inherit;
+  font-size: 11px;
+}
+.dsh-git-graph-active-filter > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dsh-git-graph-active-filter-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--git-graph-secondary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+.dsh-git-graph-active-filter-clear:hover { background: var(--git-graph-hover); color: var(--git-graph-text); }
 .dsh-git-graph-check {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   color: var(--git-graph-secondary);
   font-size: 11px;
   white-space: nowrap;
 }
 .dsh-git-graph-check input { margin: 0; }
+
+/* ---- Panel body: sheets stack over the graph instead of pushing it down ----
+   Every secondary surface (branches, filters, settings) is an absolutely
+   positioned sheet inside this body, so opening one never scrolls the commit
+   list away or changes the graph's measured geometry. */
+.dsh-git-graph-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+}
+.dsh-git-graph-sheet {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--git-graph-bg);
+  box-shadow: 0 -1px 0 var(--git-graph-border), 0 10px 28px color-mix(in srgb, #000 16%, transparent);
+}
+.dsh-git-graph-sheet-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 6px 8px 6px 12px;
+  border-bottom: 1px solid var(--git-graph-border);
+  background: var(--git-graph-layer);
+}
+.dsh-git-graph-sheet-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dsh-git-graph-sheet-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  gap: 12px;
+  min-height: 0;
+  padding: 10px 12px 14px;
+  overflow: auto;
+}
+.dsh-git-graph-sheet-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.dsh-git-graph-sheet-group-title { color: var(--git-graph-secondary); font-size: 11px; font-weight: 600; letter-spacing: .04em; }
+.dsh-git-graph-sheet-field { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.dsh-git-graph-sheet-label { flex: 0 0 auto; min-width: 5.6em; color: var(--git-graph-tertiary); font-size: 11px; }
+.dsh-git-graph-sheet-control { flex: 1 1 0; min-width: 0; min-height: 28px; }
+.dsh-git-graph-sheet-note { margin: 0; color: var(--git-graph-tertiary); font-size: 11px; line-height: 1.55; }
+.dsh-git-graph-sheet-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--git-graph-border);
+  background: var(--git-graph-layer);
+}
+
+/* ---- Branch picker: pick a real branch, never type a glob by hand ---- */
+.dsh-git-graph-branch-search { flex: none; min-height: 28px; margin: 8px 10px 6px; padding: 0 8px; border: 1px solid var(--git-graph-border); border-radius: 6px; background: var(--git-graph-bg); color: inherit; font-size: 12px; }
+.dsh-git-graph-branch-list {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-height: 0;
+  margin: 0;
+  padding: 2px 8px 10px;
+  overflow: auto;
+  list-style: none;
+}
+.dsh-git-graph-branch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--git-graph-text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.dsh-git-graph-branch-row:hover { background: var(--git-graph-hover); }
+.dsh-git-graph-branch-row[data-current='true'] { font-weight: 600; }
+.dsh-git-graph-branch-row-active {
+  background: color-mix(in srgb, var(--dsw-alias-link) 14%, transparent);
+  box-shadow: inset 2px 0 var(--dsw-alias-link);
+}
+.dsh-git-graph-branch-row-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dsh-git-graph-branch-row-meta {
+  flex: none;
+  color: var(--git-graph-tertiary);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 10px;
+}
+.dsh-git-graph-branch-row-badge {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 16%, transparent);
+  color: var(--dsw-alias-state-success-primary);
+  font-size: 10px;
+}
+.dsh-git-graph-branch-row-actions { display: flex; flex: none; gap: 4px; opacity: 0; }
+.dsh-git-graph-branch-row:hover .dsh-git-graph-branch-row-actions,
+.dsh-git-graph-branch-row:focus-within .dsh-git-graph-branch-row-actions { opacity: 1; }
+/* Group captions are list items inside the scrolling branch list. */
+.dsh-git-graph-branch-list > .dsh-git-graph-sheet-group-title { display: block; padding: 10px 8px 2px; }
+
+/* ---- Find: a single strip, not a three-row block ---- */
+.dsh-git-graph-find-strip {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--git-graph-border);
+  background: var(--git-graph-layer);
+}
+.dsh-git-graph-find-strip-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--git-graph-border);
+  border-radius: 6px;
+  background: var(--git-graph-bg);
+  color: inherit;
+  font-size: 12px;
+}
 .dsh-git-graph-primary-button,
 .dsh-git-graph-secondary-button,
 .dsh-git-graph-load-more {
@@ -856,19 +1211,13 @@ const CSS = `
 .dsh-git-graph-compare-hint { color: var(--git-graph-tertiary); }
 .dsh-git-graph-select-wide { flex: 1 1 220px; min-width: 160px; }
 /* Settings read as named decisions, not one long run of controls: every
-   section owns a single question and its captions share one column width. */
+   section owns a single question and its captions share one column width.
+   The sheet body already scrolls, so the panel itself is only a grid. */
 .dsh-git-graph-settings-panel {
-  margin: 0 12px 10px;
-  padding: 11px 12px 0;
-  border: 1px solid var(--git-graph-border);
-  border-radius: 8px;
-  background: var(--git-graph-layer);
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(212px, 1fr));
-  max-height: min(52vh, 380px);
-  overflow: auto;
-  flex: none;
-  gap: 12px 16px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px 16px;
+  min-width: 0;
   font-size: 11px;
 }
 .dsh-git-graph-settings-section {
@@ -899,26 +1248,8 @@ const CSS = `
   padding-top: 9px;
   border-top: 1px solid var(--git-graph-border);
   gap: 8px;
-  /* In a narrow pane the panel scrolls; its actions must not scroll away.
-     The row carries the panel's bottom spacing so nothing shows under it. */
-  position: sticky;
-  bottom: 0;
-  padding-bottom: 10px;
-  background: inherit;
 }
-.dsh-git-graph-find-container {
-  margin: 0 12px 10px;
-  padding: 8px 10px;
-  border: 1px solid var(--git-graph-border);
-  border-radius: 8px;
-  background: var(--git-graph-layer);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.dsh-git-graph-find-input-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.dsh-git-graph-find-input { flex: 1 1 220px; min-width: 180px; }
-.dsh-git-graph-find-bar { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+.dsh-git-graph-find-bar { display: flex; align-items: center; gap: 6px; font-size: 11px; min-width: 0; }
 .dsh-git-graph-find-count { color: var(--git-graph-secondary); font-weight: 600; }
 .dsh-git-graph-find-highlight {
   background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 22%, transparent);
@@ -941,12 +1272,10 @@ const CSS = `
   .dsh-git-graph-settings-wide { grid-column: span 2; }
 }
 @container git-graph (max-width: 480px) {
-  .dsh-git-graph-header { align-items: flex-start; flex-direction: column; }
-  .dsh-git-graph-toolbar-group:first-child { flex-direction: column; align-items: stretch; }
-  .dsh-git-graph-toolbar-group:first-child .dsh-git-graph-search { flex: none; width: 100%; box-sizing: border-box; }
-  .dsh-git-graph-toolbar-group .dsh-git-graph-select { flex: 1; max-width: 100%; }
   .dsh-git-graph-details-list { gap: 6px; }
   .dsh-git-graph-details-actions { margin-left: 0; }
+  /* The filter entry keeps its label only while there is room for one. */
+  .dsh-git-graph-filter-button > .dsh-git-graph-filter-label { display: none; }
 }
 `
 
