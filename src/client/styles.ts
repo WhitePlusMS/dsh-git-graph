@@ -159,6 +159,7 @@ export const css = {
   body: 'dsh-git-graph-body',
   dropdown: 'dsh-git-graph-dropdown',
   dropdownBody: 'dsh-git-graph-dropdown-body',
+  dropdownTall: 'dsh-git-graph-dropdown-tall',
   sheet: 'dsh-git-graph-sheet',
   sheetHeader: 'dsh-git-graph-sheet-header',
   sheetTitle: 'dsh-git-graph-sheet-title',
@@ -246,6 +247,9 @@ const CSS = `
   padding: 8px 10px 10px;
   overflow: auto;
 }
+/* The settings form is taller than a menu but still hangs off the bar, so the
+   graph stays on screen while a display option is being changed. */
+.dsh-git-graph-dropdown-tall { max-height: min(72vh, 540px); }
 .dsh-git-graph-header-main { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1 1 auto; }
 .dsh-git-graph-branch-button {
   display: inline-flex;
@@ -1245,9 +1249,14 @@ const CSS = `
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 9px;
+  padding: 9px 0 4px;
   border-top: 1px solid var(--git-graph-border);
   gap: 8px;
+  /* The form scrolls inside the dropdown; its actions must not scroll away. */
+  position: sticky;
+  bottom: 0;
+  background: var(--git-graph-layer);
+  box-shadow: 0 -8px 12px -8px color-mix(in srgb, #000 45%, transparent);
 }
 .dsh-git-graph-find-bar { display: flex; align-items: center; gap: 6px; font-size: 11px; min-width: 0; }
 .dsh-git-graph-find-count { color: var(--git-graph-secondary); font-weight: 600; }

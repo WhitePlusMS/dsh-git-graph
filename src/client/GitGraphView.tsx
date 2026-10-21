@@ -1240,35 +1240,20 @@ function SlidersGlyph() {
   )
 }
 
-/** Full-panel shell, used only for the settings form. */
-function Sheet({ title, onClose, children, footer }: {
-  readonly title: string
-  readonly onClose: () => void
-  readonly children: ReactNode
-  readonly footer?: ReactNode
-}) {
-  const t = useText()
-  return (
-    <div className={css.sheet} role="dialog" aria-modal="true" aria-label={title} data-sheet>
-      <div className={css.sheetHeader}>
-        <span className={css.sheetTitle}>{title}</span>
-        <button type="button" className={css.iconButton} onClick={onClose} title={t('common.close')} aria-label={t('common.close')}><CloseGlyph /></button>
-      </div>
-      {children}
-      {footer}
-    </div>
-  )
-}
-
 /**
- * A menu that hangs under the bar it belongs to.
+ * A surface that hangs under the bar it belongs to.
  *
- * A picker chooses one row, so it must not take the panel over: the list
- * behind it is the context for the choice. Only settings is a page.
+ * Nothing in this panel takes the graph over: a menu chooses one row, and the
+ * settings form is a live preview — the list behind it is what the options act
+ * on. `tall` only raises the height limit for the form.
  */
-function Dropdown({ label, children }: { readonly label: string; readonly children: ReactNode }) {
+function Dropdown({ label, tall = false, children }: {
+  readonly label: string
+  readonly tall?: boolean
+  readonly children: ReactNode
+}) {
   return (
-    <div className={css.dropdown} role="dialog" aria-label={label} data-git-graph-dropdown>
+    <div className={tall ? `${css.dropdown} ${css.dropdownTall}` : css.dropdown} role="dialog" aria-label={label} data-git-graph-dropdown>
       {children}
     </div>
   )
@@ -1808,13 +1793,14 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
     return () => section.removeEventListener('keydown', onKeyDown)
   }, [visibleCommits, selectedHash, findOpen, findText, sheet, t])
 
-  // A menu closes on a click anywhere else. The trigger and the menu itself are
-  // excluded so pressing the trigger toggles instead of closing and reopening.
+  // A menu closes on a click anywhere else. The menu itself and any trigger are
+  // exempt, so pressing a trigger toggles its menu instead of closing it on
+  // mousedown and immediately reopening it on click.
   useEffect(() => {
     if (sheet === undefined) return undefined
     const onPointerDown = (event: MouseEvent) => {
       const target = event.target
-      if (target instanceof Element && target.closest('[data-git-graph-dropdown], [data-git-graph-dropdown-trigger]') !== null) return
+      if (target instanceof Element && target.closest('[data-git-graph-dropdown], [data-git-graph-dropdown-trigger], [aria-haspopup="dialog"]') !== null) return
       setSheet(undefined)
     }
     document.addEventListener('mousedown', onPointerDown, true)
@@ -1893,11 +1879,14 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
         </div>
         <div className={css.toolbarActions}>
           <button type="button" className={css.iconButton} data-loading={loading} onClick={() => void refresh()} disabled={loading} title={t('toolbar.refresh')} aria-label={t('toolbar.refresh')}><RefreshGlyph /></button>
-          <button type="button" className={css.iconButton} onClick={() => setSheet(current => current === 'settings' ? undefined : 'settings')} aria-pressed={sheet === 'settings'} title={t('toolbar.settings')} aria-label={t('toolbar.settings')}><SlidersGlyph /></button>
+          <button type="button" className={css.iconButton} data-git-graph-dropdown-trigger
+            onClick={() => setSheet(current => current === 'settings' ? undefined : 'settings')}
+            aria-pressed={sheet === 'settings'} aria-expanded={sheet === 'settings'} aria-haspopup="dialog"
+            title={t('toolbar.settings')} aria-label={t('toolbar.settings')}><SlidersGlyph /></button>
         </div>
         {/* Menus are absolutely positioned children of the bar, so they hang
             below it without disturbing its single-line layout, and the graph
-            stays visible behind them. Only settings is a full-panel surface. */}
+            stays visible behind them. */}
         {sheet === 'branch' && branches !== undefined && (
           <BranchMenu branches={branches} focused={focusedBranch} onSelect={selectBranch} onShowAll={clearBranchFocus} />
         )}
@@ -1910,6 +1899,18 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
             onSort={setSort} onIncludeAll={setIncludeAll} onFirstParent={setFirstParent} onBranchGlob={setBranchGlob}
             onReset={() => { setRefFilter('all'); setSort('date'); setIncludeAll(true); setFirstParent(false); setBranchGlob('') }}
             onClose={() => setSheet(undefined)} />
+        )}
+        {sheet === 'settings' && (
+          <Dropdown label={t('toolbar.settings')} tall>
+            <div className={css.sheetHeader}>
+              <span className={css.sheetTitle}>{t('toolbar.settings')}</span>
+              <button type="button" className={css.iconButton} onClick={() => setSheet(undefined)} title={t('common.close')} aria-label={t('common.close')}><CloseGlyph /></button>
+            </div>
+            <div className={css.dropdownBody}>
+              <SettingsPanel settings={display} onChange={setDisplay} onClose={() => setSheet(undefined)}
+                diagnostics={`build ${BUILD_ID} · ${measuredOk ? '已测量' : '等距回退'} · ${measureLog.current} · 节点 ${layout.nodes.length}`} />
+            </div>
+          </Dropdown>
         )}
       </header>
 
@@ -1940,18 +1941,9 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
       )}
       {findOpen && findError !== undefined && <div className={css.error} role="alert">{findError}</div>}
 
-      {/* Everything below the chrome. Only the settings form covers the graph;
-          the menus are anchored to the header above. */}
+      {/* Everything below the chrome. Every secondary surface is anchored to
+          the bar above, so nothing here takes the graph over. */}
       <div className={css.body}>
-        {sheet === 'settings' && (
-          <Sheet title={t('toolbar.settings')} onClose={() => setSheet(undefined)}>
-            <div className={css.sheetBody}>
-              <SettingsPanel settings={display} onChange={setDisplay} onClose={() => setSheet(undefined)}
-                diagnostics={`build ${BUILD_ID} · ${measuredOk ? '已测量' : '等距回退'} · ${measureLog.current} · 节点 ${layout.nodes.length}`} />
-            </div>
-          </Sheet>
-        )}
-
         {error !== undefined && <div className={css.error} role="alert">{t('error.graph', { message: error })}<button type="button" className={css.secondaryButton} onClick={() => void refresh()} disabled={loading}>{t('common.retry')}</button></div>}
         {navigationHint !== undefined && <div className={css.hint} role="status">{navigationHint}<button type="button" className={css.linkButton} onClick={() => setNavigationHint(undefined)}>{t('common.close')}</button></div>}
         {display.showAvatars && authorAvatars.error !== undefined && <div className={css.hint} role="status">{t('avatar.error')}</div>}
