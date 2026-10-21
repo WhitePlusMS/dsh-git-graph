@@ -2,7 +2,7 @@
 
 [使用说明](../README.zh.md) · [English README](../README.md)
 
-本项目当前版本为 0.5.2，适配 DSH 0.2.0-rc.2。这里记录本地安装、构建、内部数据接口及验收依据。
+本项目当前版本为 0.5.3，适配 DSH 0.2.0-rc.2。这里记录本地安装、构建、内部数据接口及验收依据。
 
 ## 本地安装与自定义 profile
 
@@ -12,7 +12,7 @@
 pnpm install --frozen-lockfile
 pnpm run typecheck
 pnpm pack --pack-destination .scratch/release
-dsh plugin --profile web add ./.scratch/release/dsh-git-graph-0.5.2.tgz
+dsh plugin --profile web add ./.scratch/release/dsh-git-graph-0.5.3.tgz
 dsh web
 ```
 
@@ -22,7 +22,7 @@ dsh web
 
 ```powershell
 dsh --profile my-web --from-default-profile web --dump-config
-dsh plugin --profile my-web add ./.scratch/release/dsh-git-graph-0.5.2.tgz
+dsh plugin --profile my-web add ./.scratch/release/dsh-git-graph-0.5.3.tgz
 dsh --profile my-web
 ```
 
@@ -44,7 +44,7 @@ pnpm run build
 
 ## 发布 GitHub Release 成品包
 
-同步 `package.json` 版本、源码、`lib/` 和 `CHANGELOG.md` 后，将以 `release:` 开头的发布提交合入 `master`，例如 `release: publish dsh-git-graph v0.5.2`。也可在 GitHub Actions 网页手动运行 `Package release`。
+同步 `package.json` 版本、源码、`lib/` 和 `CHANGELOG.md` 后，将以 `release:` 开头的发布提交合入 `master`，例如 `release: publish dsh-git-graph v0.5.3`。也可在 GitHub Actions 网页手动运行 `Package release`。
 
 `.github/workflows/release.yml` 执行类型检查和 `pnpm pack`，成功后以本次提交创建对应版本标签与 Release，附带含 `lib/` 的 `.tgz` 和 `SHA256SUMS.txt`；发布说明取自 `CHANGELOG.md` 的当前版本。普通提交不会发布，已发布版本不会被覆盖。检查 Actions 成功且附件可下载后，再用 README 中的地址安装。该过程不发布到 npm，也不自动完成市场目录收录。
 
@@ -82,6 +82,10 @@ git_graph({
 
 提交行的引用不再折叠为「+N」：徽标保持原尺寸，放不下时在容器内换行；说明文字使用 `flex: 1 1 0` 与 `min-width: min(14ch, 100%)`，能保留一行就保留一行，挤不下才整行下移，行高随内容增长。因此行高不是常量：`GitGraphContent` 用 `useLayoutEffect` + `ResizeObserver` 量出每行（含未提交行、行内展开面板）的 `top` / `height`，`GraphSvg` 的顶点、连线与 `引用对齐 = graph` 的标签层都按这份实测数据定位；该模式还会按最宽标签动态预留标签列宽（160–360px）。新增可折叠内容时不需要再单独上报空档高度。
 
+## 设置面板
+
+设置面板按「一个问题一组」分节：引用、日期、作者与头像、提交列表、图形。每组内标题与控件各占一列，控件宽度固定，取值不再随文案长短左右跳动；面板用 `repeat(auto-fit, minmax(212px, 1fr))` 排布，宽时三列、变窄依次两列与一列，图形一组跨列以免行末留空。面板不再固定 200px 高并常驻滚动条，只在容器不足 `min(52vh, 380px)` 时滚动，滚动时「恢复默认显示 / 关闭设置」以 `position: sticky` 固定在底部。`数据属性 data-settings-panel` 保留，供检查脚本定位。
+
 ## 验收依据
 
 仓库按现有规则忽略 `tests/`，新克隆不附带测试集。仅在保留本地测试文件的工作区运行 `pnpm test`。
@@ -93,5 +97,6 @@ git_graph({
 | 0.4.0 的显示更新 | 106 项通过 | 26 项通过 | [显示功能报告](DISPLAY_TEST_REPORT.md) |
 | 0.5.0 的两提交 Diff 与完整原文 | 115 项通过 | 18 项通过 | [提交比较与原文报告](COMPARE_SOURCE_TEST_REPORT.md) |
 | 0.5.2 的引用显示、头像来源与子目录 Diff | 回归 6 项 + 校验 30 项通过 | 未执行（改用组件级渲染测量） | [引用与头像验收记录](REFS_AVATAR_TEST_REPORT.md) |
+| 0.5.3 的设置面板重排 | 回归 6 项通过 | 未执行（三种宽度的组件级渲染截图核对） | 见[版本说明](../CHANGELOG.md) |
 
-各阶段数量不相加。P0 验收时临时包为 0.1.0，后纳入 0.3.0；0.4.0 显示实现验收时临时包仍为 0.3.0；0.5.0 比较与原文实现验收时临时包仍为 0.4.0。0.5.2 的验收在检出中缺少历史测试集的情况下进行，未重做真实 DSH 浏览器检查。版本调整另行通过类型检查、构建和打包，未因版本号变化重复浏览器验收。正式版本记录见[版本说明](../CHANGELOG.md)。
+各阶段数量不相加。P0 验收时临时包为 0.1.0，后纳入 0.3.0；0.4.0 显示实现验收时临时包仍为 0.3.0；0.5.0 比较与原文实现验收时临时包仍为 0.4.0。0.5.2 与 0.5.3 的验收在检出中缺少历史测试集的情况下进行，未重做真实 DSH 浏览器检查。版本调整另行通过类型检查、构建和打包，未因版本号变化重复浏览器验收。正式版本记录见[版本说明](../CHANGELOG.md)。

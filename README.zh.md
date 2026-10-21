@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>当前版本 0.5.2</strong> · 适配 DSH 0.2.0-rc.2 · <a href="LICENSE">MIT</a><br>
+  <strong>当前版本 0.5.3</strong> · 适配 DSH 0.2.0-rc.2 · <a href="LICENSE">MIT</a><br>
   <a href="README.md">English</a> · <a href="docs/screenshots/readme-header.svg">静态标题</a>
 </p>
 
@@ -17,7 +17,7 @@
 
 ![原生侧栏、提交图与筛选演示](docs/screenshots/demo.gif)
 
-GIF 录制于 0.4.0；0.5.0 的两提交 Diff 与完整原文见下方截图，0.5.2 的引用显示与头像来源见[验收记录](docs/REFS_AVATAR_TEST_REPORT.md)。
+GIF 录制于 0.4.0；0.5.0 的两提交 Diff 与完整原文见下方截图，0.5.2 的引用显示与头像来源见[验收记录](docs/REFS_AVATAR_TEST_REPORT.md)。0.5.3 只调整设置面板排版，未附新的真实 DSH 截图。
 
 <details>
 <summary>更多截图：两提交比较、完整原文、英文及窄屏</summary>
@@ -59,25 +59,25 @@ GIF 录制于 0.4.0；0.5.0 的两提交 Diff 与完整原文见下方截图，0
 
 需要 **DSH 0.2.0-rc.2**、可用的 `dsh` CLI、用于安装插件的 pnpm，以及 DSH Host 上已安装的 Git。
 
-通过 DSH 内置插件页面或命令行安装 `v0.5.2` Release 成品包，两者接受同一安装来源。参见官方的[插件管理器说明](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/packages/client/ui-plugin-manager/README.zh.md)与[打包安装文档](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/docs/user/develop/basic/publish.zh.md)。
+通过 DSH 内置插件页面或命令行安装 `v0.5.3` Release 成品包，两者接受同一安装来源。参见官方的[插件管理器说明](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/packages/client/ui-plugin-manager/README.zh.md)与[打包安装文档](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/docs/user/develop/basic/publish.zh.md)。
 
 在 DSH 中打开 **插件 → 添加插件**，粘贴下面的地址，安装后选择**立即启用**：
 
 ```text
-https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.2/dsh-git-graph-0.5.2.tgz
+https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.3/dsh-git-graph-0.5.3.tgz
 ```
 
 也可以在终端安装：
 
 ```powershell
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.2/dsh-git-graph-0.5.2.tgz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.3/dsh-git-graph-0.5.3.tgz
 ```
 
 归档已包含构建后的 `lib/` 入口，无需克隆仓库、在本机构建，或保留固定路径的开发目录。
 
 这个 `.tgz` 由 `pnpm pack` 生成并作为 GitHub Release 附件发布，与 GitHub 自动生成的源码归档分开。DSH 官方支持在界面和命令行中使用这个包地址；发布 Release 不会自动完成插件市场收录。仅输入包名安装则需要先发布到 npm。
 
-检查 `dsh-git-graph` 是否已安装为 `0.5.2`：
+检查 `dsh-git-graph` 是否已安装为 `0.5.3`：
 
 ```powershell
 dsh plugin --profile web list dsh-git-graph
@@ -132,7 +132,7 @@ dsh plugin --profile web remove dsh-git-graph
 
 ```powershell
 dsh plugin --profile web remove dsh-git-graph
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.2/dsh-git-graph-0.5.2.tgz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.3/dsh-git-graph-0.5.3.tgz
 ```
 
 之后重启该 DSH Web 实例。单独运行 `dsh plugin --profile web install` 会沿用已保存的安装来源，无法修复指向不存在目录的链接。

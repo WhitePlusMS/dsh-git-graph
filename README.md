@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>Version 0.5.2</strong> · DSH 0.2.0-rc.2 · <a href="LICENSE">MIT</a><br>
+  <strong>Version 0.5.3</strong> · DSH 0.2.0-rc.2 · <a href="LICENSE">MIT</a><br>
   <a href="README.zh.md">中文说明</a> · <a href="docs/screenshots/readme-header.svg">Static title</a>
 </p>
 
@@ -17,7 +17,7 @@
 
 ![Native sidebar, commit graph, and filtering demo](docs/screenshots/demo.gif)
 
-The GIFs were recorded with 0.4.0. Screenshots of the 0.5.0 comparison and full-source views are below; the 0.5.2 reference and avatar changes are covered by the [acceptance record](docs/REFS_AVATAR_TEST_REPORT.md).
+The GIFs were recorded with 0.4.0. Screenshots of the 0.5.0 comparison and full-source views are below; the 0.5.2 reference and avatar changes are covered by the [acceptance record](docs/REFS_AVATAR_TEST_REPORT.md). 0.5.3 only rearranges the settings panel, so it has no new real-DSH screenshot.
 
 <details>
 <summary>More screenshots: commit comparison, full source, English, and narrow screens</summary>
@@ -59,25 +59,25 @@ The GIFs were recorded with 0.4.0. Screenshots of the 0.5.0 comparison and full-
 
 Requires DSH **0.2.0-rc.2**, the `dsh` CLI, pnpm for plugin installation, and Git installed on the DSH Host.
 
-Install the prebuilt `v0.5.2` Release package through either DSH's plugin page or the CLI. Both accept the same package source. See the official [plugin manager guide](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/packages/client/ui-plugin-manager/README.md) and [packaging guide](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/docs/user/develop/basic/publish.md).
+Install the prebuilt `v0.5.3` Release package through either DSH's plugin page or the CLI. Both accept the same package source. See the official [plugin manager guide](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/packages/client/ui-plugin-manager/README.md) and [packaging guide](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/docs/user/develop/basic/publish.md).
 
 In DSH, open **Plugins → Add plugin**, paste this URL, install it, and choose **Enable now**:
 
 ```text
-https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.2/dsh-git-graph-0.5.2.tgz
+https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.3/dsh-git-graph-0.5.3.tgz
 ```
 
 Or install from the terminal:
 
 ```powershell
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.2/dsh-git-graph-0.5.2.tgz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.3/dsh-git-graph-0.5.3.tgz
 ```
 
 The archive includes the built `lib/` entry points. You do not need to clone this repository, build it locally, or keep a development folder at a fixed path.
 
 This `.tgz` is built with `pnpm pack` and uploaded as a GitHub Release asset; it is separate from GitHub's automatically generated source archives. DSH supports installing this package URL in both the UI and CLI. Publishing a release does not automatically list the plugin in a marketplace; installing by package name alone requires an npm publication.
 
-Check that `dsh-git-graph` is installed at version `0.5.2`:
+Check that `dsh-git-graph` is installed at version `0.5.3`:
 
 ```powershell
 dsh plugin --profile web list dsh-git-graph
@@ -132,7 +132,7 @@ A previous local-directory installation may still link to a folder that was move
 
 ```powershell
 dsh plugin --profile web remove dsh-git-graph
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.2/dsh-git-graph-0.5.2.tgz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.3/dsh-git-graph-0.5.3.tgz
 ```
 
 Restart that DSH Web instance afterward. Running `dsh plugin --profile web install` alone reuses the saved package source and cannot repair a link to a missing folder.

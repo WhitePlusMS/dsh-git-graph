@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.5.3 — 2026-10-21
+
+- **设置面板重排**：原来把 15 个控件平铺成三四行的做法改为按问题分组的栅格——引用、日期、作者与头像、提交列表、图形各自成组，组内标题在左、控件在右对齐，控件宽度不再随文字抖动。宽度够时三列并排，变窄依次降到两列、一列；图形三项横向展开并跨列，行末不留空洞。
+- **高度可控**：去掉原来 200px 高的滚动小窗。常规宽度下整块约 150–200px 一次看全，只有面板真的很窄时才滚动，且「恢复默认显示 / 关闭设置」固定在底部，不随内容滚走。
+- **状态与文案**：工具栏「设置」「查找」用按下态标出对应面板已展开；头像来源改为「自动获取 / 仅 Gravatar」，窄列下不再被截断，完整取值顺序由面板底部的说明承担。
+
+适配 DSH **0.2.0-rc.2**，设置项本身与按仓库保存的语义均未改动。
+
+验证：三个 TypeScript 程序类型检查通过，`lib/` 已重新构建；组件级渲染在 872 / 560 / 360 px 三种宽度下截图核对（三个宽度见[872](docs/screenshots/settings-panel-872-0.5.3.png)、[560](docs/screenshots/settings-panel-560-0.5.3.png)、[360](docs/screenshots/settings-panel-360-0.5.3.png)），面板与图形区无重叠，窄宽度时底部按钮固定可见；本次未触及的提交行图形对齐复测 6 行顶点偏差仍为 0。未在真实 DSH 中做点击验收，上述截图来自组件级 demo，仅以 DSH 深色主题变量近似配色。
+
+### English
+
+- Rebuild the settings panel as a grid of named groups — references, dates, author and avatars, commit list, graph. Captions share one column and controls another, so values no longer shift with the label text; three columns on a wide pane, two and then one as it narrows, with the graph row spreading over the remaining columns instead of leaving a gap.
+- Remove the old 200px scrolling box. At normal widths the whole panel fits in roughly 150–200px and only scrolls when the pane is genuinely narrow, where the reset and close actions stay pinned to the bottom.
+- The Settings and Find buttons now show a pressed state while their panel is open, and the avatar source reads "Automatic" / "Gravatar only" so it is not clipped in a narrow column; the full lookup order stays in the note under the groups.
+
+Requires DSH **0.2.0-rc.2**. No setting was added or removed, and settings are still stored per repository.
+
 ## 0.5.2 — 2026-10-21
 
 - **文件 Diff 路径修正**：会话工作目录位于仓库子目录时，文件 Diff 不再匹配错路径。此前 `git diff` 静默返回空，界面显示「该文件在工作区没有行级变更」，旁边却仍是正确的增删行数；现在先按 `rev-parse --show-toplevel` 取仓库根再校验路径并读取，未提交变更、未跟踪文件与提交内文件 Diff 一并修正。
