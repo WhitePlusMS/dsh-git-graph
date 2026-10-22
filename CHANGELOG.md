@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.6.0 — 2026-10-22
+
+- **只读分支导航与顶栏下拉**：本地 / 远端分支分组、名称筛选、精确聚焦并定位分支最新提交；分支、筛选、设置从顶栏打开，重复点击或 Esc 可收起，不改写工作区或引用。
+- **展开后图形对齐**：监听行内详情区域的实际高度变化。提交详情、历史文件 Diff、未提交列表和文件 Diff 加载、展开或收起后，节点与提交标题保持对齐。
+- **数据与搜索修复**：Host / Client / 模型工具的分支与搜索截断契约一致；搜索仍最多扫描 2000 条，但明确提示未扫描的历史。保留引用名中的逗号，分支 glob 使用 Git 原生语义，详情 / 比较 / 工作区纳入文件类型变化，修正 porcelain 重命名目标路径。
+- **按需读取与刷新**：切换、关闭或卸载视图会取消旧读取；标签 / Stash 展开时才请求，标签详情合并为一次 Git 命令。比较刷新重新读取数据并保留基准选择。
+- **仓库身份与交付**：同一 Git 工作树的根目录 / 子目录会话共用显示设置和头像缓存身份。测试源码随仓库交付，CI 校验类型和测试通过后才打包发布。双语 README、安装地址与机器摘要同步更新。
+
+适配 DSH **0.2.0-rc.2**，继续仅通过本仓库 GitHub Release 成品包分发，不发布到同名 npm 项目。升级后请重启同一 profile 的 DSH，确保 Host / Client 严格契约同时生效；原先按子目录保存的显示设置不迁移。
+
+验证：Host / Client / 测试三个 TypeScript 程序检查通过，4 个测试文件共 **31 项**通过；真实 DSH 页面 **23 次**逐态坐标测量通过，41 个节点和分支聚焦后的 35 个节点最大偏差不超过 **0.5px**，并确认旧详情请求取消、metadata 按需读取、比较刷新保留基准。2001 条历史的搜索截断由真实 Git 回归覆盖。详细范围见[修复与验证记录](https://github.com/WhitePlusMS/dsh-git-graph/blob/v0.6.0/docs/ARCHITECTURE_FIX_REPORT_20261022.md)。
+
+### English
+
+- Add read-only branch navigation with local/remote groups, name search, exact history focus, and tip location. Branch, filter, and settings controls open as top-bar dropdowns; repeated clicks or Escape close them.
+- Observe inline detail height changes so graph nodes remain aligned while commit details, historical diffs, and uncommitted changes load, expand, or collapse.
+- Align Host, Client, and tool data contracts. Report when the 2,000-commit search budget leaves earlier history unscanned; preserve commas in reference names, use native Git branch patterns, include file type changes, and correct porcelain rename destinations.
+- Cancel obsolete reads when views change or close. Fetch tag/stash metadata only on expansion and read all tag details in one Git command. Refresh comparisons without resetting the selected base.
+- Share repository settings across root/subdirectory sessions in one worktree. Include regression tests in Git and require typecheck/tests before CI packaging. Update both READMEs, installation links, and the machine-readable summary.
+
+Requires DSH **0.2.0-rc.2**. Install from this repository's GitHub Release, not the unrelated npm package. Restart the same DSH profile after updating; old subdirectory-specific settings are not migrated.
+
+Validation: three TypeScript programs and **31 tests** passed; **23 real-DSH layout checks** passed with a maximum node offset of **0.5px**, including branch focus, cancellation, lazy metadata, and comparison refresh. A real 2,001-commit Git fixture covers search truncation. See the [validation record](https://github.com/WhitePlusMS/dsh-git-graph/blob/v0.6.0/docs/ARCHITECTURE_FIX_REPORT_20261022.md).
+
 ## 0.5.3 — 2026-10-21
 
 - **设置面板重排**：原来把 15 个控件平铺成三四行的做法改为按问题分组的栅格——引用、日期、作者与头像、提交列表、图形各自成组，组内标题在左、控件在右对齐，控件宽度不再随文字抖动。宽度够时三列并排，变窄依次降到两列、一列；图形三项横向展开并跨列，行末不留空洞。

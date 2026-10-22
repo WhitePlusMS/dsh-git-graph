@@ -2,7 +2,7 @@
 
 [使用说明](../README.zh.md) · [English README](../README.md)
 
-本项目当前版本为 0.5.3，适配 DSH 0.2.0-rc.2。这里记录本地安装、构建、内部数据接口及验收依据。
+本项目当前版本为 0.6.0，适配 DSH 0.2.0-rc.2。这里记录本地安装、构建、内部数据接口及验收依据。
 
 ## 本地安装与自定义 profile
 
@@ -12,7 +12,7 @@
 pnpm install --frozen-lockfile
 pnpm run typecheck
 pnpm pack --pack-destination .scratch/release
-dsh plugin --profile web add ./.scratch/release/dsh-git-graph-0.5.3.tgz
+dsh plugin --profile web add ./.scratch/release/dsh-git-graph-0.6.0.tgz
 dsh web
 ```
 
@@ -22,7 +22,7 @@ dsh web
 
 ```powershell
 dsh --profile my-web --from-default-profile web --dump-config
-dsh plugin --profile my-web add ./.scratch/release/dsh-git-graph-0.5.3.tgz
+dsh plugin --profile my-web add ./.scratch/release/dsh-git-graph-0.6.0.tgz
 dsh --profile my-web
 ```
 
@@ -70,9 +70,9 @@ pnpm run build
 
 ## 发布 GitHub Release 成品包
 
-同步 `package.json` 版本、源码、`lib/` 和 `CHANGELOG.md` 后，将以 `release:` 开头的发布提交合入 `master`，例如 `release: publish dsh-git-graph v0.5.3`。也可在 GitHub Actions 网页手动运行 `Package release`。
+同步 `package.json` 版本、源码、`lib/` 和 `CHANGELOG.md` 后，将以 `release:` 开头的发布提交合入 `master`，例如 `release: publish dsh-git-graph v0.6.0`。也可在 GitHub Actions 网页手动运行 `Package release`。
 
-`.github/workflows/release.yml` 执行类型检查和 `pnpm pack`，成功后以本次提交创建对应版本标签与 Release，附带含 `lib/` 的 `.tgz` 和 `SHA256SUMS.txt`；发布说明取自 `CHANGELOG.md` 的当前版本。普通提交不会发布，已发布版本不会被覆盖。检查 Actions 成功且附件可下载后，再用 README 中的地址安装。该过程不发布到 npm，也不自动完成市场目录收录。
+`.github/workflows/release.yml` 先执行类型检查和测试，通过后运行 `pnpm pack`，成功后以本次提交创建对应版本标签与 Release，附带含 `lib/` 的 `.tgz` 和 `SHA256SUMS.txt`；发布说明取自 `CHANGELOG.md` 的当前版本。普通提交不会发布，已发布版本不会被覆盖。检查 Actions 成功且附件可下载后，再用 README 中的地址安装。该过程不发布到 npm，也不自动完成市场目录收录。
 
 ## Git 数据与路径处理
 
@@ -80,7 +80,7 @@ Host 通过固定、不经过 shell 的 subprocess 参数读取 Git 数据，采
 
 `readFileDiff` 接收 `hash`、仓库相对 `path` 及可选 `baseHash`。明确基准时比较两端树，不使用 merge-base；未指定时比较目标与首父提交，根提交比较空树。两端变更列表决定文件状态和重命名前后的路径，即使目标最后一次提交未修改该文件也能读取范围 Diff。`readFile` 只接收 `hash` / `path`，单文件上限为 1 MiB；新增、删除、重命名读取各自存在的一端，空文件、二进制和超限分别展示。
 
-浏览器请求绑定当前会话工作区，不接受任意仓库 `path`。文件请求必须使用仓库相对路径；绝对路径和仓库外路径被拒绝。非 Git 目录和无提交仓库有独立空状态；无提交仓库仍可查看暂存文件。
+浏览器请求绑定当前会话工作区，不接受任意仓库 `path`。图快照的 `path` 为 Git 工作树根目录，`branches` 与 `searchTruncated` 为必填字段；显示设置和头像缓存使用这一仓库身份。搜索多取一条判断是否达到 2000 条扫描预算；即使匹配为空，截断仍会明确呈现。文件请求必须使用仓库相对路径；绝对路径和仓库外路径被拒绝。非 Git 目录和无提交仓库有独立空状态；无提交仓库仍可查看暂存文件。
 
 独立模型工具 `git_graph` 的参数如下：
 
@@ -90,7 +90,7 @@ git_graph({
   max_commits?: number,   // 1..500，默认 100
   all?: boolean,          // 包含所有可达 refs，默认 true
   first_parent?: boolean, // 只跟随首父提交，默认 false
-  glob?: string[],        // 本地分支名 glob（OR），提供时覆盖 --all
+  glob?: string[],        // 本地 / 远端分支名 glob（OR），最多 64 项
   search?: string,        // Hash、主题、作者、邮箱、引用名、日期；扫描上限 2000
   sort?: string           // date、author-date、topological，默认 date
 })
@@ -106,15 +106,18 @@ git_graph({
 
 ## 引用显示与行高
 
-提交行的引用不再折叠为「+N」：徽标保持原尺寸，放不下时在容器内换行；说明文字使用 `flex: 1 1 0` 与 `min-width: min(14ch, 100%)`，能保留一行就保留一行，挤不下才整行下移，行高随内容增长。因此行高不是常量：`GitGraphContent` 用 `useLayoutEffect` + `ResizeObserver` 量出每行（含未提交行、行内展开面板）的 `top` / `height`，`GraphSvg` 的顶点、连线与 `引用对齐 = graph` 的标签层都按这份实测数据定位；该模式还会按最宽标签动态预留标签列宽（160–360px）。新增可折叠内容时不需要再单独上报空档高度。
+提交行的引用不再折叠为「+N」：徽标保持原尺寸，放不下时在容器内换行；说明文字使用 `flex: 1 1 0` 与 `min-width: min(14ch, 100%)`，能保留一行就保留一行，挤不下才整行下移，行高随内容增长。因此行高不是常量：`GitGraphContent` 用 `useLayoutEffect` + `ResizeObserver` 量出每行（含未提交行、行内展开面板）的 `top` / `height`，`GraphSvg` 的顶点、连线与 `引用对齐 = graph` 的标签层都按这份实测数据定位；该模式还会按最宽标签动态预留标签列宽（160–360px）。`ResizeObserver` 同时监听 `[data-commit-hash]` 与 `[data-inline-details]`，异步文件内容加载或折叠引起的详情高度变化也会重新测量；新增可折叠内容不需要单独上报空档高度。
 
 ## 设置面板
 
-设置面板按「一个问题一组」分节：引用、日期、作者与头像、提交列表、图形。每组内标题与控件各占一列，控件宽度固定，取值不再随文案长短左右跳动；面板用 `repeat(auto-fit, minmax(212px, 1fr))` 排布，宽时三列、变窄依次两列与一列，图形一组跨列以免行末留空。面板不再固定 200px 高并常驻滚动条，只在容器不足 `min(52vh, 380px)` 时滚动，滚动时「恢复默认显示 / 关闭设置」以 `position: sticky` 固定在底部。`数据属性 data-settings-panel` 保留，供检查脚本定位。
+设置入口位于顶栏，点击打开下拉面板，再次点击或按 Esc 收起；分支、筛选、设置共用单一浮层状态。下拉容器以顶栏为定位基准，设置面板最大高度为 `min(72vh, 540px)`，内容区可滚动，底部「恢复默认显示 / 关闭设置」保持可见。
+
+面板按引用、日期、作者与头像、显示列、图形分为五组；用 `repeat(auto-fit, minmax(200px, 1fr))` 自适应列数，容器达到 500px 时图形组跨两列。保留 `data-settings-panel` 定位属性，以及实际构建标识与行高测量诊断信息。
+
 
 ## 验收依据
 
-仓库按现有规则忽略 `tests/`，新克隆不附带测试集。仅在保留本地测试文件的工作区运行 `pnpm test`。
+从 0.6.0 起，测试源码随仓库交付；`pnpm test` 自动发现 `tests/**/*.test.ts` / `tests/**/*.test.tsx`。PR 与 master 推送执行类型检查和测试，发布任务必须等待验证通过。历史验收数字仍按各版本当时的证据记录。
 
 | 验收阶段 | 自动测试 | 浏览器检查 | 详细报告 |
 | --- | --- | --- | --- |
@@ -124,5 +127,6 @@ git_graph({
 | 0.5.0 的两提交 Diff 与完整原文 | 115 项通过 | 18 项通过 | [提交比较与原文报告](COMPARE_SOURCE_TEST_REPORT.md) |
 | 0.5.2 的引用显示、头像来源与子目录 Diff | 回归 6 项 + 校验 30 项通过 | 未执行（改用组件级渲染测量） | [引用与头像验收记录](REFS_AVATAR_TEST_REPORT.md) |
 | 0.5.3 的设置面板重排 | 回归 6 项通过 | 未执行（三种宽度的组件级渲染截图核对） | 见[版本说明](../CHANGELOG.md) |
+| 0.6.0 的分支导航与读取修复 | 31 项通过 | 真实 DSH 中 23 次逐态坐标测量通过，最大偏差 0.5px | [修复与验证记录](ARCHITECTURE_FIX_REPORT_20261022.md) |
 
 各阶段数量不相加。P0 验收时临时包为 0.1.0，后纳入 0.3.0；0.4.0 显示实现验收时临时包仍为 0.3.0；0.5.0 比较与原文实现验收时临时包仍为 0.4.0。0.5.2 与 0.5.3 的验收在检出中缺少历史测试集的情况下进行，未重做真实 DSH 浏览器检查。版本调整另行通过类型检查、构建和打包，未因版本号变化重复浏览器验收。正式版本记录见[版本说明](../CHANGELOG.md)。

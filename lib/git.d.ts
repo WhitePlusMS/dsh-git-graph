@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { Agent } from '@deepseek-ai/dsh-agent';
-import type { GitGraphBranch, GitGraphCommit, GitGraphCommitDetails, GitGraphCompareRequest, GitGraphCompareResult, GitGraphDiffLine, GitGraphFileChange, GitGraphFileContent, GitGraphFileDiff, GitGraphFileDiffRequest, GitGraphFileRequest, GitGraphInput, GitGraphMetadata, GitGraphRepoConfig, GitGraphSignature, GitGraphSnapshot, GitGraphStash, GitGraphTag, GitGraphTagDetails, GitGraphWorkingTree, GitGraphWorkingTreeChanges, GitGraphWorkingTreeFileRequest } from './domain.js';
+import type { GitGraphBranch, GitGraphCommit, GitGraphCommitDetails, GitGraphCompareRequest, GitGraphCompareResult, GitGraphDiffLine, GitGraphFileChange, GitGraphFileContent, GitGraphFileDiff, GitGraphFileDiffRequest, GitGraphFileRequest, GitGraphInput, GitGraphMetadata, GitGraphRepoConfig, GitGraphSignature, GitGraphSnapshot, GitGraphStash, GitGraphTag, GitGraphWorkingTree, GitGraphWorkingTreeChanges, GitGraphWorkingTreeFileRequest } from './domain.js';
 import type { AvatarAuthor } from './avatars.js';
 /** Minimal execution identity shared by the tool and the independent view. */
 export interface GitGraphExecutionContext {
@@ -19,13 +19,6 @@ export declare function parseGitStatus(text: string): {
     changed: boolean;
     summary: string;
 };
-/**
- * Match a short branch name against a git-style glob. Follows git's rules:
- * `*` matches any run, `?` one character, `[abc]` a class, and a pattern with
- * no magic characters is treated as a prefix (implicit trailing `*`). Matching
- * is case-sensitive.
- */
-export declare function branchNameMatches(name: string, pattern: string): boolean;
 /** Pure parser for the branch listing, exported so it can be tested alone. */
 export declare function parseBranches(stdout: string, currentBranch: string | null): GitGraphBranch[];
 /** Load the bounded graph snapshot used by the model result and Client renderer. */
@@ -63,15 +56,7 @@ export declare function loadCommitDetails(ctx: Context, cwd: string, hash: strin
 export declare function parseStashReflog(text: string): GitGraphStash[];
 /** Load all stashes (`git reflog refs/stash`). */
 export declare function loadStashes(ctx: Context, cwd: string, signal: AbortSignal): Promise<GitGraphStash[]>;
-/** Parse `git for-each-ref refs/tags` lines into (name, object, annotated) triples. */
-export declare function parseForEachRefTags(text: string): Array<{
-    readonly name: string;
-    readonly object: string;
-    readonly annotated: boolean;
-}>;
-/** Parse `git for-each-ref refs/tags/<name>` annotated-tag detail record. */
-export declare function parseAnnotatedTagDetail(text: string): GitGraphTagDetails;
-/** Load tag refs (name + object + annotated flag) and annotated-tag details. */
+/** Load all tags and their details in one bounded subprocess capture. */
 export declare function loadTags(ctx: Context, cwd: string, signal: AbortSignal): Promise<GitGraphTag[]>;
 /** Parse `git config --list -z --includes [--local|--global]` into key/value pairs. */
 export declare function parseConfigList(text: string): Map<string, string>;

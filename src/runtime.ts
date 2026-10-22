@@ -7,7 +7,7 @@ import { MAX_COMMITS } from './domain.ts'
 import { loadGitGraph } from './git.ts'
 import { GitGraphRemoteService } from './remote-service.ts'
 
-const GRAPH_OUTPUT_SCHEMA = {
+export const GRAPH_OUTPUT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   properties: {
@@ -16,6 +16,22 @@ const GRAPH_OUTPUT_SCHEMA = {
     branch: { oneOf: [{ type: 'string' }, { type: 'null' }], required: true },
     head: { oneOf: [{ type: 'string' }, { type: 'null' }], required: true },
     remotes: { type: 'array', required: true, items: { type: 'string' } },
+    // Every snapshot lists branch tips; the tool output accepts the same field
+    // the Host sends instead of dropping the read as an invalid result.
+    branches: {
+      type: 'array',
+      required: true,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          name: { type: 'string', required: true },
+          hash: { type: 'string', required: true },
+          kind: { type: 'string', required: true, enum: ['local', 'remote'] },
+          isCurrent: { type: 'boolean', required: true },
+        },
+      },
+    },
     workingTree: {
       type: 'object',
       additionalProperties: false,
@@ -56,6 +72,7 @@ const GRAPH_OUTPUT_SCHEMA = {
       },
     },
     hasMore: { type: 'boolean', required: true },
+    searchTruncated: { type: 'boolean', required: true },
   },
 } as const
 
@@ -91,7 +108,7 @@ export function apply(ctx: Context): void {
       all: { type: 'boolean', description: 'Include all reachable refs. Defaults to true.' },
       first_parent: { type: 'boolean', description: 'Follow only first parents. Defaults to false.' },
       glob: { type: 'array', description: 'Branch-name glob filters (OR); overrides --all when provided.', items: { type: 'string' } },
-      search: { type: 'string', description: 'Full-range free-text search across hash, subject, author, email, ref name and date.' },
+      search: { type: 'string', description: 'Bounded free-text search (result indicates truncation) across hash, subject, author, email, ref name and date.' },
       sort: { type: 'string', description: 'Commit ordering: date, author-date, or topological. Defaults to date.', enum: ['date', 'author-date', 'topological'] },
     },
     output: {

@@ -29,20 +29,22 @@ export function apply(ctx: Context): void {
     key: 'dsh-git-graph',
     locale: NS,
     inject: (sessionId): GitGraphViewInjected => {
-      const remote = async () => {
+      const remote = async (signal: AbortSignal) => {
+        signal.throwIfAborted()
         await remoteReady
+        signal.throwIfAborted()
         return ctx.get('remote.gitGraph') as typeof ctx.remote.gitGraph
       }
       return {
-        avatars: async (request, signal) => (await remote()).avatars(sessionId, request, signal),
-        read: async request => (await remote()).read(sessionId, request),
-        readCommit: async request => (await remote()).readCommit(sessionId, request),
-        readFile: async request => (await remote()).readFile(sessionId, request),
-        readFileDiff: async request => (await remote()).readFileDiff(sessionId, request),
-        readWorkingTree: async () => (await remote()).readWorkingTree(sessionId, {}),
-        readWorkingTreeFile: async request => (await remote()).readWorkingTreeFile(sessionId, request),
-        compare: async request => (await remote()).compare(sessionId, request),
-        metadata: async () => (await remote()).metadata(sessionId, {}),
+        avatars: async (request, signal) => (await remote(signal)).avatars(sessionId, request, signal),
+        read: async (request, signal) => (await remote(signal)).read(sessionId, request, signal),
+        readCommit: async (request, signal) => (await remote(signal)).readCommit(sessionId, request, signal),
+        readFile: async (request, signal) => (await remote(signal)).readFile(sessionId, request, signal),
+        readFileDiff: async (request, signal) => (await remote(signal)).readFileDiff(sessionId, request, signal),
+        readWorkingTree: async signal => (await remote(signal)).readWorkingTree(sessionId, {}, signal),
+        readWorkingTreeFile: async (request, signal) => (await remote(signal)).readWorkingTreeFile(sessionId, request, signal),
+        compare: async (request, signal) => (await remote(signal)).compare(sessionId, request, signal),
+        metadata: async signal => (await remote(signal)).metadata(sessionId, {}, signal),
       }
     },
   }, GitGraphView)), 'git-graph tab body')

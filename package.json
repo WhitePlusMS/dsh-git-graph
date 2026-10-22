@@ -1,6 +1,6 @@
 {
   "name": "dsh-git-graph",
-  "version": "0.5.3",
+  "version": "0.6.0",
   "description": "Read-only native Git Graph sidebar for DeepSeek Harness",
   "icon": "./icon.svg",
   "type": "module",
@@ -67,7 +67,7 @@
     }
   },
   "scripts": {
-    "test": "vitest run tests/client-bundle.test.ts tests/host-typert.test.ts tests/graph-layout.test.ts tests/git-parser.test.ts tests/git-loader.test.ts tests/git-command-format.test.ts tests/git-data.test.ts tests/git-query.test.ts tests/git-details.test.ts tests/client-settings.test.ts tests/avatars.test.ts tests/git-file-diff-cwd.test.ts",
+    "test": "vitest run",
     "typecheck": "tsc -p tsconfig.host.json --noEmit && tsc -p tsconfig.client.json --noEmit && tsc -p tsconfig.tests.json --noEmit",
     "build": "node scripts/build.mjs",
     "bundle": "node scripts/build.mjs",
@@ -134,6 +134,10 @@
     "docs/DEVELOPMENT.md",
     "locale/*.json",
     "icon.svg",
-    "LICENSE"
+    "LICENSE",
+    "llms.txt",
+    "GLOSSARY.md",
+    "docs/FEATURE_GAP_VS_VSCODE.md",
+    "docs/ARCHITECTURE_FIX_REPORT_20261022.md"
   ]
 }

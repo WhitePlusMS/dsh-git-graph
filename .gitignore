@@ -7,8 +7,7 @@ node_modules/
 .idea/
 *.code-workspace
 
-# 按项目约定不提交测试目录及测试运行产物
-tests/
+# 测试源码随项目交付，只忽略运行产物
 test-results/
 coverage/
 

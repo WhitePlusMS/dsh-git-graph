@@ -27,20 +27,17 @@ import type {
   GitGraphSnapshot,
   GitGraphStash,
   GitGraphTag,
-  GitGraphTagDetails,
   GitGraphWorkingTree,
   GitGraphWorkingTreeChanges,
   GitGraphWorkingTreeFileRequest,
 } from './domain.ts'
-import { MAX_AVATAR_BATCH, MAX_BRANCH_FILTER, MAX_COMMITS } from './domain.ts'
+import { MAX_AVATAR_BATCH, MAX_BRANCH_FILTER, MAX_COMMITS, MAX_SEARCH_COMMITS } from './domain.ts'
 import type { AvatarAuthor } from './avatars.ts'
 
 const LOG_FORMAT = '%H%x00%P%x00%aN%x00%aE%x00%aI%x00%cI%x00%s%x00%D%x00%x1e'
 const OUTPUT_MAX_BYTES = 8 * 1024 * 1024
 const STDERR_MAX_BYTES = 64 * 1024
 const GRACE_MS = 3_000
-/** Upper bound for full-range commit scanning when a search is active. */
-const SEARCH_CAP = MAX_COMMITS * 4
 
 /** Minimal execution identity shared by the tool and the independent view. */
 export interface GitGraphExecutionContext {
@@ -78,6 +75,7 @@ async function runGit(
   signal: AbortSignal,
   allowedExitCodes: readonly number[] = [0],
 ): Promise<GitCommandResult> {
+  signal.throwIfAborted()
   let handle: SubprocessHandle
   try {
     const spec: SubprocessSpawnSpec = {
@@ -120,7 +118,7 @@ async function runGit(
 
 function parseRefs(decorations: string): GitGraphRef[] {
   const refs: GitGraphRef[] = []
-  for (const raw of decorations.split(',').map(item => item.trim()).filter(item => item.length > 0)) {
+  for (const raw of decorations.split(', ').map(item => item.trim()).filter(item => item.length > 0)) {
     if (raw.startsWith('HEAD -> refs/heads/')) {
       refs.push({ kind: 'head', name: raw.slice('HEAD -> refs/heads/'.length) })
       continue
@@ -177,7 +175,7 @@ export function parseGitLog(text: string): GitGraphCommit[] {
       committerDate,
       subject,
       refs,
-      isHead: decorations.split(',').some(ref => ref.trim() === 'HEAD' || ref.trim().startsWith('HEAD -> ')),
+      isHead: decorations.split(', ').some(ref => ref.trim() === 'HEAD' || ref.trim().startsWith('HEAD -> ')),
     })
   }
   return commits
@@ -209,6 +207,7 @@ function validateInput(input: GitGraphInput): Required<Pick<GitGraphInput, 'maxC
     throw new GitGraphError('sort 必须是 date、author-date 或 topological')
   }
   const glob = (input.glob ?? []).map(item => item.trim()).filter(item => item.length > 0)
+  if (glob.length > MAX_BRANCH_FILTER) throw new GitGraphError(`glob 最多 ${MAX_BRANCH_FILTER} 项`)
   // Exact branch focus is bounded for the same reason as globs: the value is
   // joined into one bounded query, not an unbounded selector list.
   const branches = (input.branches ?? []).map(item => item.trim()).filter(item => item.length > 0)
@@ -243,43 +242,6 @@ function commitMatchesSearch(commit: GitGraphCommit, query: string): boolean {
   return haystack.includes(needle)
 }
 
-/**
- * Match a short branch name against a git-style glob. Follows git's rules:
- * `*` matches any run, `?` one character, `[abc]` a class, and a pattern with
- * no magic characters is treated as a prefix (implicit trailing `*`). Matching
- * is case-sensitive.
- */
-export function branchNameMatches(name: string, pattern: string): boolean {
-  const magic = /[*?[]/u
-  const source = magic.test(pattern) ? pattern : `${pattern}*`
-  const regex = new RegExp(`^${globToRegexSource(source)}$`, 'u')
-  return regex.test(name)
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
-}
-
-function globToRegexSource(glob: string): string {
-  let out = ''
-  for (let i = 0; i < glob.length; i += 1) {
-    const char = glob[i]
-    if (char === undefined) break
-    if (char === '*') out += '.*'
-    else if (char === '?') out += '.'
-    else if (char === '[') {
-      // Copy the character class verbatim (git supports ranges/caret negations).
-      const close = glob.indexOf(']', i + 1)
-      if (close === -1) { out += '\\['; continue }
-      out += glob.slice(i, close + 1)
-      i = close
-    } else {
-      out += escapeRegExp(char)
-    }
-  }
-  return out
-}
-
 /** Wire format for one branch row: full ref, tip, short name, symbolic target. */
 const BRANCH_FORMAT = '%(refname)%00%(objectname)%00%(refname:short)%00%(symref)'
 
@@ -296,14 +258,22 @@ export function parseBranches(stdout: string, currentBranch: string | null): Git
       : refname.startsWith('refs/remotes/') ? 'remote'
         : undefined
     if (kind === undefined) continue
-    branches.push({ name: short, hash, kind, isCurrent: kind === 'local' && short === currentBranch })
+    const name = refname.slice(kind === 'local' ? 'refs/heads/'.length : 'refs/remotes/'.length)
+    branches.push({ name, hash, kind, isCurrent: kind === 'local' && name === currentBranch })
   }
   return branches
 }
 
 /** Load every branch once per snapshot; one command covers local and remote. */
-async function loadBranches(ctx: Context, cwd: string, currentBranch: string | null, signal: AbortSignal): Promise<GitGraphBranch[]> {
-  const result = await runGit(ctx, cwd, ['for-each-ref', `--format=${BRANCH_FORMAT}`, 'refs/heads', 'refs/remotes'], signal)
+async function loadBranches(ctx: Context, cwd: string, currentBranch: string | null, signal: AbortSignal, globs: readonly string[] = []): Promise<GitGraphBranch[]> {
+  // Delegate wildmatch (negation, ranges and malformed classes) to Git itself.
+  // Preserve the UI's plain-prefix convention while constraining namespaces.
+  const refs = globs.length === 0 ? ['refs/heads', 'refs/remotes']
+    : globs.flatMap(pattern => {
+      const suffix = /[*?[]/u.test(pattern) ? pattern : `${pattern}*`
+      return [`refs/heads/${suffix}`, `refs/remotes/${suffix}`]
+    })
+  const result = await runGit(ctx, cwd, ['for-each-ref', `--format=${BRANCH_FORMAT}`, ...refs], signal)
   return parseBranches(result.stdout, currentBranch)
 }
 
@@ -331,6 +301,7 @@ function nonGitRepositorySnapshot(cwd: string): GitGraphSnapshot {
     },
     commits: [],
     hasMore: false,
+    searchTruncated: false,
   }
 }
 
@@ -341,7 +312,8 @@ export async function loadGitGraph(
   exec: GitGraphExecutionContext,
 ): Promise<GitGraphSnapshot> {
   const validated = validateInput(input)
-  const cwd = workingDirectory(validated, exec)
+  const requestedCwd = workingDirectory(validated, exec)
+  let cwd = requestedCwd
   let status: GitCommandResult
   try {
     status = await runGit(ctx, cwd, ['status', '--porcelain=v1', '-b'], exec.signal)
@@ -350,6 +322,7 @@ export async function loadGitGraph(
     throw error
   }
   const statusInfo = parseGitStatus(status.stdout)
+  cwd = await repositoryRoot(ctx, requestedCwd, exec.signal)
   // `rev-parse --verify HEAD` on a fresh repo (no commits yet) exits 128, so a
   // missing HEAD is treated as an empty repository, not a query failure.
   const headResult = await runGit(ctx, cwd, ['rev-parse', '--verify', 'HEAD'], exec.signal, [0, 1, 128])
@@ -364,19 +337,17 @@ export async function loadGitGraph(
     : validated.sort === 'topological' ? '--topo-order'
     : '--date-order'
   // Two filters select branches by resolving the real ref list and passing the
-  // matched names as fixed rev arguments. Exact names win when both are sent:
+  // matched full refs as fixed rev arguments. Exact names win when both are sent:
   // focusing one branch must never silently widen into a glob.
   const nameFilterActive = validated.branches.length > 0 || validated.glob.length > 0
-  const selectedBranches = nameFilterActive
-    ? branches
-      .map(branch => branch.name)
-      .filter(name => validated.branches.length > 0
-        ? validated.branches.includes(name)
-        : validated.glob.some(glob => branchNameMatches(name, glob)))
-    : []
+  const selectedBranches = validated.branches.length > 0
+    ? branches.filter(branch => validated.branches.includes(branch.name))
+    : validated.glob.length > 0
+      ? await loadBranches(ctx, cwd, statusInfo.branch, exec.signal, validated.glob)
+      : []
   const refArgs =
     nameFilterActive
-      ? selectedBranches
+      ? selectedBranches.map(branch => `refs/${branch.kind === 'local' ? 'heads' : 'remotes'}/${branch.name}`)
       : validated.all ? ['--all'] : []
   // A branch filter that matches nothing yields an empty graph rather than
   // falling back to HEAD history. The repository itself may still be non-empty.
@@ -394,11 +365,14 @@ export async function loadGitGraph(
       },
       commits: [],
       hasMore: false,
+      searchTruncated: false,
     }
   }
-  // Search scans the full query range (bounded by a capture cap) so results are
-  // not wrongly limited to the first page; paging is applied to matches.
-  const cap = validated.search.length > 0 ? SEARCH_CAP : validated.maxCommits + 1
+  // Search scans beyond the displayed page up to its explicit resource budget;
+  // paging is applied to matches and truncation is reported independently.
+  const searching = validated.search.length > 0
+  // One extra record detects truncation without presenting it as a search hit.
+  const cap = searching ? MAX_SEARCH_COMMITS + 1 : validated.maxCommits + 1
   const logArgs = [
     'log',
     '--decorate=full',
@@ -421,7 +395,8 @@ export async function loadGitGraph(
     }
   }
   const parsed = parseGitLog(log.stdout)
-  const allCommits = parsed.map(commit => ({ ...commit, isHead: commit.hash === head }))
+  const searchTruncated = searching && parsed.length > MAX_SEARCH_COMMITS
+  const allCommits = (searching ? parsed.slice(0, MAX_SEARCH_COMMITS) : parsed).map(commit => ({ ...commit, isHead: commit.hash === head }))
   const searched = validated.search.length === 0
     ? allCommits
     : allCommits.filter(commit => commitMatchesSearch(commit, validated.search))
@@ -440,6 +415,7 @@ export async function loadGitGraph(
     },
     commits,
     hasMore,
+    searchTruncated,
   }
 }
 
@@ -467,8 +443,6 @@ const DETAILS_FORMAT = [
 ].join('%x00')
 
 const DETAILS_FIELD_COUNT = 12
-
-const GIT_LOG_SEPARATOR = 'XX7Nal-YARtTpjCikii9nJxER19D6diSyk-AWkPb'
 
 /** Parse an empty-or-status signature string ("", or G/U/X/Y/R/E/B) into a signature. */
 export function parseSignatureStatus(status: string, signer: string, key: string): GitGraphSignature | null {
@@ -614,7 +588,7 @@ export async function loadCommitDetails(
   // Explicitly compare merge commits to the first parent; single-commit
   // diff-tree output otherwise omits merge changes. Root commits use --root.
   const revisions = details.parents[0] === undefined ? ['--root', hash] : [details.parents[0], hash]
-  const common = ['-c', 'log.showSignature=false', 'diff-tree', '-r', '--no-commit-id', '--find-renames', '--diff-filter=AMDR', '-z']
+  const common = ['-c', 'log.showSignature=false', 'diff-tree', '-r', '--no-commit-id', '--find-renames', '--diff-filter=AMDRTU', '-z']
   const nameArgs = [...common, '--name-status', ...revisions]
   const numArgs = [...common, '--numstat', ...revisions]
   const [nameResult, numResult] = await Promise.all([
@@ -666,69 +640,31 @@ export async function loadStashes(ctx: Context, cwd: string, signal: AbortSignal
   return parseStashReflog(result.stdout)
 }
 
-/** Parse `git for-each-ref refs/tags` lines into (name, object, annotated) triples. */
-export function parseForEachRefTags(text: string): Array<{ readonly name: string; readonly object: string; readonly annotated: boolean }> {
-  const tags: Array<{ readonly name: string; readonly object: string; readonly annotated: boolean }> = []
-  for (const line of text.split(/\r?\n/u)) {
-    if (line.length === 0) continue
-    // Format: <objectname>\t<refname>\t<objecttype>. An annotated tag has
-    // objecttype "tag"; a lightweight tag points straight at a "commit".
-    const parts = line.split('\t')
-    if (parts.length < 3) continue
-    const object = parts[0] ?? ''
-    const ref = parts[1] ?? ''
-    const objectType = parts[2] ?? ''
-    const match = /^refs\/tags\/(.+)$/u.exec(ref)
-    if (match === null) continue
-    tags.push({ name: match[1] ?? '', object, annotated: objectType === 'tag' })
-  }
-  return tags
-}
-
-/** Parse `git for-each-ref refs/tags/<name>` annotated-tag detail record. */
-export function parseAnnotatedTagDetail(text: string): GitGraphTagDetails {
-  const fields = text.split(GIT_LOG_SEPARATOR)
-  if (fields.length < 5) throw new GitGraphError('Git annotated tag 详情输出格式不完整')
-  const objectHash = fields[0]
-  const tagger = fields[1]
-  const taggerEmail = fields[2]
-  const taggerDate = fields[3]
-  const sigStatus = fields[4]
-  const contents = fields.slice(5).join(GIT_LOG_SEPARATOR)
-  if (objectHash === undefined || objectHash.length === 0) throw new GitGraphError('Git annotated tag 详情包含空字段')
-  const message = (contents ?? '').replace(/\s+$/u, '')
-  return {
-    objectHash,
-    tagger: (tagger ?? '').trim(),
-    taggerEmail: (taggerEmail ?? '').trim(),
-    taggerDate: taggerDate ?? '',
-    message,
-    // for-each-ref returns signature text, not a verification result. Until
-    // verify-tag is explicitly run, neither validity nor a key id is known.
-    signature: sigStatus !== undefined && sigStatus.trim().length > 0
-      ? { status: 'E', key: null, signer: null }
-      : null,
-  }
-}
-
-/** Load tag refs (name + object + annotated flag) and annotated-tag details. */
+/** Load all tags and their details in one bounded subprocess capture. */
 export async function loadTags(ctx: Context, cwd: string, signal: AbortSignal): Promise<GitGraphTag[]> {
-  const listFormat = ['%(objectname)', '%(refname)', '%(objecttype)'].join('\t')
-  const list = await runGit(ctx, cwd, ['for-each-ref', 'refs/tags', `--format=${listFormat}`], signal)
-  const entries = parseForEachRefTags(list.stdout)
+  // Fixed-width NUL fields preserve multiline messages and separator characters.
+  // Git adds one newline after each record; only strip it from the next hash.
+  const fields = ['%(objectname)', '%(refname)', '%(objecttype)', '%(taggername)', '%(taggeremail)', '%(taggerdate:iso-strict)', '%(contents:signature)', '%(contents)']
+  const result = await runGit(ctx, cwd, ['for-each-ref', 'refs/tags', `--format=${fields.join('%00')}%00`], signal)
+  const tokens = result.stdout.split('\u0000')
   const tags: GitGraphTag[] = []
-  for (const entry of entries) {
-    if (!entry.annotated) {
-      tags.push({ name: entry.name, annotated: false, detail: null })
-      continue
-    }
-    const detailFields = ['%(objectname)', '%(taggername)', '%(taggeremail)', '%(taggerdate:iso-strict)', '%(contents:signature)', '%(contents)']
-    const detailFormat = detailFields.join(GIT_LOG_SEPARATOR)
-    const detailResult = await runGit(ctx, cwd, ['for-each-ref', `refs/tags/${entry.name}`, `--format=${detailFormat}`], signal)
+  for (let index = 0; index + 7 < tokens.length; index += 8) {
+    const [rawHash = '', ref = '', kind = '', tagger = '', email = '', date = '', signature = '', message = ''] = tokens.slice(index, index + 8)
+    const objectHash = rawHash.replace(/^[\r\n]+/u, '')
+    if (!ref.startsWith('refs/tags/') || objectHash.length === 0) throw new GitGraphError('Git tag 输出格式不完整')
+    const annotated = kind === 'tag'
     tags.push({
-      name: entry.name,
-      annotated: true,
-      detail: parseAnnotatedTagDetail(detailResult.stdout),
+      name: ref.slice('refs/tags/'.length),
+      annotated,
+      detail: annotated ? {
+        objectHash,
+        tagger: tagger.trim(),
+        taggerEmail: email.trim(),
+        taggerDate: date,
+        message: message.replace(/\s+$/u, ''),
+        // Signature presence does not establish verification or signer identity.
+        signature: signature.trim().length > 0 ? { status: 'E', key: null, signer: null } : null,
+      } : null,
     })
   }
   return tags
@@ -802,25 +738,12 @@ export function parseWorkingTreeStatus(text: string): GitGraphWorkingTree {
   while (i < tokens.length) {
     const token = tokens[i]
     if (token === undefined) break
-    // Porcelain v1 -z format is "XY<SP>path": two status columns, a space,
-    // then the path. Rename/copy entries ("R  <old>") list the new path as the
-    // following NUL token, so advance i past it.
+    // In porcelain v1 -z the destination comes first; the next token is the
+    // source path. Both index and worktree columns can report a rename/copy.
     const status = token.slice(0, 2)
-    let path = token.slice(3)
-    let consumedPath = path.length > 0
-    if (/^[RC]/u.test(status)) {
-      const newPath = tokens[i + 1]
-      if (newPath !== undefined && consumedPath) {
-        path = newPath
-        i += 2
-        consumedPath = true
-      } else {
-        i += 1
-      }
-      if (!consumedPath) i += 1
-    } else {
-      i += 1
-    }
+    const path = token.slice(3)
+    const consumedPath = path.length > 0
+    i += /[RC]/u.test(status) ? 2 : 1
     if (consumedPath && path.length > 0) {
       if (status.includes('D') && !status.includes('A')) deleted.push(path)
       else if (status.startsWith('?')) untracked.push(path)
@@ -1044,7 +967,7 @@ export async function loadWorkingTreeChanges(
 ): Promise<GitGraphWorkingTreeChanges> {
   const headResult = await runGit(ctx, cwd, ['rev-parse', '--verify', 'HEAD'], signal, [0, 1, 128])
   const base = headResult.exitCode === 0 ? 'HEAD' : EMPTY_TREE_HASH
-  const common = ['diff', '--no-ext-diff', '--no-textconv', base, '--find-renames', '--diff-filter=AMDR', '-z']
+  const common = ['diff', '--no-ext-diff', '--no-textconv', base, '--find-renames', '--diff-filter=AMDRTU', '-z']
   const [nameResult, numResult] = await Promise.all([
     runGit(ctx, cwd, [...common, '--name-status'], signal),
     runGit(ctx, cwd, [...common, '--numstat'], signal),
@@ -1119,7 +1042,7 @@ export async function loadCompare(
   assertValidHash(request.baseHash)
   assertValidHash(request.targetHash)
   const range = `${request.baseHash}..${request.targetHash}`
-  const common = ['-c', 'log.showSignature=false', 'diff', '--no-commit-id', '--find-renames', '--diff-filter=AMDR', '-z', range]
+  const common = ['-c', 'log.showSignature=false', 'diff', '--no-commit-id', '--find-renames', '--diff-filter=AMDRTU', '-z', range]
   const [nameResult, numResult] = await Promise.all([
     runGit(ctx, cwd, [...common, '--name-status'], signal),
     runGit(ctx, cwd, [...common, '--numstat'], signal),

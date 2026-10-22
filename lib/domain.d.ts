@@ -46,6 +46,7 @@ export interface GitGraphBranch {
 }
 /** The bounded, replayable result sent from the Host tool to the Client view. */
 export interface GitGraphSnapshot {
+    /** Git worktree root; session cwd remains a request context, not repository identity. */
     readonly path: string;
     /** `not-git` | `empty` | `ready`. */
     readonly state: GitGraphRepoState;
@@ -55,12 +56,9 @@ export interface GitGraphSnapshot {
     readonly remotes: string[];
     /**
      * Local branches followed by remote-tracking branches; symbolic refs excluded.
-     * Always populated by the Host. Optional only so a Client bundle and a Host
-     * from adjacent versions still interoperate: an absent list means "this Host
-     * cannot list branches", which the view renders by hiding branch navigation
-     * instead of showing an empty picker.
+     * Always populated by the Host, including empty and non-Git snapshots.
      */
-    readonly branches?: GitGraphBranch[];
+    readonly branches: GitGraphBranch[];
     readonly workingTree: {
         readonly changed: boolean;
         readonly summary: string;
@@ -68,6 +66,8 @@ export interface GitGraphSnapshot {
     readonly commits: GitGraphCommit[];
     /** True when more commits exist beyond the requested page (Host uses maxCommits+1). */
     readonly hasMore: boolean;
+    /** Search reached its scan limit; a missing match is not proof of absence. */
+    readonly searchTruncated: boolean;
 }
 /** How the Host orders the returned commit stream. */
 export type GitGraphSort = 'date' | 'author-date' | 'topological';
@@ -109,7 +109,7 @@ export interface GitGraphTimestamps {
 }
 /** A single changed file within a commit or comparison. */
 export interface GitGraphFileChange {
-    readonly type: 'A' | 'M' | 'D' | 'R' | 'U';
+    readonly type: 'A' | 'M' | 'D' | 'R' | 'T' | 'U';
     readonly oldPath: string;
     readonly newPath: string;
     /** Number of lines added, when known (text file). */
@@ -197,6 +197,8 @@ export interface GitGraphWorkingTree {
 }
 /** Upper bound for persisted graph metadata in one tool result. */
 export declare const MAX_COMMITS = 500;
+/** Search resource budget, independent of the number of matches displayed. */
+export declare const MAX_SEARCH_COMMITS: number;
 /** Upper bound on exact branch names accepted in one query. */
 export declare const MAX_BRANCH_FILTER = 64;
 /** Request body for `gitGraph/readCommit`. */

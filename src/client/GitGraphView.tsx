@@ -4,6 +4,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { GitGraphAvatar, GitGraphAvatarRequest, GitGraphAvatarResult } from '../domain.ts'
 import type { GitGraphBranch, GitGraphCommit, GitGraphCommitDetails, GitGraphCompareRequest, GitGraphCompareResult, GitGraphFileChange, GitGraphFileContent, GitGraphFileDiff, GitGraphFileDiffRequest, GitGraphFileRequest, GitGraphQuery, GitGraphMetadata, GitGraphRef, GitGraphSnapshot, GitGraphWorkingTreeChanges, GitGraphWorkingTreeFileRequest } from '../domain.ts'
+import { MAX_SEARCH_COMMITS } from '../domain.ts'
 import { layoutGraph, type GraphLayout } from './graph-layout.ts'
 import { loadDisplaySettings, saveDisplaySettings, DEFAULT_DISPLAY_SETTINGS, COLUMN_LIMITS, clampColumnWidth, type CommitColumn, type GitGraphDisplaySettings, type GraphDateFormat, type GraphLineStyle, type GraphPalette } from './settings.ts'
 import { commitDate, displayHunks, graphDisplayWidth, graphRowHeight, referenceLabels, visibleColumns } from './presentation.ts'
@@ -15,14 +16,14 @@ import { NS, type GitGraphTranslate } from './locales.ts'
 
 export interface GitGraphViewInjected {
   readonly avatars: (request: GitGraphAvatarRequest, signal: AbortSignal) => Promise<RemoteResult<GitGraphAvatarResult>>
-  readonly read: (request: GitGraphQuery) => Promise<RemoteResult<GitGraphSnapshot>>
-  readonly readCommit: (request: { hash: string }) => Promise<RemoteResult<GitGraphCommitDetails>>
-  readonly readFile: (request: GitGraphFileRequest) => Promise<RemoteResult<GitGraphFileContent>>
-  readonly readFileDiff: (request: GitGraphFileDiffRequest) => Promise<RemoteResult<GitGraphFileDiff>>
-  readonly readWorkingTree: () => Promise<RemoteResult<GitGraphWorkingTreeChanges>>
-  readonly readWorkingTreeFile: (request: GitGraphWorkingTreeFileRequest) => Promise<RemoteResult<GitGraphFileDiff>>
-  readonly compare: (request: GitGraphCompareRequest) => Promise<RemoteResult<GitGraphCompareResult>>
-  readonly metadata: () => Promise<RemoteResult<GitGraphMetadata>>
+  readonly read: (request: GitGraphQuery, signal: AbortSignal) => Promise<RemoteResult<GitGraphSnapshot>>
+  readonly readCommit: (request: { hash: string }, signal: AbortSignal) => Promise<RemoteResult<GitGraphCommitDetails>>
+  readonly readFile: (request: GitGraphFileRequest, signal: AbortSignal) => Promise<RemoteResult<GitGraphFileContent>>
+  readonly readFileDiff: (request: GitGraphFileDiffRequest, signal: AbortSignal) => Promise<RemoteResult<GitGraphFileDiff>>
+  readonly readWorkingTree: (signal: AbortSignal) => Promise<RemoteResult<GitGraphWorkingTreeChanges>>
+  readonly readWorkingTreeFile: (request: GitGraphWorkingTreeFileRequest, signal: AbortSignal) => Promise<RemoteResult<GitGraphFileDiff>>
+  readonly compare: (request: GitGraphCompareRequest, signal: AbortSignal) => Promise<RemoteResult<GitGraphCompareResult>>
+  readonly metadata: (signal: AbortSignal) => Promise<RemoteResult<GitGraphMetadata>>
 }
 
 type Props = PropsRuntime<'sidebar.right.pane.tab'> & PropsLocale<typeof NS> & GitGraphViewInjected
@@ -576,14 +577,15 @@ function CommitDetails({ commit, readCommit, compareActive, onCompare, onOpenFil
     setDetailsError(undefined)
     if (commit === undefined) return
     let cancelled = false
-    void readCommit({ hash: commit.hash }).then(result => {
+    const controller = new AbortController()
+    void readCommit({ hash: commit.hash }, controller.signal).then(result => {
       if (cancelled) return
       if (result.ok) setDetails(result.value)
       else setDetailsError(result.error.message)
     }).catch((cause: unknown) => {
       if (!cancelled) setDetailsError(cause instanceof Error ? cause.message : String(cause))
     })
-    return () => { cancelled = true }
+    return () => { cancelled = true; controller.abort() }
   }, [commit?.hash, readCommit, revision, readRevision])
 
   if (commit === undefined) return <div className={css.emptyDetails}>{t('details.select')}</div>
@@ -691,16 +693,17 @@ function FileSource({ hash, path, readFile }: {
 
   useEffect(() => {
     let cancelled = false
+    const controller = new AbortController()
     setContent(undefined)
     setError(undefined)
-    void readFile({ hash, path }).then(result => {
+    void readFile({ hash, path }, controller.signal).then(result => {
       if (cancelled) return
       if (result.ok) setContent(result.value)
       else setError(result.error.message)
     }).catch((cause: unknown) => {
       if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause))
     })
-    return () => { cancelled = true }
+    return () => { cancelled = true; controller.abort() }
   }, [hash, path, readFile, revision])
 
   // Two text nodes keep even a many-line, bounded blob from creating a DOM
@@ -751,16 +754,17 @@ function FileViewer({ hash, baseHash, change, readFileDiff, readFile, onClose }:
 
   useEffect(() => {
     let cancelled = false
+    const controller = new AbortController()
     setDiff(undefined)
     setError(undefined)
-    void readFileDiff({ hash, path, ...(baseHash === undefined ? {} : { baseHash }) }).then(result => {
+    void readFileDiff({ hash, path, ...(baseHash === undefined ? {} : { baseHash }) }, controller.signal).then(result => {
       if (cancelled) return
       if (result.ok) setDiff(result.value)
       else setError(result.error.message)
     }).catch((cause: unknown) => {
       if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause))
     })
-    return () => { cancelled = true }
+    return () => { cancelled = true; controller.abort() }
   }, [hash, baseHash, path, readFileDiff, revision])
 
   const hasChange = diff !== undefined && diff.lines.some(line => line.type !== 'context')
@@ -853,16 +857,17 @@ function WorkingTreeFileViewer({ path, readWorkingTreeFile, onClose }: {
 
   useEffect(() => {
     let cancelled = false
+    const controller = new AbortController()
     setDiff(undefined)
     setError(undefined)
-    void readWorkingTreeFile({ path }).then(result => {
+    void readWorkingTreeFile({ path }, controller.signal).then(result => {
       if (cancelled) return
       if (result.ok) setDiff(result.value)
       else setError(result.error.message)
     }).catch((cause: unknown) => {
       if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause))
     })
-    return () => { cancelled = true }
+    return () => { cancelled = true; controller.abort() }
   }, [path, readWorkingTreeFile, revision])
 
   const hasChange = diff !== undefined && diff.lines.some(line => line.type !== 'context')
@@ -894,13 +899,14 @@ function WorkingTreeFileViewer({ path, readWorkingTreeFile, onClose }: {
   )
 }
 
-function ComparePanel({ targetHash, commits, compare, readFileDiff, readFile, onClose }: {
+function ComparePanel({ targetHash, commits, compare, readFileDiff, readFile, onClose, readRevision }: {
   readonly targetHash: string
   readonly commits: readonly GitGraphCommit[]
   readonly compare: GitGraphViewInjected['compare']
   readonly readFileDiff: GitGraphViewInjected['readFileDiff']
   readonly readFile: GitGraphViewInjected['readFile']
   readonly onClose: () => void
+  readonly readRevision: number
 }) {
   const t = useText()
   const [baseHash, setBaseHash] = useState<string>(commits.find(commit => commit.hash !== targetHash)?.hash ?? '')
@@ -916,15 +922,16 @@ function ComparePanel({ targetHash, commits, compare, readFileDiff, readFile, on
     setFile(undefined)
     if (baseHash.length === 0 || baseHash === targetHash) return
     let cancelled = false
-    void compare({ baseHash, targetHash }).then(res => {
+    const controller = new AbortController()
+    void compare({ baseHash, targetHash }, controller.signal).then(res => {
       if (cancelled) return
       if (res.ok) setResult(res.value)
       else setError(res.error.message)
     }).catch((cause: unknown) => {
       if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause))
     })
-    return () => { cancelled = true }
-  }, [baseHash, targetHash, compare, revision])
+    return () => { cancelled = true; controller.abort() }
+  }, [baseHash, targetHash, compare, revision, readRevision])
 
   return (
     <div className={css.comparePanel} data-compare-panel>
@@ -989,36 +996,56 @@ function Avatar({ email, name, avatar }: { readonly email: string; readonly name
   </span>
 }
 
-function MetadataStrip({ metadata, error, onRetry }: { readonly metadata: GitGraphMetadata | undefined; readonly error: string | undefined; readonly onRetry: () => void }) {
+function MetadataStrip({ readMetadata, readRevision }: { readonly readMetadata: GitGraphViewInjected['metadata']; readonly readRevision: number }) {
   const t = useText()
-  if (error !== undefined) return <div className={css.metadataStrip} role="status">{t('metadata.error', { message: error })}<button type="button" className={css.linkButton} onClick={onRetry}>{t('common.retry')}</button></div>
-  if (metadata === undefined) return <div className={css.metadataStrip}>{t('metadata.loading')}</div>
-  if (metadata.tags.length === 0 && metadata.stashes.length === 0) {
-    return <div className={css.metadataStrip}>{t('metadata.empty')}</div>
-  }
+  const [open, setOpen] = useState(false)
+  const [metadata, setMetadata] = useState<GitGraphMetadata>()
+  const [error, setError] = useState<string>()
+  const [revision, setRevision] = useState(0)
+
+  useEffect(() => {
+    if (!open) return
+    const controller = new AbortController()
+    setMetadata(undefined)
+    setError(undefined)
+    void readMetadata(controller.signal).then(result => {
+      if (controller.signal.aborted) return
+      if (result.ok) setMetadata(result.value)
+      else setError(result.error.message)
+    }).catch((cause: unknown) => {
+      if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : String(cause))
+    })
+    return () => controller.abort()
+  }, [open, readMetadata, readRevision, revision])
+
   return (
-    <details className={css.metadataStrip}>
-      <summary>{t('metadata.tags')} ({metadata.tags.length}) · {t('metadata.stashes')} ({metadata.stashes.length})</summary>
-      {metadata.tags.length > 0 && (
-        <div className={css.metadataGroup}>
-          <span className={css.metadataLabel}>{t('metadata.tags')}</span>
-          {metadata.tags.map(tag => (
-            <span key={tag.name} className={css.metaTag} title={tag.annotated ? `${tag.detail?.objectHash ?? ''} · ${tag.detail?.tagger ?? ''}` : t('metadata.lightweight')}>
-              <CopyButton value={tag.name} label={t('refs.copy', { name: tag.name })} className={css.metaCopy}>{tag.name}{tag.annotated ? ' ⚑' : ''}</CopyButton>
-            </span>
-          ))}
-        </div>
-      )}
-      {metadata.stashes.length > 0 && (
-        <div className={css.metadataGroup}>
-          <span className={css.metadataLabel}>{t('metadata.stashes')}</span>
-          {metadata.stashes.map(stash => (
-            <span key={stash.selector} className={css.metaStash} title={`${stash.message} · ${stash.author}`}>
-              <CopyButton value={stash.selector} label={t('refs.copy', { name: stash.selector })} className={css.metaCopy}>{stash.selector}</CopyButton>
-            </span>
-          ))}
-        </div>
-      )}
+    <details className={css.metadataStrip} onToggle={event => setOpen(event.currentTarget.open)}>
+      <summary>{t('metadata.tags')}{metadata === undefined ? '' : ` (${metadata.tags.length})`} · {t('metadata.stashes')}{metadata === undefined ? '' : ` (${metadata.stashes.length})`}</summary>
+      {error !== undefined && <div role="status">{t('metadata.error', { message: error })}<button type="button" className={css.linkButton} onClick={() => setRevision(current => current + 1)}>{t('common.retry')}</button></div>}
+      {metadata === undefined && error === undefined && <div>{t('metadata.loading')}</div>}
+      {metadata !== undefined && metadata.tags.length === 0 && metadata.stashes.length === 0 && <div>{t('metadata.empty')}</div>}
+      {metadata !== undefined && <>
+        {metadata.tags.length > 0 && (
+          <div className={css.metadataGroup}>
+            <span className={css.metadataLabel}>{t('metadata.tags')}</span>
+            {metadata.tags.map(tag => (
+              <span key={tag.name} className={css.metaTag} title={tag.annotated ? `${tag.detail?.objectHash ?? ''} · ${tag.detail?.tagger ?? ''}` : t('metadata.lightweight')}>
+                <CopyButton value={tag.name} label={t('refs.copy', { name: tag.name })} className={css.metaCopy}>{tag.name}{tag.annotated ? ' ⚑' : ''}</CopyButton>
+              </span>
+            ))}
+          </div>
+        )}
+        {metadata.stashes.length > 0 && (
+          <div className={css.metadataGroup}>
+            <span className={css.metadataLabel}>{t('metadata.stashes')}</span>
+            {metadata.stashes.map(stash => (
+              <span key={stash.selector} className={css.metaStash} title={`${stash.message} · ${stash.author}`}>
+                <CopyButton value={stash.selector} label={t('refs.copy', { name: stash.selector })} className={css.metaCopy}>{stash.selector}</CopyButton>
+              </span>
+            ))}
+          </div>
+        )}
+      </>}
     </details>
   )
 }
@@ -1405,7 +1432,7 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
   const [snapshot, setSnapshot] = useState<GitGraphSnapshot | undefined>()
   const [selectedHash, setSelectedHash] = useState<string>()
   const [searchText, setSearchText] = useState('')
-  // The emitted search reaches the Host (full-range); keep a debounced copy.
+  // The emitted search reaches the Host (bounded scan); keep a debounced copy.
   const [search, setSearch] = useState('')
   const [refFilter, setRefFilter] = useState<RefFilter>('all')
   const [maxCommits, setMaxCommits] = useState(PAGE_SIZE)
@@ -1421,8 +1448,6 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
   const [workingTreeChanges, setWorkingTreeChanges] = useState<GitGraphWorkingTreeChanges>()
   const [workingTreeError, setWorkingTreeError] = useState<string>()
   const [workingTreeFile, setWorkingTreeFile] = useState<string>()
-  const [repoMetadata, setRepoMetadata] = useState<GitGraphMetadata>()
-  const [metadataError, setMetadataError] = useState<string>()
   const [readRevision, setReadRevision] = useState(0)
   const [display, setDisplay] = useState<GitGraphDisplaySettings>(DEFAULT_DISPLAY_SETTINGS)
   const [sheet, setSheet] = useState<SheetKind>()
@@ -1446,6 +1471,7 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
   const [measured, setMeasured] = useState<{ key: string; metrics: RowMetrics }>()
   // Only the newest query may replace the graph, including after unmount.
   const querySequence = useRef(0)
+  const queryController = useRef<AbortController>()
   const loadedPath = useRef<string>()
   const authorAvatars = useAvatars(snapshot?.commits ?? NO_COMMITS, snapshot?.path, display.avatarSource,
     display.showAvatars && settingsRepo === snapshot?.path, readAvatars)
@@ -1456,10 +1482,13 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
 
   const load = useCallback(async (request: GitGraphQuery) => {
     const sequence = ++querySequence.current
+    queryController.current?.abort()
+    const controller = new AbortController()
+    queryController.current = controller
     setLoading(true)
     setError(undefined)
     try {
-      const result = await read(request)
+      const result = await read(request, controller.signal)
       if (sequence !== querySequence.current) return
       if (!result.ok) throw new Error(result.error.message)
       const firstRead = loadedPath.current !== result.value.path
@@ -1498,34 +1527,23 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
     void load(buildRequest(maxCommits, search))
   }, [load, buildRequest, maxCommits, search])
 
-  useEffect(() => () => { querySequence.current += 1 }, [read])
-
-  useEffect(() => {
-    let cancelled = false
-    setRepoMetadata(undefined)
-    setMetadataError(undefined)
-    void metadata().then(result => {
-      if (cancelled) return
-      if (result.ok) setRepoMetadata(result.value)
-      else setMetadataError(result.error.message)
-    }).catch((cause: unknown) => { if (!cancelled) setMetadataError(cause instanceof Error ? cause.message : String(cause)) })
-    return () => { cancelled = true }
-  }, [metadata, readRevision])
+  useEffect(() => () => { querySequence.current += 1; queryController.current?.abort() }, [read])
 
   // Load the uncommitted-changes list when the working-tree panel is opened.
   useEffect(() => {
     if (!showWorkingTree) return
     let cancelled = false
+    const controller = new AbortController()
     setWorkingTreeChanges(undefined)
     setWorkingTreeError(undefined)
-    void readWorkingTree().then(result => {
+    void readWorkingTree(controller.signal).then(result => {
       if (cancelled) return
       if (result.ok) setWorkingTreeChanges(result.value)
       else setWorkingTreeError(result.error.message)
     }).catch((cause: unknown) => {
       if (!cancelled) setWorkingTreeError(cause instanceof Error ? cause.message : String(cause))
     })
-    return () => { cancelled = true }
+    return () => { cancelled = true; controller.abort() }
   }, [showWorkingTree, readWorkingTree, readRevision])
 
   // Debounce only text; sorting and branch filters preserve the emitted query.
@@ -1843,7 +1861,7 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
       onOpenFile={(hash, change) => setViewingFile({ hash, change })} />
     {viewingFile !== undefined && viewingFile.hash === selectedCommit.hash && <FileViewer key={`${viewingFile.hash}:${viewingFile.change.newPath}:${readRevision}`}
       hash={viewingFile.hash} baseHash={selectedCommit.parents[0]} change={viewingFile.change} readFileDiff={readFileDiff} readFile={readFile} onClose={() => setViewingFile(undefined)} />}
-    {compareTarget === selectedCommit.hash && <ComparePanel targetHash={selectedCommit.hash} commits={snapshot.commits} compare={compare}
+    {compareTarget === selectedCommit.hash && <ComparePanel readRevision={readRevision} targetHash={selectedCommit.hash} commits={snapshot.commits} compare={compare}
       readFileDiff={readFileDiff} readFile={readFile} onClose={() => setCompareTarget(undefined)} />}
   </>
 
@@ -1858,12 +1876,8 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
           we are, and the two actions that are not about narrowing the graph. */}
       <header className={css.header}>
         <div className={css.headerMain}>
-          {snapshot !== undefined && snapshot.state !== 'not-git' && (branches === undefined
-            ? <span className={css.branchLabel} title={t('branch.detached')}>
-              <BranchGlyph />
-              <span className={css.branchName}>{snapshot.branch ?? t('branch.detached')}</span>
-            </span>
-            : <button type="button" className={css.branchButton} data-detached={snapshot.branch === null}
+          {snapshot !== undefined && snapshot.state !== 'not-git' && (
+            <button type="button" className={css.branchButton} data-detached={snapshot.branch === null}
               data-git-graph-dropdown-trigger
               onClick={() => setSheet(sheet === 'branch' ? undefined : 'branch')}
               aria-expanded={sheet === 'branch'} aria-haspopup="dialog"
@@ -1890,11 +1904,10 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
         {sheet === 'branch' && branches !== undefined && (
           <BranchMenu branches={branches} focused={focusedBranch} onSelect={selectBranch} onShowAll={clearBranchFocus} />
         )}
+        {/* Reference-type filtering uses the loaded page; refresh the Host
+            query as well so every filter action gives visible feedback. */}
         {sheet === 'filter' && (
           <FilterMenu refFilter={refFilter} sort={sort} includeAll={includeAll} firstParent={firstParent} branchGlob={branchGlob}
-            // The reference-type filter runs in the browser over the loaded
-            // page, so it changes no query; re-ask the Host anyway so the
-            // choice always produces one visible refresh.
             onRefFilter={value => { setRefFilter(value); void refresh() }}
             onSort={setSort} onIncludeAll={setIncludeAll} onFirstParent={setFirstParent} onBranchGlob={setBranchGlob}
             onReset={() => { setRefFilter('all'); setSort('date'); setIncludeAll(true); setFirstParent(false); setBranchGlob('') }}
@@ -1949,6 +1962,7 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
         {display.showAvatars && authorAvatars.error !== undefined && <div className={css.hint} role="status">{t('avatar.error')}</div>}
         {refFilter !== 'all' && <div className={css.hint} role="status">{t('refs.filterHint')}</div>}
         {refFilter === 'remote' && <div className={css.hint}>{t('refs.remoteHint')}</div>}
+        {snapshot?.searchTruncated === true && <div className={css.hint} role="status" data-search-truncated>{t('search.truncated', { limit: MAX_SEARCH_COMMITS })}</div>}
         {loading && snapshot === undefined && <div className={css.pending}>{t('status.loadingGraph')}</div>}
         {!loading && error === undefined && snapshot !== undefined && visibleCommits.length === 0 && (
           <div className={css.pending}>
@@ -1997,7 +2011,7 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
               </div>
             </div>
             {canLoadMore && <button type="button" className={css.loadMore} onClick={loadMore} disabled={loading}>{loading ? t('toolbar.loading') : t('toolbar.loadMore')}</button>}
-            <MetadataStrip metadata={repoMetadata} error={metadataError} onRetry={() => void refresh()} />
+            <MetadataStrip readMetadata={metadata} readRevision={readRevision} />
           </>
         )}
       </div>

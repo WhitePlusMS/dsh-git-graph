@@ -5,8 +5,8 @@
 > DSH 原生右侧栏的只读 Git 可视化插件：提交历史、分支与标签、文件 Diff、两提交比较、完整历史原文。无需 API Key，也不占用对话消息。
 
 - Repository: https://github.com/WhitePlusMS/dsh-git-graph
-- Latest release (0.5.3, 2026-10-21): https://github.com/WhitePlusMS/dsh-git-graph/releases/tag/v0.5.3
-- Install archive: https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.3/dsh-git-graph-0.5.3.tgz
+- Latest release (0.6.0, 2026-10-22): https://github.com/WhitePlusMS/dsh-git-graph/releases/tag/v0.6.0
+- Install archive: https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.0/dsh-git-graph-0.6.0.tgz
 - Changelog: https://github.com/WhitePlusMS/dsh-git-graph/blob/master/CHANGELOG.md
 - English README: https://github.com/WhitePlusMS/dsh-git-graph/blob/master/README.md
 - Chinese README: https://github.com/WhitePlusMS/dsh-git-graph/blob/master/README.zh.md
@@ -16,10 +16,10 @@
 Requires DSH 0.2.0-rc.2, the `dsh` CLI, pnpm, and Git on the DSH Host. Installation is from the GitHub Release archive, not from npm:
 
 ```powershell
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.3/dsh-git-graph-0.5.3.tgz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.0/dsh-git-graph-0.6.0.tgz
 ```
 
-Restart the same DSH Web instance afterwards, then open **dsh-git-graph** from the right sidebar.
+Restart the same DSH Web instance after updating to keep Host/Client contracts aligned; old subdirectory-specific display settings are not migrated. Then then open **dsh-git-graph** from the right sidebar.
 
 ## Facts
 
@@ -35,12 +35,15 @@ Restart the same DSH Web instance afterwards, then open **dsh-git-graph** from t
 ## What it does
 
 - Renders commit topology with branch/tag/HEAD references; every reference is shown and wraps instead of collapsing into `+N`.
+- Read-only branch dropdown: search local/remote branches, focus one branch, and locate its tip without checkout.
 - Inline commit details: author and committer dates, parents, references, signature status, copy actions.
 - File changes per commit with tree or list view, per-file unified diff, and a working-tree (uncommitted changes) view.
 - Two-commit comparison: pick a base commit, then open each changed file's unified diff.
 - Historical file source: read and copy the old or new version of a file, up to 1 MiB per file.
 - Commit messages with links, bold, italic, and inline code; author avatars from GitHub, Gravatar, or the repository's own Git service (Gitea/Gogs).
-- Display settings saved per repository: column widths, date format and source, compact rows, line style, lane palette, reference alignment.
+- Search scans at most 2,000 commits and explicitly reports unscanned earlier history; Find only searches loaded results.
+- Graph geometry follows expanded details and diffs; obsolete reads are cancelled, and tag/stash metadata loads on expansion.
+- Display settings shared by root/subdirectory sessions of the same Git worktree: column widths, date format and source, compact rows, line style, lane palette, reference alignment.
 
 ## What it does not do
 

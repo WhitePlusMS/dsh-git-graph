@@ -3,10 +3,32 @@ name: Package release
 on:
   push:
     branches: [master]
+  pull_request:
   workflow_dispatch:
 
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.22.1'
+          package-manager-cache: false
+      - name: Install dependencies
+        run: |
+          npm install --global pnpm@11.22.0
+          pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm run typecheck
+      - name: Test
+        run: pnpm test
   package:
+    needs: verify
     # 只有显式发布提交或手动运行才创建版本，普通开发提交不会发布。
     if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'release:')
     runs-on: ubuntu-latest
@@ -24,8 +46,6 @@ jobs:
         run: |
           npm install --global pnpm@11.22.0
           pnpm install --frozen-lockfile
-      - name: Typecheck
-        run: pnpm run typecheck
       - name: Pack and publish
         env:
           GH_TOKEN: ${{ github.token }}

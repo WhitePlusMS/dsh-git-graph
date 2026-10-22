@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { MAX_AVATAR_BATCH, MAX_COMMITS } from './domain.ts'
+import { MAX_AVATAR_BATCH, MAX_BRANCH_FILTER, MAX_COMMITS } from './domain.ts'
 import { createGitGraphInvocation, TYPERT_PACKAGE } from './typert.shared.ts'
 
 /** Host-only zod codecs required by dsh-typert-loader for RPC registration. */
@@ -20,11 +20,22 @@ const hostCommitSchema = z.object({
   isHead: z.boolean(),
 }).strict()
 
+/** One local or remote-tracking branch tip listed in every snapshot. */
+const hostBranchSchema = z.object({
+  name: z.string(),
+  hash: z.string(),
+  kind: z.enum(['local', 'remote']),
+  isCurrent: z.boolean(),
+}).strict()
+
 const hostQuerySchema = z.object({
   maxCommits: z.number().int().min(1).max(MAX_COMMITS).optional(),
   all: z.boolean().optional(),
   firstParent: z.boolean().optional(),
-  glob: z.array(z.string()).optional(),
+  glob: z.array(z.string()).max(MAX_BRANCH_FILTER).optional(),
+  // Exact branch focus: the sidebar sends the selected branch name, so the
+  // Host request boundary must accept it instead of rejecting an unknown key.
+  branches: z.array(z.string()).max(MAX_BRANCH_FILTER).optional(),
   search: z.string().optional(),
   sort: z.enum(['date', 'author-date', 'topological']).optional(),
 }).strict()
@@ -35,19 +46,21 @@ const hostSnapshotSchema = z.object({
   branch: z.string().nullable(),
   head: z.string().nullable(),
   remotes: z.array(z.string()),
+  branches: z.array(hostBranchSchema),
   workingTree: z.object({
     changed: z.boolean(),
     summary: z.string(),
   }).strict(),
   commits: z.array(hostCommitSchema),
   hasMore: z.boolean(),
+  searchTruncated: z.boolean(),
 }).strict()
 
 const hashSchema = z.string().regex(/^[0-9a-f]{40}$/iu)
 const nullableIntSchema = z.number().int().min(0).nullable()
 
 const hostFileChangeSchema = z.object({
-  type: z.enum(['A', 'M', 'D', 'R', 'U']),
+  type: z.enum(['A', 'M', 'D', 'R', 'T', 'U']),
   oldPath: z.string(),
   newPath: z.string(),
   additions: nullableIntSchema,
@@ -99,7 +112,7 @@ const hostFileDiffSchema = z.object({
   hash: z.string(),
   path: z.string(),
   oldPath: z.string(),
-  status: z.enum(['A', 'M', 'D', 'R', 'U']),
+  status: z.enum(['A', 'M', 'D', 'R', 'T', 'U']),
   binary: z.boolean(),
   additions: z.number().int().min(0),
   deletions: z.number().int().min(0),
@@ -157,7 +170,7 @@ const hostAvatarRequestSchema = z.object({ hashes: z.array(hashSchema).min(1).ma
 const hostAvatarSchema = z.object({
   email: z.string().max(320),
   image: z.string().max(100000).regex(/^data:image\/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+=*$/u).nullable(),
-  provider: z.enum(['github', 'gravatar']).nullable(),
+  provider: z.enum(['github', 'gravatar', 'host']).nullable(),
 }).strict().refine(value => (value.image === null) === (value.provider === null))
 const hostAvatarResultSchema = z.object({ avatars: z.array(hostAvatarSchema).max(MAX_AVATAR_BATCH) }).strict()
 

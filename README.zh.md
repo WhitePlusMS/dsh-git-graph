@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>当前版本 0.5.3</strong> · 适配 DSH 0.2.0-rc.2 · <a href="LICENSE">MIT</a><br>
+  <strong>当前版本 0.6.0</strong> · 适配 DSH 0.2.0-rc.2 · <a href="LICENSE">MIT</a><br>
   <a href="README.md">English</a> · <a href="docs/screenshots/readme-header.svg">静态标题</a>
 </p>
 
@@ -17,7 +17,7 @@
 | --- | --- |
 | 插件名 | `dsh-git-graph`（仓库名与 DSH 组合包行 ID） |
 | 仓库 | https://github.com/WhitePlusMS/dsh-git-graph |
-| 安装来源 | GitHub Release 成品包（`dsh-git-graph-0.5.3.tgz`），**不是 npm** |
+| 安装来源 | GitHub Release 成品包（`dsh-git-graph-0.6.0.tgz`），**不是 npm** |
 | 依赖 | DSH **0.2.0-rc.2**、`dsh` CLI、pnpm、DSH Host 上的 Git |
 | 操作性质 | 只读：不暂存、不提交、不推送、不拉取、不 Fetch、不合并、不打标签 |
 | 语言与许可 | 中 / 英界面 · MIT |
@@ -28,7 +28,7 @@
 
 ![原生侧栏、提交图与筛选演示](docs/screenshots/demo.gif)
 
-GIF 录制于 0.4.0；0.5.0 的两提交 Diff 与完整原文见下方截图，0.5.2 的引用显示与头像来源见[验收记录](docs/REFS_AVATAR_TEST_REPORT.md)。0.5.3 只调整设置面板排版，未附新的真实 DSH 截图。
+GIF 录制于 0.4.0，下方两提交 Diff 与完整原文截图来自 0.5.0，均保留历史版本标注。0.6.0 新增的分支导航、下拉控件和详情展开时的图形对齐已在真实 DSH 中检查，见[修复与验证记录](docs/ARCHITECTURE_FIX_REPORT_20261022.md)。
 
 <details>
 <summary>更多截图：两提交比较、完整原文、英文及窄屏</summary>
@@ -46,6 +46,14 @@ GIF 录制于 0.4.0；0.5.0 的两提交 Diff 与完整原文见下方截图，0
 ![360px 窄侧栏](docs/screenshots/display-360.png)
 
 </details>
+
+## 0.6.0 更新
+
+- 选中本地或远端分支即可聚焦其历史并定位到最新提交，不切换工作区。分支、筛选、设置统一从顶栏下拉打开。
+- 提交详情、文件 Diff、未提交变更展开或收起时，图形节点持续跟随实际行高；切换和关闭视图取消旧读取，标签 / Stash 展开时才加载。
+- 搜索达到 2000 条扫描上限时明确提示；修正含逗号的引用名、原生 Git 分支模式与文件类型变化。仓库根目录和子目录会话共用仓库设置。
+
+完整修复与升级说明见 [0.6.0 版本记录](CHANGELOG.md#060--2026-10-22)。
 
 ## 功能
 
@@ -71,18 +79,18 @@ GIF 录制于 0.4.0；0.5.0 的两提交 Diff 与完整原文见下方截图，0
 
 需要 **DSH 0.2.0-rc.2**、可用的 `dsh` CLI、用于安装插件的 pnpm，以及 DSH Host 上已安装的 Git。
 
-通过 DSH 内置插件页面或命令行安装 `v0.5.3` Release 成品包，两者接受同一安装来源。参见官方的[插件管理器说明](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/packages/client/ui-plugin-manager/README.zh.md)与[打包安装文档](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/docs/user/develop/basic/publish.zh.md)。
+通过 DSH 内置插件页面或命令行安装 `v0.6.0` Release 成品包，两者接受同一安装来源。参见官方的[插件管理器说明](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/packages/client/ui-plugin-manager/README.zh.md)与[打包安装文档](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/docs/user/develop/basic/publish.zh.md)。
 
 在 DSH 中打开 **插件 → 添加插件**，粘贴下面的地址，安装后选择**立即启用**：
 
 ```text
-https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.3/dsh-git-graph-0.5.3.tgz
+https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.0/dsh-git-graph-0.6.0.tgz
 ```
 
 也可以在终端安装：
 
 ```powershell
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.3/dsh-git-graph-0.5.3.tgz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.0/dsh-git-graph-0.6.0.tgz
 ```
 
 归档已包含构建后的 `lib/` 入口，无需克隆仓库、在本机构建，或保留固定路径的开发目录。
@@ -92,13 +100,15 @@ dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releas
 > **名称说明**：npm 上的 `dsh-git-graph` 是**另一个不相关的插件**（作者 `enoughpower`，0.1.x，带暂存与提交功能）。本项目只通过上面的 Release 成品包安装；这里的 `dsh-git-graph` 仅用作 DSH 组合包行 ID 和仓库内的包名。
 
 
-检查 `dsh-git-graph` 是否已安装为 `0.5.3`：
+检查 `dsh-git-graph` 是否已安装为 `0.6.0`：
 
 ```powershell
 dsh plugin --profile web list dsh-git-graph
 ```
 
 使用 `dsh web` 启动 DSH Web；如果已有实例正在运行，重启原实例使插件生效。更新时执行目标发布标签的 `add` 命令，再重启原实例。安装、启动和卸载须使用同一 profile 名称。
+
+升级到 0.6.0 后请重启，使 Host 与 Client 使用一致的严格数据契约。此前按子目录单独保存的显示设置不迁移到工作树根目录设置。
 
 自定义 profile、本地 `.tgz` 安装和源码构建见[开发指南](docs/DEVELOPMENT.md#本地安装与自定义-profile)。
 
@@ -148,7 +158,7 @@ dsh plugin --profile web remove dsh-git-graph
 
 ```powershell
 dsh plugin --profile web remove dsh-git-graph
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.3/dsh-git-graph-0.5.3.tgz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.0/dsh-git-graph-0.6.0.tgz
 ```
 
 之后重启该 DSH Web 实例。单独运行 `dsh plugin --profile web install` 会沿用已保存的安装来源，无法修复指向不存在目录的链接。
@@ -171,12 +181,14 @@ dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releas
 
 ## 使用范围
 
-- 初始加载 100 条提交，手动加载最多 500 条；搜索最多扫描 2000 条，查找仅针对已加载结果。引用类型筛选只显示直接带对应标签的提交。
+- 初始加载 100 条提交，手动加载最多 500 条；搜索最多扫描 2000 条，仍有更早历史未扫描时会明确提示；查找仅针对已加载结果。引用类型筛选只显示直接带对应标签的提交。
 - 分支面板只做只读导航：选中分支等于把它变成查询范围并定位到它的最新提交。插件不执行 `checkout`、`merge`、`rebase`、`cherry-pick`、`reset`、`fetch`、`pull`、`push`，也不会改写暂存区或引用。
 - 历史文件查看器提供统一 Diff 和完整文本，单文件读取上限为 1 MiB。二进制和超限文件会显示状态，不会将截断文本当作完整内容；重命名、新增和删除按实际存在的版本及对应路径读取。
 - 尚无左右 Diff、语法高亮、Tag 签名验证或 Stash Diff；Tag / Stash 条目提供摘要和复制。
 
 ## 更多文档
+
+- [0.6.0 修复与验证记录](docs/ARCHITECTURE_FIX_REPORT_20261022.md)
 
 - [llms.txt](llms.txt)——供 AI 助手与索引读取的精简摘要
 - [与 vscode-git-graph 的功能差距报告](docs/FEATURE_GAP_VS_VSCODE.md)——逐项对比、可只读补齐清单与「不做」边界

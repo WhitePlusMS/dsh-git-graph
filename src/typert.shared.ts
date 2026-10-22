@@ -91,6 +91,7 @@ function parseInput(value: unknown): GitGraphQuery {
   if (Object.hasOwn(object, 'firstParent')) result.firstParent = booleanAt(object.firstParent, '$.firstParent')
   if (Object.hasOwn(object, 'glob')) {
     result.glob = arrayAt(object.glob, '$.glob').map((item, index) => stringAt(item, `$.glob[${index}]`))
+    if (result.glob.length > MAX_BRANCH_FILTER) fail('$.glob', `at most ${MAX_BRANCH_FILTER} patterns`)
   }
   if (Object.hasOwn(object, 'branches')) {
     const branches = arrayAt(object.branches, '$.branches').map((item, index) => stringAt(item, `$.branches[${index}]`))
@@ -121,7 +122,7 @@ function parseBranch(value: unknown, path: string): GitGraphBranch {
 
 function parseSnapshot(value: unknown): GitGraphSnapshot {
   const object = objectAt(value, '$')
-  rejectUnknown(object, ['path', 'state', 'branch', 'head', 'remotes', 'branches', 'workingTree', 'commits', 'hasMore'], '$')
+  rejectUnknown(object, ['path', 'state', 'branch', 'head', 'remotes', 'branches', 'workingTree', 'commits', 'hasMore', 'searchTruncated'], '$')
   const workingTree = objectAt(object.workingTree, '$.workingTree')
   rejectUnknown(workingTree, ['changed', 'summary'], '$.workingTree')
   const state = stringAt(object.state, '$.state')
@@ -132,17 +133,14 @@ function parseSnapshot(value: unknown): GitGraphSnapshot {
     branch: nullableStringAt(object.branch, '$.branch'),
     head: nullableStringAt(object.head, '$.head'),
     remotes: arrayAt(object.remotes, '$.remotes').map((remote, index) => stringAt(remote, `$.remotes[${index}]`)),
-    // Left undefined when the Host does not send it, so the view can hide branch
-    // navigation rather than render a picker that can never list anything.
-    ...(object.branches === undefined
-      ? {}
-      : { branches: arrayAt(object.branches, '$.branches').map((branch, index) => parseBranch(branch, `$.branches[${index}]`)) }),
+    branches: arrayAt(object.branches, '$.branches').map((branch, index) => parseBranch(branch, `$.branches[${index}]`)),
     workingTree: {
       changed: booleanAt(workingTree.changed, '$.workingTree.changed'),
       summary: stringAt(workingTree.summary, '$.workingTree.summary'),
     },
     commits: arrayAt(object.commits, '$.commits').map((commit, index) => parseCommit(commit, `$.commits[${index}]`)),
     hasMore: booleanAt(object.hasMore, '$.hasMore'),
+    searchTruncated: booleanAt(object.searchTruncated, '$.searchTruncated'),
   }
 }
 
@@ -179,8 +177,8 @@ function parseFileChange(value: unknown, path: string): import('./domain.ts').Gi
   const object = objectAt(value, path)
   rejectUnknown(object, ['type', 'oldPath', 'newPath', 'additions', 'deletions'], path)
   const type = stringAt(object.type, `${path}.type`)
-  if (type !== 'A' && type !== 'M' && type !== 'D' && type !== 'R' && type !== 'U') {
-    fail(`${path}.type`, 'A, M, D, R, or U')
+  if (type !== 'A' && type !== 'M' && type !== 'D' && type !== 'R' && type !== 'T' && type !== 'U') {
+    fail(`${path}.type`, 'A, M, D, R, T, or U')
   }
   return {
     type,
@@ -295,7 +293,7 @@ function parseFileDiff(value: unknown): GitGraphFileDiff {
   const object = objectAt(value, '$')
   rejectUnknown(object, ['hash', 'path', 'oldPath', 'status', 'binary', 'additions', 'deletions', 'lines'], '$')
   const status = stringAt(object.status, '$.status')
-  if (status !== 'A' && status !== 'M' && status !== 'D' && status !== 'R' && status !== 'U') fail('$.status', 'A, M, D, R, or U')
+  if (status !== 'A' && status !== 'M' && status !== 'D' && status !== 'R' && status !== 'T' && status !== 'U') fail('$.status', 'A, M, D, R, T, or U')
   return {
     hash: stringAt(object.hash, '$.hash'),
     path: stringAt(object.path, '$.path'),
@@ -429,7 +427,7 @@ export const gitGraphAvatarResultSchema: TypertSchema<import('./domain.ts').GitG
     const provider = nullableStringAt(avatar.provider, `${path}.provider`)
     if (email.length > 320) fail(`${path}.email`, 'at most 320 characters')
     if (image !== null && (image.length > 100000 || !/^data:image\/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+=*$/u.test(image))) fail(`${path}.image`, 'a bounded raster data URL')
-    if (provider !== null && provider !== 'github' && provider !== 'gravatar') fail(`${path}.provider`, 'github, gravatar, or null')
+    if (provider !== null && provider !== 'github' && provider !== 'gravatar' && provider !== 'host') fail(`${path}.provider`, 'github, gravatar, host, or null')
     if ((image === null) !== (provider === null)) fail(path, 'matching image and provider availability')
     return { email, image, provider }
   }) }
@@ -492,6 +490,10 @@ export function createGitGraphInvocation(spec: InvocationSpec): InvocationDescri
       mode: 'strict',
       typeSymbol: `${TYPERT_PACKAGE}#${spec.resultSymbol}`,
       create: () => spec.schemas.result,
+      // Gateway unary results use these hooks; create().parse alone only
+      // validates inputs. Validate both sides so DTO drift fails at the seam.
+      encode: value => spec.schemas.result.parse(value),
+      decode: value => spec.schemas.result.parse(value),
     },
   }
 }

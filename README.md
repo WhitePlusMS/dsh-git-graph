@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>Version 0.5.3</strong> · DSH 0.2.0-rc.2 · <a href="LICENSE">MIT</a><br>
+  <strong>Version 0.6.0</strong> · DSH 0.2.0-rc.2 · <a href="LICENSE">MIT</a><br>
   <a href="README.zh.md">中文说明</a> · <a href="docs/screenshots/readme-header.svg">Static title</a>
 </p>
 
@@ -17,7 +17,7 @@
 | --- | --- |
 | Plugin name | `dsh-git-graph` (repository and DSH bundle row id) |
 | Repository | https://github.com/WhitePlusMS/dsh-git-graph |
-| Install source | GitHub Release archive (`dsh-git-graph-0.5.3.tgz`), **not** npm |
+| Install source | GitHub Release archive (`dsh-git-graph-0.6.0.tgz`), **not** npm |
 | Requires | DSH **0.2.0-rc.2**, `dsh` CLI, pnpm, Git on the DSH Host |
 | Operations | Read-only — no stage, commit, push, pull, fetch, merge, or tag |
 | Languages and license | Chinese / English UI · MIT |
@@ -28,7 +28,7 @@
 
 ![Native sidebar, commit graph, and filtering demo](docs/screenshots/demo.gif)
 
-The GIFs were recorded with 0.4.0. Screenshots of the 0.5.0 comparison and full-source views are below; the 0.5.2 reference and avatar changes are covered by the [acceptance record](docs/REFS_AVATAR_TEST_REPORT.md). 0.5.3 only rearranges the settings panel, so it has no new real-DSH screenshot.
+The GIFs were recorded with 0.4.0; the comparison and full-source screenshots below are from 0.5.0. They show earlier versions. The new branch navigation, dropdown controls, and dynamic graph alignment in 0.6.0 were checked in real DSH; see the [fix and validation record](docs/ARCHITECTURE_FIX_REPORT_20261022.md).
 
 <details>
 <summary>More screenshots: commit comparison, full source, English, and narrow screens</summary>
@@ -47,9 +47,18 @@ The GIFs were recorded with 0.4.0. Screenshots of the 0.5.0 comparison and full-
 
 </details>
 
+## What's new in 0.6.0
+
+- Select a local or remote branch to focus its history and locate its tip, without checking it out. Branches, filters, and settings open from the top bar as dropdowns.
+- Keep graph nodes aligned while commit details, file diffs, and uncommitted changes expand or collapse. Cancel obsolete reads when switching or closing views; load tag/stash metadata only when opened.
+- Show when search stops at its 2,000-commit budget, preserve comma-containing references, use native Git branch patterns, and include file type changes. Root and subdirectory sessions share repository settings.
+
+See the [0.6.0 release notes](CHANGELOG.md#060--2026-10-22) for fixes and upgrade details.
+
 ## Features
 
 - **History** — Commit topology, branches, tags, HEAD, search, and history filters.
+- **Branch navigation** — Search local/remote branches in the branch dropdown, focus one branch, and locate its latest commit without changing the working tree.
 - **Commit details** — Inline details with author/committer dates, parents, references, signature status, and copying.
 - **References** — Every reference on a commit is shown; matching local/remote labels combine, chips wrap onto another line, and the row height follows. Two alternative layouts remain.
 - **File changes** — File tree/list views, per-file diffs, and uncommitted changes; select two commits and open each changed file's diff.
@@ -70,18 +79,18 @@ The GIFs were recorded with 0.4.0. Screenshots of the 0.5.0 comparison and full-
 
 Requires DSH **0.2.0-rc.2**, the `dsh` CLI, pnpm for plugin installation, and Git installed on the DSH Host.
 
-Install the prebuilt `v0.5.3` Release package through either DSH's plugin page or the CLI. Both accept the same package source. See the official [plugin manager guide](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/packages/client/ui-plugin-manager/README.md) and [packaging guide](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/docs/user/develop/basic/publish.md).
+Install the prebuilt `v0.6.0` Release package through either DSH's plugin page or the CLI. Both accept the same package source. See the official [plugin manager guide](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/packages/client/ui-plugin-manager/README.md) and [packaging guide](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/docs/user/develop/basic/publish.md).
 
 In DSH, open **Plugins → Add plugin**, paste this URL, install it, and choose **Enable now**:
 
 ```text
-https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.3/dsh-git-graph-0.5.3.tgz
+https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.0/dsh-git-graph-0.6.0.tgz
 ```
 
 Or install from the terminal:
 
 ```powershell
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.3/dsh-git-graph-0.5.3.tgz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.0/dsh-git-graph-0.6.0.tgz
 ```
 
 The archive includes the built `lib/` entry points. You do not need to clone this repository, build it locally, or keep a development folder at a fixed path.
@@ -91,13 +100,15 @@ This `.tgz` is built with `pnpm pack` and uploaded as a GitHub Release asset; it
 > **Name note.** The npm package named `dsh-git-graph` is a **different, unrelated plugin** (author `enoughpower`, version 0.1.x, with staging and commit features). This project is installed from the Release archive above; `dsh-git-graph` is used here only as the DSH bundle row id and the package name inside this repository.
 
 
-Check that `dsh-git-graph` is installed at version `0.5.3`:
+Check that `dsh-git-graph` is installed at version `0.6.0`:
 
 ```powershell
 dsh plugin --profile web list dsh-git-graph
 ```
 
 Start DSH Web with `dsh web`, or restart your existing instance to load the plugin. For updates, run `add` with the desired release tag, then restart that instance. Use the same profile name for installation, startup, and removal.
+
+For 0.6.0, restart after updating so the Host and Client use the same strict data contract. Settings previously saved separately for a subdirectory are not migrated to the worktree-root settings.
 
 For a custom profile, local `.tgz` installation, or source builds, see the [development guide](docs/DEVELOPMENT.md#本地安装与自定义-profile).
 
@@ -126,6 +137,7 @@ Use the profile you installed into, and restart it after removal.
 | --- | --- |
 | `Ctrl/Cmd+F` | Find within loaded results |
 | `Ctrl/Cmd+Shift+F` | Toggle display settings |
+| `Esc` | Close the branch, filter, or settings dropdown first, then Find |
 | `↑` / `↓` | Select a commit when Find is closed and cleared |
 | `H` | Locate HEAD, or show an out-of-range hint |
 | `Enter` / `Space` on a row or node | Select that commit |
@@ -146,7 +158,7 @@ A previous local-directory installation may still link to a folder that was move
 
 ```powershell
 dsh plugin --profile web remove dsh-git-graph
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.5.3/dsh-git-graph-0.5.3.tgz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.0/dsh-git-graph-0.6.0.tgz
 ```
 
 Restart that DSH Web instance afterward. Running `dsh plugin --profile web install` alone reuses the saved package source and cannot repair a link to a missing folder.
@@ -169,11 +181,14 @@ No. The plugin is read-only; refreshing the graph does not fetch remote changes 
 
 ## Scope
 
-- Initially loads 100 commits, with manual loading up to 500. Search scans up to 2,000 commits; Find searches loaded results. Reference-type filters show commits directly carrying the selected kind of label.
+- Initially loads 100 commits, with manual loading up to 500. Search scans up to 2,000 commits and shows a warning when earlier history remains unscanned; Find searches loaded results. Reference-type filters show commits directly carrying the selected kind of label.
 - Historical file viewers provide unified diffs and full text up to 1 MiB per file. Binary and oversized files show their status; text is not truncated and presented as complete. Renamed, added, and deleted files use the available version and corresponding path.
 - Side-by-side diffs, syntax highlighting, tag signature verification, and stash diffs are not available. Tag/stash entries provide summaries and copying.
 
 ## Documentation
+
+- [0.6.0 fix and validation record](docs/ARCHITECTURE_FIX_REPORT_20261022.md)
+- [Feature comparison with vscode-git-graph](docs/FEATURE_GAP_VS_VSCODE.md)
 
 - [llms.txt](llms.txt) — compact machine-readable summary for AI assistants and indexes
 - [Development, local installation, and API details](docs/DEVELOPMENT.md)
