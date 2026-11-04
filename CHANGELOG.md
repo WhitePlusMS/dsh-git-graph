@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.1 — 2026-11-04
+
+- 适配 DSH **0.2.1-rc.5**：更新运行时要求及 DSH peer、开发依赖，并将 Cordis 升级至 **4.0.5**。本版本不声明兼容旧版 DSH。
+- 更新双语 README、开发说明及机器摘要中的版本和安装地址。
+
+验证：TypeScript 类型检查、31 项自动测试、构建及 peer 依赖检查通过；本机 DSH 配置加载检查通过。本次未进行真实 DSH 浏览器功能验收。
+
+### English
+
+- Target DSH **0.2.1-rc.5** and update DSH dependencies and Cordis to **4.0.5**. Older DSH versions are not declared compatible.
+- Update both READMEs, development documentation, and machine-readable installation details.
+
+Validation: TypeScript checks, 31 automated tests, the build, and peer dependency checks passed. The local DSH profile configuration loaded the bundle. Browser functionality was not revalidated for this release.
+
 ## 0.6.0 — 2026-10-22
 
 - **只读分支导航与顶栏下拉**：本地 / 远端分支分组、名称筛选、精确聚焦并定位分支最新提交；分支、筛选、设置从顶栏打开，重复点击或 Esc 可收起，不改写工作区或引用。

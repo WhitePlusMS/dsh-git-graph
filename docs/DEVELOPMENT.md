@@ -2,7 +2,7 @@
 
 [使用说明](../README.zh.md) · [English README](../README.md)
 
-本项目当前版本为 0.6.0，适配 DSH 0.2.0-rc.2。这里记录本地安装、构建、内部数据接口及验收依据。
+本项目当前版本为 0.6.1，适配 DSH 0.2.1-rc.5。这里记录本地安装、构建、内部数据接口及验收依据。
 
 ## 本地安装与自定义 profile
 
@@ -12,7 +12,7 @@
 pnpm install --frozen-lockfile
 pnpm run typecheck
 pnpm pack --pack-destination .scratch/release
-dsh plugin --profile web add ./.scratch/release/dsh-git-graph-0.6.0.tgz
+dsh plugin --profile web add ./.scratch/release/dsh-git-graph-0.6.1.tgz
 dsh web
 ```
 
@@ -22,7 +22,7 @@ dsh web
 
 ```powershell
 dsh --profile my-web --from-default-profile web --dump-config
-dsh plugin --profile my-web add ./.scratch/release/dsh-git-graph-0.6.0.tgz
+dsh plugin --profile my-web add ./.scratch/release/dsh-git-graph-0.6.1.tgz
 dsh --profile my-web
 ```
 
@@ -70,7 +70,7 @@ pnpm run build
 
 ## 发布 GitHub Release 成品包
 
-同步 `package.json` 版本、源码、`lib/` 和 `CHANGELOG.md` 后，将以 `release:` 开头的发布提交合入 `master`，例如 `release: publish dsh-git-graph v0.6.0`。也可在 GitHub Actions 网页手动运行 `Package release`。
+同步 `package.json` 版本、源码、`lib/` 和 `CHANGELOG.md` 后，将以 `release:` 开头的发布提交合入 `master`，例如 `release: publish dsh-git-graph v0.6.1`。也可在 GitHub Actions 网页手动运行 `Package release`。
 
 `.github/workflows/release.yml` 先执行类型检查和测试，通过后运行 `pnpm pack`，成功后以本次提交创建对应版本标签与 Release，附带含 `lib/` 的 `.tgz` 和 `SHA256SUMS.txt`；发布说明取自 `CHANGELOG.md` 的当前版本。普通提交不会发布，已发布版本不会被覆盖。检查 Actions 成功且附件可下载后，再用 README 中的地址安装。该过程不发布到 npm，也不自动完成市场目录收录。
 

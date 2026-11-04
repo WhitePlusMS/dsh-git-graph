@@ -5,21 +5,21 @@
 > DSH 原生右侧栏的只读 Git 可视化插件：提交历史、分支与标签、文件 Diff、两提交比较、完整历史原文。无需 API Key，也不占用对话消息。
 
 - Repository: https://github.com/WhitePlusMS/dsh-git-graph
-- Latest release (0.6.0, 2026-10-22): https://github.com/WhitePlusMS/dsh-git-graph/releases/tag/v0.6.0
-- Install archive: https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.0/dsh-git-graph-0.6.0.tgz
+- Latest release (0.6.1, 2026-11-04): https://github.com/WhitePlusMS/dsh-git-graph/releases/tag/v0.6.1
+- Install archive: https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.1/dsh-git-graph-0.6.1.tgz
 - Changelog: https://github.com/WhitePlusMS/dsh-git-graph/blob/master/CHANGELOG.md
 - English README: https://github.com/WhitePlusMS/dsh-git-graph/blob/master/README.md
 - Chinese README: https://github.com/WhitePlusMS/dsh-git-graph/blob/master/README.zh.md
 
 ## Install
 
-Requires DSH 0.2.0-rc.2, the `dsh` CLI, pnpm, and Git on the DSH Host. Installation is from the GitHub Release archive, not from npm:
+Requires DSH 0.2.1-rc.5, the `dsh` CLI, pnpm, and Git on the DSH Host. Installation is from the GitHub Release archive, not from npm:
 
 ```powershell
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.0/dsh-git-graph-0.6.0.tgz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.1/dsh-git-graph-0.6.1.tgz
 ```
 
-Restart the same DSH Web instance after updating to keep Host/Client contracts aligned; old subdirectory-specific display settings are not migrated. Then then open **dsh-git-graph** from the right sidebar.
+Restart the same DSH Web instance after updating to keep Host/Client contracts aligned; old subdirectory-specific display settings are not migrated. Then open **dsh-git-graph** from the right sidebar.
 
 ## Facts
 
@@ -27,7 +27,7 @@ Restart the same DSH Web instance after updating to keep Host/Client contracts a
 - Author and maintainer: WhitePlusMS.
 - License: MIT.
 - UI languages: Chinese and English.
-- Compatible runtime: DSH 0.2.0-rc.2.
+- Compatible runtime: DSH 0.2.1-rc.5.
 - Data source: the current session workspace's local Git repository only.
 - Operations: read-only. The plugin never writes to the repository, the index, refs, or the remote.
 - Distribution: GitHub Releases (`*.tgz` with prebuilt `lib/`), checksummed with `SHA256SUMS.txt`. Not published to npm.

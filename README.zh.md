@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>当前版本 0.6.0</strong> · 适配 DSH 0.2.0-rc.2 · <a href="LICENSE">MIT</a><br>
+  <strong>当前版本 0.6.1</strong> · 适配 DSH 0.2.1-rc.5 · <a href="LICENSE">MIT</a><br>
   <a href="README.md">English</a> · <a href="docs/screenshots/readme-header.svg">静态标题</a>
 </p>
 
@@ -17,8 +17,8 @@
 | --- | --- |
 | 插件名 | `dsh-git-graph`（仓库名与 DSH 组合包行 ID） |
 | 仓库 | https://github.com/WhitePlusMS/dsh-git-graph |
-| 安装来源 | GitHub Release 成品包（`dsh-git-graph-0.6.0.tgz`），**不是 npm** |
-| 依赖 | DSH **0.2.0-rc.2**、`dsh` CLI、pnpm、DSH Host 上的 Git |
+| 安装来源 | GitHub Release 成品包（`dsh-git-graph-0.6.1.tgz`），**不是 npm** |
+| 依赖 | DSH **0.2.1-rc.5**、`dsh` CLI、pnpm、DSH Host 上的 Git |
 | 操作性质 | 只读：不暂存、不提交、不推送、不拉取、不 Fetch、不合并、不打标签 |
 | 语言与许可 | 中 / 英界面 · MIT |
 
@@ -46,6 +46,10 @@ GIF 录制于 0.4.0，下方两提交 Diff 与完整原文截图来自 0.5.0，�
 ![360px 窄侧栏](docs/screenshots/display-360.png)
 
 </details>
+
+## 0.6.1 更新
+
+- 适配 **DSH 0.2.1-rc.5**，同步升级 DSH 依赖和 Cordis **4.0.5**。本版本面向该运行时，更新后请重启 DSH。
 
 ## 0.6.0 更新
 
@@ -77,20 +81,20 @@ GIF 录制于 0.4.0，下方两提交 Diff 与完整原文截图来自 0.5.0，�
 
 ## 安装与更新
 
-需要 **DSH 0.2.0-rc.2**、可用的 `dsh` CLI、用于安装插件的 pnpm，以及 DSH Host 上已安装的 Git。
+需要 **DSH 0.2.1-rc.5**、可用的 `dsh` CLI、用于安装插件的 pnpm，以及 DSH Host 上已安装的 Git。
 
-通过 DSH 内置插件页面或命令行安装 `v0.6.0` Release 成品包，两者接受同一安装来源。参见官方的[插件管理器说明](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/packages/client/ui-plugin-manager/README.zh.md)与[打包安装文档](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/docs/user/develop/basic/publish.zh.md)。
+通过 DSH 内置插件页面或命令行安装 `v0.6.1` Release 成品包，两者接受同一安装来源。参见官方的[插件管理器说明](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/packages/client/ui-plugin-manager/README.zh.md)与[打包安装文档](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/docs/user/develop/basic/publish.zh.md)。
 
 在 DSH 中打开 **插件 → 添加插件**，粘贴下面的地址，安装后选择**立即启用**：
 
 ```text
-https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.0/dsh-git-graph-0.6.0.tgz
+https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.1/dsh-git-graph-0.6.1.tgz
 ```
 
 也可以在终端安装：
 
 ```powershell
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.0/dsh-git-graph-0.6.0.tgz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.1/dsh-git-graph-0.6.1.tgz
 ```
 
 归档已包含构建后的 `lib/` 入口，无需克隆仓库、在本机构建，或保留固定路径的开发目录。
@@ -100,7 +104,7 @@ dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releas
 > **名称说明**：npm 上的 `dsh-git-graph` 是**另一个不相关的插件**（作者 `enoughpower`，0.1.x，带暂存与提交功能）。本项目只通过上面的 Release 成品包安装；这里的 `dsh-git-graph` 仅用作 DSH 组合包行 ID 和仓库内的包名。
 
 
-检查 `dsh-git-graph` 是否已安装为 `0.6.0`：
+检查 `dsh-git-graph` 是否已安装为 `0.6.1`：
 
 ```powershell
 dsh plugin --profile web list dsh-git-graph
@@ -150,7 +154,7 @@ dsh plugin --profile web remove dsh-git-graph
 
 **如何在 DeepSeek Harness Web 查看提交和文件 Diff？**
 
-为 DSH 0.2.0-rc.2 [安装插件](#安装与更新)，再从原生右侧栏打开 **dsh-git-graph**。两提交比较和完整历史原文的操作见[使用说明](#使用)。
+为 DSH 0.2.1-rc.5 [安装插件](#安装与更新)，再从原生右侧栏打开 **dsh-git-graph**。两提交比较和完整历史原文的操作见[使用说明](#使用)。
 
 **为什么提示 `cannot resolve profile bundle "dsh-git-graph"`？**
 
@@ -158,7 +162,7 @@ dsh plugin --profile web remove dsh-git-graph
 
 ```powershell
 dsh plugin --profile web remove dsh-git-graph
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.0/dsh-git-graph-0.6.0.tgz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.1/dsh-git-graph-0.6.1.tgz
 ```
 
 之后重启该 DSH Web 实例。单独运行 `dsh plugin --profile web install` 会沿用已保存的安装来源，无法修复指向不存在目录的链接。
