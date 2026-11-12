@@ -3,7 +3,14 @@
 </p>
 
 <p align="center">
-  <strong>当前版本 0.6.2</strong> · 适配 DSH 0.2.2-rc.1 · <a href="LICENSE">MIT</a><br>
+  <a href="https://awesome-dsh-plugin.com"><img src="https://awesome-dsh-plugin.com/badge.svg" alt="Listed in Awesome DSH Plugin"></a>
+  <a href="https://github.com/WhitePlusMS/dsh-git-graph/releases/latest"><img src="https://img.shields.io/github/v/release/WhitePlusMS/dsh-git-graph?display_name=tag" alt="Latest GitHub Release"></a>
+  <a href="package.json"><img src="https://img.shields.io/github/package-json/dependency-version/WhitePlusMS/dsh-git-graph/peer/%40deepseek-ai%2Fdsh-agent?label=DSH" alt="Declared DSH peer version"></a>
+  <a href="https://github.com/WhitePlusMS/dsh-git-graph/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/WhitePlusMS/dsh-git-graph/release.yml?branch=master&amp;label=build" alt="Build and test status"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/WhitePlusMS/dsh-git-graph" alt="License"></a>
+</p>
+
+<p align="center">
   <a href="README.md">English</a> · <a href="docs/screenshots/readme-header.svg">静态标题</a>
 </p>
 
