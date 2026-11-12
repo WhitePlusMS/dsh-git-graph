@@ -2,7 +2,7 @@
 
 [使用说明](../README.zh.md) · [English README](../README.md)
 
-本项目当前版本为 0.6.1，适配 DSH 0.2.1-rc.5。这里记录本地安装、构建、内部数据接口及验收依据。
+本项目当前版本为 0.6.2，适配 DSH 0.2.2-rc.1，要求 Node.js 24.9 或更高版本。这里记录本地安装、构建、内部数据接口及验收依据。
 
 ## 本地安装与自定义 profile
 
@@ -12,7 +12,7 @@
 pnpm install --frozen-lockfile
 pnpm run typecheck
 pnpm pack --pack-destination .scratch/release
-dsh plugin --profile web add ./.scratch/release/dsh-git-graph-0.6.1.tgz
+dsh plugin --profile web add ./.scratch/release/dsh-git-graph-0.6.2.tgz
 dsh web
 ```
 
@@ -22,7 +22,7 @@ dsh web
 
 ```powershell
 dsh --profile my-web --from-default-profile web --dump-config
-dsh plugin --profile my-web add ./.scratch/release/dsh-git-graph-0.6.1.tgz
+dsh plugin --profile my-web add ./.scratch/release/dsh-git-graph-0.6.2.tgz
 dsh --profile my-web
 ```
 
@@ -70,9 +70,9 @@ pnpm run build
 
 ## 发布 GitHub Release 成品包
 
-同步 `package.json` 版本、源码、`lib/` 和 `CHANGELOG.md` 后，将以 `release:` 开头的发布提交合入 `master`，例如 `release: publish dsh-git-graph v0.6.1`。也可在 GitHub Actions 网页手动运行 `Package release`。
+同步 `package.json` 版本、源码、`lib/` 和 `CHANGELOG.md` 后，将以 `release:` 开头的发布提交合入 `master`，例如 `release: publish dsh-git-graph v0.6.2`。也可在 GitHub Actions 网页手动运行 `Package release`。
 
-`.github/workflows/release.yml` 先执行类型检查和测试，通过后运行 `pnpm pack`，成功后以本次提交创建对应版本标签与 Release，附带含 `lib/` 的 `.tgz` 和 `SHA256SUMS.txt`；发布说明取自 `CHANGELOG.md` 的当前版本。普通提交不会发布，已发布版本不会被覆盖。检查 Actions 成功且附件可下载后，再用 README 中的地址安装。该过程不发布到 npm，也不自动完成市场目录收录。
+`.github/workflows/release.yml` 先执行类型检查和测试，通过后运行 `pnpm pack`，成功后以本次提交创建对应版本标签与 Release，附带含 `lib/` 的版本化 `.tgz`、供市场跟随最新版本的固定名 `dsh-git-graph.tgz` 和 `SHA256SUMS.txt`；发布说明取自 `CHANGELOG.md` 的当前版本。普通提交不会发布，已发布版本不会被覆盖。检查 Actions 成功且附件可下载后，再用 README 中的地址安装。该过程不发布到 npm，也不自动完成市场目录收录。
 
 ## Git 数据与路径处理
 
@@ -121,6 +121,7 @@ git_graph({
 
 | 验收阶段 | 自动测试 | 浏览器检查 | 详细报告 |
 | --- | --- | --- | --- |
+| 0.6.2 的 DSH 0.2.2-rc.1 适配 | 31 项通过 | 真实 DSH 右侧栏、Git Diff 与受控模型工具通过 | [验收记录](DSH_0.2.2_RC1_TEST_REPORT.md) |
 | DSH 0.2 适配 | 78 项通过 | 48 项通过 | [DSH 适配报告](DSH_0.2_TEST_REPORT.md) |
 | 0.3.0 的 P0 显示优化 | 88 项通过 | 56 项通过 | [P0 报告](P0_TEST_REPORT.md) |
 | 0.4.0 的显示更新 | 106 项通过 | 26 项通过 | [显示功能报告](DISPLAY_TEST_REPORT.md) |

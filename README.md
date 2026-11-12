@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>Version 0.6.1</strong> · DSH 0.2.1-rc.5 · <a href="LICENSE">MIT</a><br>
+  <strong>Version 0.6.2</strong> · DSH 0.2.2-rc.1 · <a href="LICENSE">MIT</a><br>
   <a href="README.zh.md">中文说明</a> · <a href="docs/screenshots/readme-header.svg">Static title</a>
 </p>
 
@@ -17,8 +17,8 @@
 | --- | --- |
 | Plugin name | `dsh-git-graph` (repository and DSH bundle row id) |
 | Repository | https://github.com/WhitePlusMS/dsh-git-graph |
-| Install source | GitHub Release archive (`dsh-git-graph-0.6.1.tgz`), **not** npm |
-| Requires | DSH **0.2.1-rc.5**, `dsh` CLI, pnpm, Git on the DSH Host |
+| Install source | GitHub Release archive (`dsh-git-graph-0.6.2.tgz`), **not** npm |
+| Requires | DSH **0.2.2-rc.1**, Node.js **24.9+**, `dsh` CLI, pnpm, Git on the DSH Host |
 | Operations | Read-only — no stage, commit, push, pull, fetch, merge, or tag |
 | Languages and license | Chinese / English UI · MIT |
 
@@ -46,6 +46,10 @@ The GIFs were recorded with 0.4.0; the comparison and full-source screenshots be
 ![360px sidebar](docs/screenshots/display-360.png)
 
 </details>
+
+## What's new in 0.6.2
+
+- Target **DSH 0.2.2-rc.1** and Node.js **24.9+**. The installed plugin was checked in a real DSH Host and sidebar; see the [validation record](docs/DSH_0.2.2_RC1_TEST_REPORT.md).
 
 ## What's new in 0.6.1
 
@@ -81,20 +85,20 @@ See the [0.6.0 release notes](CHANGELOG.md#060--2026-10-22) for fixes and upgrad
 
 ## Install or update
 
-Requires DSH **0.2.1-rc.5**, the `dsh` CLI, pnpm for plugin installation, and Git installed on the DSH Host.
+Requires DSH **0.2.2-rc.1**, Node.js **24.9+**, the `dsh` CLI, pnpm for plugin installation, and Git installed on the DSH Host.
 
-Install the prebuilt `v0.6.1` Release package through either DSH's plugin page or the CLI. Both accept the same package source. See the official [plugin manager guide](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/packages/client/ui-plugin-manager/README.md) and [packaging guide](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.0-rc.2/docs/user/develop/basic/publish.md).
+Install the prebuilt `v0.6.2` Release package through either DSH's plugin page or the CLI. Both accept the same package source. See the official [plugin manager guide](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.2-rc.1/packages/client/ui-plugin-manager/README.md) and [packaging guide](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.2-rc.1/docs/user/develop/basic/publish.md).
 
 In DSH, open **Plugins → Add plugin**, paste this URL, install it, and choose **Enable now**:
 
 ```text
-https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.1/dsh-git-graph-0.6.1.tgz
+https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.2/dsh-git-graph-0.6.2.tgz
 ```
 
 Or install from the terminal:
 
 ```powershell
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.1/dsh-git-graph-0.6.1.tgz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.2/dsh-git-graph-0.6.2.tgz
 ```
 
 The archive includes the built `lib/` entry points. You do not need to clone this repository, build it locally, or keep a development folder at a fixed path.
@@ -104,7 +108,7 @@ This `.tgz` is built with `pnpm pack` and uploaded as a GitHub Release asset; it
 > **Name note.** The npm package named `dsh-git-graph` is a **different, unrelated plugin** (author `enoughpower`, version 0.1.x, with staging and commit features). This project is installed from the Release archive above; `dsh-git-graph` is used here only as the DSH bundle row id and the package name inside this repository.
 
 
-Check that `dsh-git-graph` is installed at version `0.6.1`:
+Check that `dsh-git-graph` is installed at version `0.6.2`:
 
 ```powershell
 dsh plugin --profile web list dsh-git-graph
@@ -154,7 +158,7 @@ Shortcuts apply while focus is inside Git Graph. Normal navigation keys do not i
 
 **How do I view commits and file diffs in DeepSeek Harness Web?**
 
-[Install the plugin](#install-or-update) for DSH 0.2.1-rc.5, then open **dsh-git-graph** from the native right sidebar. See [Usage](#usage) for two-commit comparisons and full historical source.
+[Install the plugin](#install-or-update) for DSH 0.2.2-rc.1, then open **dsh-git-graph** from the native right sidebar. See [Usage](#usage) for two-commit comparisons and full historical source.
 
 **Why does DSH report `cannot resolve profile bundle "dsh-git-graph"`?**
 
@@ -162,7 +166,7 @@ A previous local-directory installation may still link to a folder that was move
 
 ```powershell
 dsh plugin --profile web remove dsh-git-graph
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.1/dsh-git-graph-0.6.1.tgz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.2/dsh-git-graph-0.6.2.tgz
 ```
 
 Restart that DSH Web instance afterward. Running `dsh plugin --profile web install` alone reuses the saved package source and cannot repair a link to a missing folder.
@@ -190,6 +194,8 @@ No. The plugin is read-only; refreshing the graph does not fetch remote changes 
 - Side-by-side diffs, syntax highlighting, tag signature verification, and stash diffs are not available. Tag/stash entries provide summaries and copying.
 
 ## Documentation
+
+- [DSH 0.2.2-rc.1 validation](docs/DSH_0.2.2_RC1_TEST_REPORT.md)
 
 - [0.6.0 fix and validation record](docs/ARCHITECTURE_FIX_REPORT_20261022.md)
 - [Feature comparison with vscode-git-graph](docs/FEATURE_GAP_VS_VSCODE.md)

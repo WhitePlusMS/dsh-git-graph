@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.2 — 2026-11-12
+
+- 适配 DSH **0.2.2-rc.1**、Cordis **4.1.0** 和 Node.js **24.9+**；本版本不声明兼容旧版 DSH。
+- 发布包同时提供版本化文件名和固定文件名，后者供市场通过 `latest/download` 跟随最新版本；两个文件均纳入 SHA-256 校验。
+
+验证：Node 24.22.1 下 TypeScript 检查、31 项自动测试和构建通过；真实 DSH Host 加载插件，右侧栏读取测试仓库的提交、工作区状态及文件 Diff；可控模型适配器通过真实 Agent 调用 `git_graph` 并收到结果。未使用真实模型，详情见[验收记录](docs/DSH_0.2.2_RC1_TEST_REPORT.md)。
+
+### English
+
+- Target DSH **0.2.2-rc.1**, Cordis **4.1.0**, and Node.js **24.9+**. Older DSH versions are not declared compatible.
+- Publish both a versioned archive and a fixed-name archive for marketplace `latest/download` links, with SHA-256 checksums for both.
+
+Validation: TypeScript checks, 31 tests, and the build passed on Node 24.22.1. The plugin loaded in a real DSH Host; its sidebar read fixture commits, working-tree status, and a file diff. A deterministic adapter drove the real Agent to invoke `git_graph` and receive its result; no real model was used. See the [validation record](docs/DSH_0.2.2_RC1_TEST_REPORT.md).
+
+
 ## 0.6.1 — 2026-11-04
 
 - 适配 DSH **0.2.1-rc.5**：更新运行时要求及 DSH peer、开发依赖，并将 Cordis 升级至 **4.0.5**。本版本不声明兼容旧版 DSH。
