@@ -1,6 +1,6 @@
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { InvocationDescriptor, TypertSchema } from '@deepseek-ai/dsh-typert-protocol'
-import type { GitGraphBranch, GitGraphCommit, GitGraphDiffLine, GitGraphFileDiff, GitGraphQuery, GitGraphRef, GitGraphRepoState, GitGraphSnapshot, GitGraphSort } from './domain.ts'
+import type { GitGraphBranch, GitGraphCommit, GitGraphDiffLine, GitGraphFileDiff, GitGraphQuery, GitGraphRef, GitGraphRepositories, GitGraphRepositoryRequest, GitGraphRepositoryScope, GitGraphRepoState, GitGraphSnapshot, GitGraphSort } from './domain.ts'
 import { MAX_AVATAR_BATCH, MAX_BRANCH_FILTER, MAX_COMMITS } from './domain.ts'
 
 export const TYPERT_PACKAGE = 'dsh-git-graph'
@@ -403,6 +403,35 @@ function parseEmptyInput(_value: unknown): Record<string, never> {
 export const gitGraphMetadataSchema: TypertSchema<import('./domain.ts').GitGraphMetadata> = { parse: parseMetadata }
 export const gitGraphEmptyInputSchema: TypertSchema<Record<string, never>> = { parse: parseEmptyInput }
 
+export const gitGraphRepositoriesSchema: TypertSchema<GitGraphRepositories> = { parse(value) {
+  const object = objectAt(value, '$')
+  rejectUnknown(object, ['main', 'submodules'], '$')
+  return {
+    main: nullableStringAt(object.main, '$.main'),
+    submodules: arrayAt(object.submodules, '$.submodules').map((item, index) => {
+      const path = `$.submodules[${index}]`
+      const entry = objectAt(item, path)
+      rejectUnknown(entry, ['path', 'available'], path)
+      return { path: stringAt(entry.path, `${path}.path`), available: booleanAt(entry.available, `${path}.available`) }
+    }),
+  }
+} }
+
+const repositoryScopeSchema: TypertSchema<GitGraphRepositoryScope> = { parse(value) {
+  const object = objectAt(value, '$')
+  rejectUnknown(object, ['repository'], '$')
+  return { repository: nullableStringAt(object.repository, '$.repository') }
+} }
+
+/** Keep repository identity separate from file paths and graph options. */
+function repositoryRequestSchema<T>(input: TypertSchema<T>): TypertSchema<GitGraphRepositoryRequest<T>> {
+  return { parse(value) {
+    const object = objectAt(value, '$')
+    rejectUnknown(object, ['repository', 'input'], '$')
+    return { repository: nullableStringAt(object.repository, '$.repository'), input: input.parse(object.input) }
+  } }
+}
+
 export const gitGraphAvatarRequestSchema: TypertSchema<import('./domain.ts').GitGraphAvatarRequest> = { parse(value) {
   const request = objectAt(value, '$')
   rejectUnknown(request, ['hashes', 'source'], '$')
@@ -499,66 +528,70 @@ export function createGitGraphInvocation(spec: InvocationSpec): InvocationDescri
 }
 
 /** Client descriptors use the local parse-only schemas to keep the bundle closed. */
+const gitGraphRepositoriesInvocation = createGitGraphInvocation({
+  method: 'repositories',
+  inputSymbol: 'GitGraphRepositoriesRequest',
+  resultSymbol: 'GitGraphRepositories',
+  schemas: { input: gitGraphEmptyInputSchema, result: gitGraphRepositoriesSchema, sessionId: sessionIdSchema },
+})
+
 export const gitGraphInvocation = createGitGraphInvocation({
   method: 'read',
   inputSymbol: 'GitGraphQuery',
   resultSymbol: 'GitGraphSnapshot',
-  schemas: { input: gitGraphQuerySchema, result: gitGraphSnapshotSchema, sessionId: sessionIdSchema },
+  schemas: { input: repositoryRequestSchema(gitGraphQuerySchema), result: gitGraphSnapshotSchema, sessionId: sessionIdSchema },
 })
 
 export const gitGraphReadCommitInvocation = createGitGraphInvocation({
   method: 'readCommit',
   inputSymbol: 'GitGraphCommitRequest',
   resultSymbol: 'GitGraphCommitDetails',
-  schemas: { input: gitGraphCommitRequestSchema, result: gitGraphCommitDetailsSchema, sessionId: sessionIdSchema },
+  schemas: { input: repositoryRequestSchema(gitGraphCommitRequestSchema), result: gitGraphCommitDetailsSchema, sessionId: sessionIdSchema },
 })
 
 export const gitGraphFileInvocation = createGitGraphInvocation({
   method: 'readFile',
   inputSymbol: 'GitGraphFileRequest',
   resultSymbol: 'GitGraphFileContent',
-  schemas: { input: gitGraphFileRequestSchema, result: gitGraphFileContentSchema, sessionId: sessionIdSchema },
+  schemas: { input: repositoryRequestSchema(gitGraphFileRequestSchema), result: gitGraphFileContentSchema, sessionId: sessionIdSchema },
 })
 
 export const gitGraphFileDiffInvocation = createGitGraphInvocation({
   method: 'readFileDiff',
   inputSymbol: 'GitGraphFileDiffRequest',
   resultSymbol: 'GitGraphFileDiff',
-  schemas: { input: gitGraphFileDiffRequestSchema, result: gitGraphFileDiffSchema, sessionId: sessionIdSchema },
+  schemas: { input: repositoryRequestSchema(gitGraphFileDiffRequestSchema), result: gitGraphFileDiffSchema, sessionId: sessionIdSchema },
 })
 
 export const gitGraphWorkingTreeInvocation = createGitGraphInvocation({
-  method: 'readWorkingTree',
-  inputSymbol: 'GitGraphWorkingTreeRequest',
-  resultSymbol: 'GitGraphWorkingTreeChanges',
-  schemas: { input: gitGraphEmptyInputSchema, result: gitGraphWorkingTreeChangesSchema, sessionId: sessionIdSchema },
+  method: 'readWorkingTree', inputSymbol: 'GitGraphRepositoryScope', resultSymbol: 'GitGraphWorkingTreeChanges',
+  schemas: { input: repositoryScopeSchema, result: gitGraphWorkingTreeChangesSchema, sessionId: sessionIdSchema },
 })
 
 export const gitGraphWorkingTreeFileInvocation = createGitGraphInvocation({
   method: 'readWorkingTreeFile',
   inputSymbol: 'GitGraphWorkingTreeFileRequest',
   resultSymbol: 'GitGraphFileDiff',
-  schemas: { input: gitGraphWorkingTreeFileRequestSchema, result: gitGraphFileDiffSchema, sessionId: sessionIdSchema },
+  schemas: { input: repositoryRequestSchema(gitGraphWorkingTreeFileRequestSchema), result: gitGraphFileDiffSchema, sessionId: sessionIdSchema },
 })
 
 export const gitGraphCompareInvocation = createGitGraphInvocation({
   method: 'compare',
   inputSymbol: 'GitGraphCompareRequest',
   resultSymbol: 'GitGraphCompareResult',
-  schemas: { input: gitGraphCompareRequestSchema, result: gitGraphCompareResultSchema, sessionId: sessionIdSchema },
+  schemas: { input: repositoryRequestSchema(gitGraphCompareRequestSchema), result: gitGraphCompareResultSchema, sessionId: sessionIdSchema },
 })
 
 export const gitGraphMetadataInvocation = createGitGraphInvocation({
-  method: 'metadata',
-  inputSymbol: 'GitGraphMetadataRequest',
-  resultSymbol: 'GitGraphMetadata',
-  schemas: { input: gitGraphEmptyInputSchema, result: gitGraphMetadataSchema, sessionId: sessionIdSchema },
+  method: 'metadata', inputSymbol: 'GitGraphRepositoryScope', resultSymbol: 'GitGraphMetadata',
+  schemas: { input: repositoryScopeSchema, result: gitGraphMetadataSchema, sessionId: sessionIdSchema },
 })
 
 export const gitGraphDescriptors = [
+  gitGraphRepositoriesInvocation,
   createGitGraphInvocation({
     method: 'avatars', inputSymbol: 'GitGraphAvatarRequest', resultSymbol: 'GitGraphAvatarResult',
-    schemas: { input: gitGraphAvatarRequestSchema, result: gitGraphAvatarResultSchema, sessionId: sessionIdSchema },
+    schemas: { input: repositoryRequestSchema(gitGraphAvatarRequestSchema), result: gitGraphAvatarResultSchema, sessionId: sessionIdSchema },
   }),
   gitGraphInvocation,
   gitGraphReadCommitInvocation,

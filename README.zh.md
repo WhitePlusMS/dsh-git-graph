@@ -24,7 +24,7 @@
 | --- | --- |
 | 插件名 | `dsh-git-graph`（仓库名与 DSH 组合包行 ID） |
 | 仓库 | https://github.com/WhitePlusMS/dsh-git-graph |
-| 安装来源 | GitHub Release 成品包（`dsh-git-graph-0.6.2.tgz`），**不是 npm** |
+| 安装来源 | GitHub Release 成品包（`dsh-git-graph.tgz`）或 Awesome DSH Plugin 社区目录 |
 | 依赖 | DSH **0.2.2-rc.1**、Node.js **24.9+**、`dsh` CLI、pnpm、DSH Host 上的 Git |
 | 操作性质 | 只读：不暂存、不提交、不推送、不拉取、不 Fetch、不合并、不打标签 |
 | 语言与许可 | 中 / 英界面 · MIT |
@@ -54,6 +54,12 @@ GIF 录制于 0.4.0，下方两提交 Diff 与完整原文截图来自 0.5.0，�
 
 </details>
 
+## 0.7.0 更新
+
+- **在右侧栏切换子模块。** 点分支左侧的仓库名，在主仓库和直接子模块之间切换。提交图、提交详情和文件 Diff 都会随之更新。
+- 未初始化的子模块会置灰，初始化后点刷新即可选择。像 `third_party/MinerU` 这样已被主仓库记录、并且本地存在独立 Git 工作树的仓库，即使主仓库没有 `.gitmodules`，也可以切换查看。
+- 已在 **DSH 0.2.2-rc.1** 中使用标准 Git 子模块和现有 MinerU 工作树验证。首版支持直接子模块。
+
 ## 0.6.2 更新
 
 - 适配 **DSH 0.2.2-rc.1**，要求 Node.js **24.9 或更高版本**；已在真实 DSH Host 与右侧栏验证，见[验收记录](docs/DSH_0.2.2_RC1_TEST_REPORT.md)。
@@ -74,6 +80,7 @@ GIF 录制于 0.4.0，下方两提交 Diff 与完整原文截图来自 0.5.0，�
 
 - **提交历史**：提交拓扑、分支、Tag、HEAD，以及提交搜索和历史筛选。
 - **分支查看**：点标题栏的分支名打开分支面板，本地 / 远端分组，可搜索名字，选中即只显示该分支的提交并定位到它的最新提交；只读，不切换工作区。
+- **子模块**：从顶栏仓库菜单切换主仓库和直接子模块，查看各自的提交历史。
 - **提交详情**：行内展示作者与提交者日期、父提交、引用、签名状态和复制操作。
 - **引用显示**：同一提交上的引用全部展示，同名本地 / 远端分支可合并；放不下时换行、行高自适应，另有两种引用布局可选。
 - **文件变更**：文件树 / 列表、逐文件 Diff、未提交变更；选择两次提交后，可以打开每个变更文件的 Diff。
@@ -94,36 +101,40 @@ GIF 录制于 0.4.0，下方两提交 Diff 与完整原文截图来自 0.5.0，�
 
 需要 **DSH 0.2.2-rc.1**、**Node.js 24.9 或更高版本**、可用的 `dsh` CLI、用于安装插件的 pnpm，以及 DSH Host 上已安装的 Git。
 
-通过 DSH 内置插件页面或命令行安装 `v0.6.2` Release 成品包，两者接受同一安装来源。参见官方的[插件管理器说明](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.2-rc.1/packages/client/ui-plugin-manager/README.zh.md)与[打包安装文档](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.2-rc.1/docs/user/develop/basic/publish.zh.md)。
+可以通过 DSH 插件页、命令行或 [Awesome DSH Plugin 社区目录](https://awesome-dsh-plugin.com/)安装。使用社区目录时，搜索 **WhitePlusMS/dsh-git-graph** 并选择 Release 成品包安装。需要固定版本时，从 [v0.7.0 发布页](https://github.com/WhitePlusMS/dsh-git-graph/releases/tag/v0.7.0)选用带版本号的附件。
 
 在 DSH 中打开 **插件 → 添加插件**，粘贴下面的地址，安装后选择**立即启用**：
 
 ```text
-https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.2/dsh-git-graph-0.6.2.tgz
+https://github.com/WhitePlusMS/dsh-git-graph/releases/latest/download/dsh-git-graph.tgz
 ```
 
 也可以在终端安装：
 
 ```powershell
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.2/dsh-git-graph-0.6.2.tgz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/latest/download/dsh-git-graph.tgz
 ```
 
 归档已包含构建后的 `lib/` 入口，无需克隆仓库、在本机构建，或保留固定路径的开发目录。
 
-这个 `.tgz` 由 `pnpm pack` 生成并作为 GitHub Release 附件发布，与 GitHub 自动生成的源码归档分开。DSH 官方支持在界面和命令行中使用这个包地址；发布 Release 不会自动完成插件市场收录。仅输入包名安装则需要先发布到 npm。
+插件页和命令行使用同一个安装地址。这个地址始终指向最新 Release，包里包含 DSH 加载插件所需的文件。
 
 > **名称说明**：npm 上的 `dsh-git-graph` 是**另一个不相关的插件**（作者 `enoughpower`，0.1.x，带暂存与提交功能）。本项目只通过上面的 Release 成品包安装；这里的 `dsh-git-graph` 仅用作 DSH 组合包行 ID 和仓库内的包名。
 
 
-检查 `dsh-git-graph` 是否已安装为 `0.6.2`：
+查看已安装的版本：
 
 ```powershell
 dsh plugin --profile web list dsh-git-graph
 ```
 
-使用 `dsh web` 启动 DSH Web；如果已有实例正在运行，重启原实例使插件生效。更新时执行目标发布标签的 `add` 命令，再重启原实例。安装、启动和卸载须使用同一 profile 名称。
+使用 `dsh web` 启动 DSH Web。如果已经装了旧版，用带版本号的地址升级，再重启原来的 DSH 实例。
 
-升级到 0.6.0 后请重启，使 Host 与 Client 使用一致的严格数据契约。此前按子目录单独保存的显示设置不迁移到工作树根目录设置。
+```powershell
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.7.0/dsh-git-graph-0.7.0.tgz
+```
+
+安装、启动和卸载使用同一个 profile。
 
 自定义 profile、本地 `.tgz` 安装和源码构建见[开发指南](docs/DEVELOPMENT.md#本地安装与自定义-profile)。
 
@@ -131,8 +142,9 @@ dsh plugin --profile web list dsh-git-graph
 
 1. 在 DSH Web 中选择工作区，打开右侧栏。
 2. 从侧栏开始页选择 **dsh-git-graph**。
-3. 点击提交查看行内详情，点击文件查看 Diff；点击 **未提交变更** 查看工作区改动。
-4. 点击 **比较提交…** 并选择基准提交，再点击变更文件。在历史文件查看器中切换 **Diff / 完整原文**，并选择旧 / 新版本。
+3. 工作区有直接子模块时，点顶栏仓库名进入子模块。要返回时，在同一个菜单选主仓库。
+4. 点击提交查看行内详情，点击文件查看 Diff；点击 **未提交变更** 查看工作区改动。
+5. 点击 **比较提交…** 并选择基准提交，再点击变更文件。在历史文件查看器中切换 **Diff / 完整原文**，并选择旧 / 新版本。
 
 通过 **设置** 调整显示效果，设置按仓库分别保存。
 
@@ -152,7 +164,7 @@ dsh plugin --profile web remove dsh-git-graph
 | --- | --- |
 | `Ctrl/Cmd+F` | 在已加载结果中查找 |
 | `Ctrl/Cmd+Shift+F` | 切换显示设置 |
-| `Esc` | 逐层关闭浮层：先关分支 / 筛选 / 设置面板，再关查找条 |
+| `Esc` | 先关闭仓库、分支、筛选或设置菜单，再关闭查找条 |
 | `↑` / `↓` | 关闭并清空查找后，选择提交 |
 | `H` | 定位 HEAD，超出范围则提示 |
 | 行或节点上的 `Enter` / `Space` | 选择提交 |
@@ -173,7 +185,7 @@ dsh plugin --profile web remove dsh-git-graph
 
 ```powershell
 dsh plugin --profile web remove dsh-git-graph
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.2/dsh-git-graph-0.6.2.tgz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/latest/download/dsh-git-graph.tgz
 ```
 
 之后重启该 DSH Web 实例。单独运行 `dsh plugin --profile web install` 会沿用已保存的安装来源，无法修复指向不存在目录的链接。

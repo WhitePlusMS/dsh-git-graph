@@ -24,7 +24,7 @@
 | --- | --- |
 | Plugin name | `dsh-git-graph` (repository and DSH bundle row id) |
 | Repository | https://github.com/WhitePlusMS/dsh-git-graph |
-| Install source | GitHub Release archive (`dsh-git-graph-0.6.2.tgz`), **not** npm |
+| Install source | GitHub Release archive (`dsh-git-graph.tgz`) or the Awesome DSH Plugin catalog |
 | Requires | DSH **0.2.2-rc.1**, Node.js **24.9+**, `dsh` CLI, pnpm, Git on the DSH Host |
 | Operations | Read-only — no stage, commit, push, pull, fetch, merge, or tag |
 | Languages and license | Chinese / English UI · MIT |
@@ -54,6 +54,12 @@ The GIFs were recorded with 0.4.0; the comparison and full-source screenshots be
 
 </details>
 
+## What's new in 0.7.0
+
+- **Browse direct submodules from the sidebar.** Open the repository menu next to the branch control to switch between the main repository and a submodule. The graph, commit details, and file diff follow the selection.
+- Uninitialized submodules are listed but disabled. Refresh after initializing one. The menu also lists a tracked Git repository such as `third_party/MinerU` if it already has a local worktree, even when the main repository has no `.gitmodules`.
+- Verified in DSH **0.2.2-rc.1** with a real Git submodule fixture and the existing MinerU worktree. The first release covers direct submodules.
+
 ## What's new in 0.6.2
 
 - Target **DSH 0.2.2-rc.1** and Node.js **24.9+**. The installed plugin was checked in a real DSH Host and sidebar; see the [validation record](docs/DSH_0.2.2_RC1_TEST_REPORT.md).
@@ -74,6 +80,7 @@ See the [0.6.0 release notes](CHANGELOG.md#060--2026-10-22) for fixes and upgrad
 
 - **History** — Commit topology, branches, tags, HEAD, search, and history filters.
 - **Branch navigation** — Search local/remote branches in the branch dropdown, focus one branch, and locate its latest commit without changing the working tree.
+- **Submodules** — Switch between the main repository and its direct submodules from the repository dropdown.
 - **Commit details** — Inline details with author/committer dates, parents, references, signature status, and copying.
 - **References** — Every reference on a commit is shown; matching local/remote labels combine, chips wrap onto another line, and the row height follows. Two alternative layouts remain.
 - **File changes** — File tree/list views, per-file diffs, and uncommitted changes; select two commits and open each changed file's diff.
@@ -94,36 +101,40 @@ See the [0.6.0 release notes](CHANGELOG.md#060--2026-10-22) for fixes and upgrad
 
 Requires DSH **0.2.2-rc.1**, Node.js **24.9+**, the `dsh` CLI, pnpm for plugin installation, and Git installed on the DSH Host.
 
-Install the prebuilt `v0.6.2` Release package through either DSH's plugin page or the CLI. Both accept the same package source. See the official [plugin manager guide](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.2-rc.1/packages/client/ui-plugin-manager/README.md) and [packaging guide](https://github.com/deepseek-ai/deepseek-harness/blob/dsh-v0.2.2-rc.1/docs/user/develop/basic/publish.md).
+Install the latest prebuilt Release package through DSH's plugin page, the CLI, or [Awesome DSH Plugin](https://awesome-dsh-plugin.com/). In the catalog, search for **WhitePlusMS/dsh-git-graph** and use its Release archive install option. For a fixed version, use the versioned asset on the [v0.7.0 release page](https://github.com/WhitePlusMS/dsh-git-graph/releases/tag/v0.7.0).
 
 In DSH, open **Plugins → Add plugin**, paste this URL, install it, and choose **Enable now**:
 
 ```text
-https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.2/dsh-git-graph-0.6.2.tgz
+https://github.com/WhitePlusMS/dsh-git-graph/releases/latest/download/dsh-git-graph.tgz
 ```
 
 Or install from the terminal:
 
 ```powershell
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.2/dsh-git-graph-0.6.2.tgz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/latest/download/dsh-git-graph.tgz
 ```
 
 The archive includes the built `lib/` entry points. You do not need to clone this repository, build it locally, or keep a development folder at a fixed path.
 
-This `.tgz` is built with `pnpm pack` and uploaded as a GitHub Release asset; it is separate from GitHub's automatically generated source archives. DSH supports installing this package URL in both the UI and CLI. Publishing a release does not automatically list the plugin in a marketplace; installing by package name alone requires an npm publication.
+The same archive URL works in the plugin page and the CLI. It tracks the latest Release and contains the files DSH needs to load the plugin.
 
 > **Name note.** The npm package named `dsh-git-graph` is a **different, unrelated plugin** (author `enoughpower`, version 0.1.x, with staging and commit features). This project is installed from the Release archive above; `dsh-git-graph` is used here only as the DSH bundle row id and the package name inside this repository.
 
 
-Check that `dsh-git-graph` is installed at version `0.6.2`:
+Check the installed version:
 
 ```powershell
 dsh plugin --profile web list dsh-git-graph
 ```
 
-Start DSH Web with `dsh web`, or restart your existing instance to load the plugin. For updates, run `add` with the desired release tag, then restart that instance. Use the same profile name for installation, startup, and removal.
+Start DSH Web with `dsh web`. If you already have an older version, use the versioned URL to upgrade, then restart the same DSH instance.
 
-For 0.6.0, restart after updating so the Host and Client use the same strict data contract. Settings previously saved separately for a subdirectory are not migrated to the worktree-root settings.
+```powershell
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.7.0/dsh-git-graph-0.7.0.tgz
+```
+
+Use the same profile name for installation, startup, and removal.
 
 For a custom profile, local `.tgz` installation, or source builds, see the [development guide](docs/DEVELOPMENT.md#本地安装与自定义-profile).
 
@@ -131,8 +142,9 @@ For a custom profile, local `.tgz` installation, or source builds, see the [deve
 
 1. Select a workspace in DSH Web and open the right sidebar.
 2. Select **dsh-git-graph** from the sidebar's start page.
-3. Select a commit for inline details, or a file for its diff. Select **Uncommitted Changes** to inspect working-tree changes.
-4. Choose **Compare commit…** and a base commit, then select a changed file. In a historical file viewer, switch between **Diff** and **Full source**, and choose the old or new version.
+3. If the workspace has direct submodules, select the repository name in the top bar and choose one to browse its history. Select the main repository from the same menu to return.
+4. Select a commit for inline details, or a file for its diff. Select **Uncommitted Changes** to inspect working-tree changes.
+5. Choose **Compare commit…** and a base commit, then select a changed file. In a historical file viewer, switch between **Diff** and **Full source**, and choose the old or new version.
 
 Use **Settings** to adjust the display. Settings are saved separately for each repository.
 
@@ -152,7 +164,7 @@ Use the profile you installed into, and restart it after removal.
 | --- | --- |
 | `Ctrl/Cmd+F` | Find within loaded results |
 | `Ctrl/Cmd+Shift+F` | Toggle display settings |
-| `Esc` | Close the branch, filter, or settings dropdown first, then Find |
+| `Esc` | Close the repository, branch, filter, or settings dropdown first, then Find |
 | `↑` / `↓` | Select a commit when Find is closed and cleared |
 | `H` | Locate HEAD, or show an out-of-range hint |
 | `Enter` / `Space` on a row or node | Select that commit |
@@ -173,7 +185,7 @@ A previous local-directory installation may still link to a folder that was move
 
 ```powershell
 dsh plugin --profile web remove dsh-git-graph
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.2/dsh-git-graph-0.6.2.tgz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/latest/download/dsh-git-graph.tgz
 ```
 
 Restart that DSH Web instance afterward. Running `dsh plugin --profile web install` alone reuses the saved package source and cannot repair a link to a missing folder.

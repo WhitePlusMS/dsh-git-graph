@@ -88,8 +88,24 @@ export interface GitGraphInput {
     readonly search?: string;
     readonly sort?: GitGraphSort;
 }
-/** Browser queries read the current session workspace; only the model tool accepts a path. */
+/** Graph options shared by the sidebar and model tool, without an arbitrary browser path. */
 export type GitGraphQuery = Omit<GitGraphInput, 'path'>;
+/** null selects the session repository; a string identifies a direct indexed Git repository. */
+export interface GitGraphRepositoryScope {
+    readonly repository: string | null;
+}
+export interface GitGraphRepositoryRequest<T> extends GitGraphRepositoryScope {
+    readonly input: T;
+}
+export interface GitGraphSubmodule {
+    /** Git path relative to the session repository's root. */
+    readonly path: string;
+    readonly available: boolean;
+}
+export interface GitGraphRepositories {
+    readonly main: string | null;
+    readonly submodules: GitGraphSubmodule[];
+}
 /** GPG signature status of a commit or annotated tag (matches %G? codes). */
 export type GitGraphSignatureStatus = 'G' | 'U' | 'X' | 'Y' | 'R' | 'E' | 'B';
 /** GPG signature detail for a commit or annotated tag. */
@@ -261,8 +277,6 @@ export interface GitGraphFileDiffRequest {
 export interface GitGraphWorkingTreeChanges {
     readonly changes: GitGraphFileChange[];
 }
-/** Request body for `gitGraph/readWorkingTree` (the working directory is implicit). */
-export type GitGraphWorkingTreeRequest = Record<string, never>;
 /** Request body for `gitGraph/readWorkingTreeFile`: diff one file vs the working tree. */
 export interface GitGraphWorkingTreeFileRequest {
     readonly path: string;
@@ -283,8 +297,6 @@ export interface GitGraphMetadata {
     readonly tags: GitGraphTag[];
     readonly stashes: GitGraphStash[];
 }
-/** Empty request for repository-level metadata in the current session. */
-export type GitGraphMetadataRequest = Record<string, never>;
 /** Avatar reads are bound to actual commit authors in the current workspace. */
 export declare const MAX_AVATAR_BATCH = 24;
 export interface GitGraphAvatarRequest {

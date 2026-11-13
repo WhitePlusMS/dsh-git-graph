@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { Agent } from '@deepseek-ai/dsh-agent';
-import type { GitGraphBranch, GitGraphCommit, GitGraphCommitDetails, GitGraphCompareRequest, GitGraphCompareResult, GitGraphDiffLine, GitGraphFileChange, GitGraphFileContent, GitGraphFileDiff, GitGraphFileDiffRequest, GitGraphFileRequest, GitGraphInput, GitGraphMetadata, GitGraphRepoConfig, GitGraphSignature, GitGraphSnapshot, GitGraphStash, GitGraphTag, GitGraphWorkingTree, GitGraphWorkingTreeChanges, GitGraphWorkingTreeFileRequest } from './domain.js';
+import type { GitGraphBranch, GitGraphCommit, GitGraphCommitDetails, GitGraphCompareRequest, GitGraphCompareResult, GitGraphDiffLine, GitGraphFileChange, GitGraphFileContent, GitGraphFileDiff, GitGraphFileDiffRequest, GitGraphFileRequest, GitGraphInput, GitGraphMetadata, GitGraphRepositories, GitGraphRepoConfig, GitGraphSignature, GitGraphSnapshot, GitGraphStash, GitGraphTag, GitGraphWorkingTree, GitGraphWorkingTreeChanges, GitGraphWorkingTreeFileRequest } from './domain.js';
 import type { AvatarAuthor } from './avatars.js';
 /** Minimal execution identity shared by the tool and the independent view. */
 export interface GitGraphExecutionContext {
@@ -75,6 +75,18 @@ export declare const FILE_MAX_BYTES: number;
  * a subdirectory of it.
  */
 export declare function assertRepoRelativePath(path: string, root: string): void;
+/**
+ * Resolve the repository top level for a working directory that may be any
+ * subdirectory of it. Every path Git prints — and every path this module uses
+ * as a pathspec or file-system path — is relative to that root, while a bare
+ * pathspec is resolved against the process working directory. Reading files and
+ * diffs therefore run at the root, so both sides agree.
+ */
+export declare function repositoryRoot(ctx: Context, cwd: string, signal: AbortSignal): Promise<string>;
+/** List direct gitlinks. An undeclared one is usable only with a local Git worktree. */
+export declare function loadRepositories(ctx: Context, cwd: string, signal: AbortSignal): Promise<GitGraphRepositories>;
+/** Resolve on every read so a removed or deinitialized module cannot reuse an old target. */
+export declare function resolveSubmodule(ctx: Context, cwd: string, path: string, signal: AbortSignal): Promise<string>;
 /** Read one version of a repo-relative file at a full commit hash. */
 export declare function loadFile(ctx: Context, cwd: string, request: GitGraphFileRequest, signal: AbortSignal): Promise<GitGraphFileContent>;
 /** Parse a `git diff` hunk header like `@@ -a,b +c,d @@` into base/new heads. */

@@ -2,7 +2,7 @@
 
 [使用说明](../README.zh.md) · [English README](../README.md)
 
-本项目当前版本为 0.6.2，适配 DSH 0.2.2-rc.1，要求 Node.js 24.9 或更高版本。这里记录本地安装、构建、内部数据接口及验收依据。
+本项目当前版本为 0.7.0，适配 DSH 0.2.2-rc.1，要求 Node.js 24.9 或更高版本。这里记录本地安装、构建、内部数据接口及验收依据。
 
 ## 本地安装与自定义 profile
 
@@ -12,7 +12,7 @@
 pnpm install --frozen-lockfile
 pnpm run typecheck
 pnpm pack --pack-destination .scratch/release
-dsh plugin --profile web add ./.scratch/release/dsh-git-graph-0.6.2.tgz
+dsh plugin --profile web add ./.scratch/release/dsh-git-graph-0.7.0.tgz
 dsh web
 ```
 
@@ -22,7 +22,7 @@ dsh web
 
 ```powershell
 dsh --profile my-web --from-default-profile web --dump-config
-dsh plugin --profile my-web add ./.scratch/release/dsh-git-graph-0.6.2.tgz
+dsh plugin --profile my-web add ./.scratch/release/dsh-git-graph-0.7.0.tgz
 dsh --profile my-web
 ```
 
@@ -70,7 +70,7 @@ pnpm run build
 
 ## 发布 GitHub Release 成品包
 
-同步 `package.json` 版本、源码、`lib/` 和 `CHANGELOG.md` 后，将以 `release:` 开头的发布提交合入 `master`，例如 `release: publish dsh-git-graph v0.6.2`。也可在 GitHub Actions 网页手动运行 `Package release`。
+同步 `package.json` 版本、源码、`lib/` 和 `CHANGELOG.md` 后，将以 `release:` 开头的发布提交合入 `master`，例如 `release: publish dsh-git-graph v0.7.0`。也可在 GitHub Actions 网页手动运行 `Package release`。
 
 `.github/workflows/release.yml` 先执行类型检查和测试，通过后运行 `pnpm pack`，成功后以本次提交创建对应版本标签与 Release，附带含 `lib/` 的版本化 `.tgz`、供市场跟随最新版本的固定名 `dsh-git-graph.tgz` 和 `SHA256SUMS.txt`；发布说明取自 `CHANGELOG.md` 的当前版本。普通提交不会发布，已发布版本不会被覆盖。检查 Actions 成功且附件可下载后，再用 README 中的地址安装。该过程不发布到 npm，也不自动完成市场目录收录。
 
@@ -80,7 +80,9 @@ Host 通过固定、不经过 shell 的 subprocess 参数读取 Git 数据，采
 
 `readFileDiff` 接收 `hash`、仓库相对 `path` 及可选 `baseHash`。明确基准时比较两端树，不使用 merge-base；未指定时比较目标与首父提交，根提交比较空树。两端变更列表决定文件状态和重命名前后的路径，即使目标最后一次提交未修改该文件也能读取范围 Diff。`readFile` 只接收 `hash` / `path`，单文件上限为 1 MiB；新增、删除、重命名读取各自存在的一端，空文件、二进制和超限分别展示。
 
-浏览器请求绑定当前会话工作区，不接受任意仓库 `path`。图快照的 `path` 为 Git 工作树根目录，`branches` 与 `searchTruncated` 为必填字段；显示设置和头像缓存使用这一仓库身份。搜索多取一条判断是否达到 2000 条扫描预算；即使匹配为空，截断仍会明确呈现。文件请求必须使用仓库相对路径；绝对路径和仓库外路径被拒绝。非 Git 目录和无提交仓库有独立空状态；无提交仓库仍可查看暂存文件。
+浏览器通过 `repositories` 发现当前会话所在的 Git 仓库和索引中直接记录的 gitlink。声明在 `.gitmodules` 中且尚未初始化的子模块仍会置灰显示。未声明的 gitlink 只有在本地存在同路径的独立 Git 工作树时才会列出。侧栏读请求用 `{ repository, input }` 指定仓库和业务参数，只需要仓库身份的请求用 `{ repository }`。其中 `null` 表示会话所在仓库，字符串是 Host 返回的 gitlink 相对路径。Host 每次读取都核对所选路径仍在当前仓库索引中，并且指向该路径自己的 Git 工作树。文件 `path` 相对于本次选中的仓库。打开侧栏和手动刷新时重新发现，切换仓库时取消旧视图的请求。普通单仓库继续使用顶栏路径显示。
+
+图快照的 `path` 为 Git 工作树根目录，`branches` 与 `searchTruncated` 为必填字段；显示设置和头像缓存使用这一仓库身份。搜索多取一条判断是否达到 2000 条扫描预算；即使匹配为空，截断仍会明确呈现。文件请求必须使用仓库相对路径；绝对路径和仓库外路径被拒绝。非 Git 目录和无提交仓库有独立空状态；无提交仓库仍可查看暂存文件。
 
 独立模型工具 `git_graph` 的参数如下：
 
@@ -110,7 +112,7 @@ git_graph({
 
 ## 设置面板
 
-设置入口位于顶栏，点击打开下拉面板，再次点击或按 Esc 收起；分支、筛选、设置共用单一浮层状态。下拉容器以顶栏为定位基准，设置面板最大高度为 `min(72vh, 540px)`，内容区可滚动，底部「恢复默认显示 / 关闭设置」保持可见。
+设置入口位于顶栏，点击打开下拉面板，再次点击或按 Esc 收起。仓库、分支、筛选和设置共用单一浮层状态。下拉容器以顶栏为定位基准，设置面板最大高度为 `min(72vh, 540px)`，内容区可滚动，底部「恢复默认显示 / 关闭设置」保持可见。
 
 面板按引用、日期、作者与头像、显示列、图形分为五组；用 `repeat(auto-fit, minmax(200px, 1fr))` 自适应列数，容器达到 500px 时图形组跨两列。保留 `data-settings-panel` 定位属性，以及实际构建标识与行高测量诊断信息。
 
@@ -121,6 +123,7 @@ git_graph({
 
 | 验收阶段 | 自动测试 | 浏览器检查 | 详细报告 |
 | --- | --- | --- | --- |
+| 0.7.0 直接子模块 | 33 项通过 | 真实 DSH 中验证标准子模块、未初始化置灰、刷新，以及实际 MinerU 提交和 Diff | [0.7.0 发布记录](../CHANGELOG.md#070--2026-11-13) |
 | 0.6.2 的 DSH 0.2.2-rc.1 适配 | 31 项通过 | 真实 DSH 右侧栏、Git Diff 与受控模型工具通过 | [验收记录](DSH_0.2.2_RC1_TEST_REPORT.md) |
 | DSH 0.2 适配 | 78 项通过 | 48 项通过 | [DSH 适配报告](DSH_0.2_TEST_REPORT.md) |
 | 0.3.0 的 P0 显示优化 | 88 项通过 | 56 项通过 | [P0 报告](P0_TEST_REPORT.md) |

@@ -3,6 +3,7 @@
  * interpolation is used, so a repository path never becomes command text.
  */
 import { isAbsolute, relative, resolve, sep } from 'node:path'
+import { lstat, realpath } from 'node:fs/promises'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SubprocessHandle, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
@@ -21,6 +22,7 @@ import type {
   GitGraphInput,
   GitGraphMetadata,
   GitGraphRef,
+  GitGraphRepositories,
   GitGraphRepoConfig,
   GitGraphSignature,
   GitGraphSignatureStatus,
@@ -797,11 +799,98 @@ export function assertRepoRelativePath(path: string, root: string): void {
  * pathspec is resolved against the process working directory. Reading files and
  * diffs therefore run at the root, so both sides agree.
  */
-async function repositoryRoot(ctx: Context, cwd: string, signal: AbortSignal): Promise<string> {
+export async function repositoryRoot(ctx: Context, cwd: string, signal: AbortSignal): Promise<string> {
   const result = await runGit(ctx, cwd, ['rev-parse', '--show-toplevel'], signal)
   const root = result.stdout.trim()
   // A worktree-less (bare) or unusual layout still resolves paths the old way.
   return root.length === 0 ? cwd : resolve(root)
+}
+
+function missingPath(error: NodeJS.ErrnoException): null {
+  if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return null
+  throw error
+}
+
+/** Use Git's config parser for quoted paths and preserve whitespace in their values. */
+async function declaredSubmodulePaths(ctx: Context, root: string, signal: AbortSignal): Promise<string[]> {
+  const file = await lstat(resolve(root, '.gitmodules')).catch(missingPath)
+  if (file?.isFile() !== true) return []
+  const result = await runGit(ctx, root, [
+    'config', '--no-includes', '--file', '.gitmodules', '--null', '--get-regexp', '^submodule\\..*\\.path$',
+  ], signal, [0, 1])
+  const paths = new Set<string>()
+  for (const entry of result.stdout.split('\u0000')) {
+    const newline = entry.indexOf('\n')
+    if (newline < 0) continue
+    const path = entry.slice(newline + 1)
+    // Only canonical relative Git paths may be used as repository identifiers.
+    if (!isRepositoryPath(path)) continue
+    paths.add(path)
+  }
+  return [...paths]
+}
+
+/** Only resolved gitlinks in the current repository's own index can be selected. */
+async function indexedGitlinks(ctx: Context, root: string, signal: AbortSignal, path?: string): Promise<string[]> {
+  const result = await runGit(ctx, root, ['ls-files', '--stage', '-z', '--', ...(path === undefined ? [] : [path])], signal)
+  return result.stdout.split('\u0000').flatMap(entry => {
+    const tab = entry.indexOf('\t')
+    return tab >= 0 && /^160000 [0-9a-f]+ 0$/u.test(entry.slice(0, tab)) ? [entry.slice(tab + 1)] : []
+  })
+}
+
+function isRepositoryPath(path: string): boolean {
+  return !path.includes('\\') && !path.includes('\u0000') && !/^[A-Za-z]:/u.test(path)
+    && !path.split('/').some(part => part === '' || part === '.' || part === '..')
+}
+
+async function submoduleRoot(ctx: Context, root: string, path: string, signal: AbortSignal): Promise<string | null> {
+  const candidate = resolve(root, path)
+  const actual = await realpath(candidate).catch(missingPath)
+  // An aliased path must not redirect the browser to another working tree.
+  if (actual === null || relative(candidate, actual) !== '') return null
+  if (!(await lstat(actual).catch(missingPath))?.isDirectory()) return null
+  const result = await runGit(ctx, actual, ['rev-parse', '--show-toplevel'], signal, [0, 128])
+  // Git walks up from an uninitialized module directory to the superproject.
+  if (result.exitCode !== 0 || relative(actual, resolve(result.stdout.trimEnd())) !== '') return null
+  return actual
+}
+
+/** List direct gitlinks. An undeclared one is usable only with a local Git worktree. */
+export async function loadRepositories(ctx: Context, cwd: string, signal: AbortSignal): Promise<GitGraphRepositories> {
+  let root: string
+  try {
+    root = await realpath(await repositoryRoot(ctx, cwd, signal))
+  } catch (error: unknown) {
+    if (isNotGitRepositoryError(error)) return { main: null, submodules: [] }
+    throw error
+  }
+  const [declared, links] = await Promise.all([
+    declaredSubmodulePaths(ctx, root, signal),
+    indexedGitlinks(ctx, root, signal),
+  ])
+  const declaredPaths = new Set(declared)
+  const paths = links.filter(isRepositoryPath).sort()
+  const submodules: GitGraphRepositories['submodules'] = []
+  // Bound concurrent probes and avoid walking arbitrary nested directories.
+  for (let i = 0; i < paths.length; i += 8) {
+    const batch = await Promise.all(paths.slice(i, i + 8).map(async path => {
+      const available = await submoduleRoot(ctx, root, path, signal) !== null
+      return available || declaredPaths.has(path) ? { path, available } : null
+    }))
+    submodules.push(...batch.filter(module => module !== null))
+  }
+  return { main: root, submodules }
+}
+
+/** Resolve on every read so a removed or deinitialized module cannot reuse an old target. */
+export async function resolveSubmodule(ctx: Context, cwd: string, path: string, signal: AbortSignal): Promise<string> {
+  const root = await realpath(await repositoryRoot(ctx, cwd, signal))
+  if (isRepositoryPath(path) && (await indexedGitlinks(ctx, root, signal, path)).includes(path)) {
+    const target = await submoduleRoot(ctx, root, path, signal)
+    if (target !== null) return target
+  }
+  throw new GitGraphError('所选子模块不可用，请刷新仓库列表')
 }
 
 /**

@@ -36,15 +36,18 @@ export function apply(ctx: Context): void {
         return ctx.get('remote.gitGraph') as typeof ctx.remote.gitGraph
       }
       return {
-        avatars: async (request, signal) => (await remote(signal)).avatars(sessionId, request, signal),
-        read: async (request, signal) => (await remote(signal)).read(sessionId, request, signal),
-        readCommit: async (request, signal) => (await remote(signal)).readCommit(sessionId, request, signal),
-        readFile: async (request, signal) => (await remote(signal)).readFile(sessionId, request, signal),
-        readFileDiff: async (request, signal) => (await remote(signal)).readFileDiff(sessionId, request, signal),
-        readWorkingTree: async signal => (await remote(signal)).readWorkingTree(sessionId, {}, signal),
-        readWorkingTreeFile: async (request, signal) => (await remote(signal)).readWorkingTreeFile(sessionId, request, signal),
-        compare: async (request, signal) => (await remote(signal)).compare(sessionId, request, signal),
-        metadata: async signal => (await remote(signal)).metadata(sessionId, {}, signal),
+        repositories: async signal => (await remote(signal)).repositories(sessionId, {}, signal),
+        forRepository: repository => ({
+          avatars: async (input, signal) => (await remote(signal)).avatars(sessionId, { repository, input }, signal),
+          read: async (input, signal) => (await remote(signal)).read(sessionId, { repository, input }, signal),
+          readCommit: async (input, signal) => (await remote(signal)).readCommit(sessionId, { repository, input }, signal),
+          readFile: async (input, signal) => (await remote(signal)).readFile(sessionId, { repository, input }, signal),
+          readFileDiff: async (input, signal) => (await remote(signal)).readFileDiff(sessionId, { repository, input }, signal),
+          readWorkingTree: async signal => (await remote(signal)).readWorkingTree(sessionId, { repository }, signal),
+          readWorkingTreeFile: async (input, signal) => (await remote(signal)).readWorkingTreeFile(sessionId, { repository, input }, signal),
+          compare: async (input, signal) => (await remote(signal)).compare(sessionId, { repository, input }, signal),
+          metadata: async signal => (await remote(signal)).metadata(sessionId, { repository }, signal),
+        }),
       }
     },
   }, GitGraphView)), 'git-graph tab body')

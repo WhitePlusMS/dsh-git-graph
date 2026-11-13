@@ -104,15 +104,15 @@ afterAll(() => {
 describe('gitGraph/read boundary contract', () => {
   it('accepts an exact branch focus in the request', () => {
     const { request } = readBoundary()
-    expect(() => request.parse({ maxCommits: 50, sort: 'date', branches: ['feature'] })).not.toThrow()
-    expect(() => request.parse({ branches: [] })).not.toThrow()
+    expect(() => request.parse({ repository: null, input: { maxCommits: 50, sort: 'date', branches: ['feature'] } })).not.toThrow()
+    expect(() => request.parse({ repository: 'packages/module', input: { branches: [] } })).not.toThrow()
   })
 
   it('keeps rejecting an over-long branch filter and unknown request fields', () => {
     const { request } = readBoundary()
-    expect(() => request.parse({ branches: Array.from({ length: MAX_BRANCH_FILTER + 1 }, () => 'main') })).toThrow()
-    expect(() => request.parse({ branch: 'main' })).toThrow()
-    expect(() => request.parse({ maxCommits: 0 })).toThrow()
+    expect(() => request.parse({ repository: null, input: { branches: Array.from({ length: MAX_BRANCH_FILTER + 1 }, () => 'main') } })).toThrow()
+    expect(() => request.parse({ repository: null, input: { branch: 'main' } })).toThrow()
+    expect(() => request.parse({ repository: null, input: { maxCommits: 0 } })).toThrow()
   })
 
   it('describes the branch list the Host actually returns', async () => {

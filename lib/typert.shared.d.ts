@@ -1,5 +1,5 @@
 import type { InvocationDescriptor, TypertSchema } from '@deepseek-ai/dsh-typert-protocol';
-import type { GitGraphFileDiff, GitGraphQuery, GitGraphSnapshot } from './domain.js';
+import type { GitGraphFileDiff, GitGraphQuery, GitGraphRepositories, GitGraphSnapshot } from './domain.js';
 export declare const TYPERT_PACKAGE = "dsh-git-graph";
 /** Strict wire schemas intentionally use only the Typert `.parse()` contract. */
 export declare const gitGraphQuerySchema: TypertSchema<GitGraphQuery>;
@@ -16,6 +16,7 @@ export declare const gitGraphCompareRequestSchema: TypertSchema<import('./domain
 export declare const gitGraphCompareResultSchema: TypertSchema<import('./domain.js').GitGraphCompareResult>;
 export declare const gitGraphMetadataSchema: TypertSchema<import('./domain.js').GitGraphMetadata>;
 export declare const gitGraphEmptyInputSchema: TypertSchema<Record<string, never>>;
+export declare const gitGraphRepositoriesSchema: TypertSchema<GitGraphRepositories>;
 export declare const gitGraphAvatarRequestSchema: TypertSchema<import('./domain.js').GitGraphAvatarRequest>;
 export declare const gitGraphAvatarResultSchema: TypertSchema<import('./domain.js').GitGraphAvatarResult>;
 export interface GitGraphInvocationSchemas {
@@ -31,7 +32,6 @@ interface InvocationSpec {
 }
 /** Build the shared endpoint metadata with a face-specific schema runtime. */
 export declare function createGitGraphInvocation(spec: InvocationSpec): InvocationDescriptor;
-/** Client descriptors use the local parse-only schemas to keep the bundle closed. */
 export declare const gitGraphInvocation: InvocationDescriptor;
 export declare const gitGraphReadCommitInvocation: InvocationDescriptor;
 export declare const gitGraphFileInvocation: InvocationDescriptor;
@@ -40,5 +40,5 @@ export declare const gitGraphWorkingTreeInvocation: InvocationDescriptor;
 export declare const gitGraphWorkingTreeFileInvocation: InvocationDescriptor;
 export declare const gitGraphCompareInvocation: InvocationDescriptor;
 export declare const gitGraphMetadataInvocation: InvocationDescriptor;
-export declare const gitGraphDescriptors: readonly [InvocationDescriptor, InvocationDescriptor, InvocationDescriptor, InvocationDescriptor, InvocationDescriptor, InvocationDescriptor, InvocationDescriptor, InvocationDescriptor, InvocationDescriptor];
+export declare const gitGraphDescriptors: readonly [InvocationDescriptor, InvocationDescriptor, InvocationDescriptor, InvocationDescriptor, InvocationDescriptor, InvocationDescriptor, InvocationDescriptor, InvocationDescriptor, InvocationDescriptor, InvocationDescriptor];
 export {};

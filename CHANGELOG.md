@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.7.0 — 2026-11-13
+
+- 在 DSH 右侧栏自动发现直接 Git 子模块，通过顶栏仓库菜单切换主仓库和子模块。提交图、详情、文件 Diff、历史原文和工作区状态随仓库切换。
+- 未初始化的子模块置灰，初始化后可刷新。也支持已被主仓库索引记录、且有独立本地 Git 工作树的内嵌仓库，即使主仓库缺少 `.gitmodules`。
+- 继续适配 DSH **0.2.2-rc.1** 和 Node.js **24.9+**。更新后重启 DSH。
+
+验证：TypeScript、33 项自动测试和构建通过。真实 DSH 中验证标准子模块发现与切换，并从现有主仓库切到 MinerU 查看实际提交和文件 Diff。覆盖直接子模块。
+
+### English
+
+- Discover direct Git submodules and switch between them and the main repository from the DSH sidebar. The graph, details, file diff, historical source, and working-tree status follow the selected repository.
+- Uninitialized submodules are listed but disabled. Refresh after initializing one. Tracked embedded repositories with their own local Git worktree are also discoverable when `.gitmodules` is absent.
+- Targets DSH **0.2.2-rc.1** and Node.js **24.9+**. Restart DSH after updating.
+
+Validation: TypeScript checks, 33 tests, and the build passed. Tested standard submodule discovery and switching in a real DSH session, and opened a real MinerU commit and file diff from its containing repository. This release covers direct submodules.
+
 ## 0.6.2 — 2026-11-12
 
 - 适配 DSH **0.2.2-rc.1**、Cordis **4.1.0** 和 Node.js **24.9+**；本版本不声明兼容旧版 DSH。

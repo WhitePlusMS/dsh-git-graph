@@ -5,8 +5,10 @@
 > DSH 原生右侧栏的只读 Git 可视化插件：提交历史、分支与标签、文件 Diff、两提交比较、完整历史原文。无需 API Key，也不占用对话消息。
 
 - Repository: https://github.com/WhitePlusMS/dsh-git-graph
-- Latest release (0.6.2, 2026-11-12): https://github.com/WhitePlusMS/dsh-git-graph/releases/tag/v0.6.2
-- Install archive: https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.2/dsh-git-graph-0.6.2.tgz
+- Latest release: https://github.com/WhitePlusMS/dsh-git-graph/releases/latest
+- Release 0.7.0 (2026-11-13): https://github.com/WhitePlusMS/dsh-git-graph/releases/tag/v0.7.0
+- Install archive: https://github.com/WhitePlusMS/dsh-git-graph/releases/latest/download/dsh-git-graph.tgz
+- Community catalog: https://awesome-dsh-plugin.com/ (search for WhitePlusMS/dsh-git-graph)
 - Changelog: https://github.com/WhitePlusMS/dsh-git-graph/blob/master/CHANGELOG.md
 - English README: https://github.com/WhitePlusMS/dsh-git-graph/blob/master/README.md
 - Chinese README: https://github.com/WhitePlusMS/dsh-git-graph/blob/master/README.zh.md
@@ -16,10 +18,10 @@
 Requires DSH 0.2.2-rc.1, Node.js 24.9+, the `dsh` CLI, pnpm, and Git on the DSH Host. Installation is from the GitHub Release archive, not from npm:
 
 ```powershell
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.6.2/dsh-git-graph-0.6.2.tgz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/latest/download/dsh-git-graph.tgz
 ```
 
-Restart the same DSH Web instance after updating to keep Host/Client contracts aligned; old subdirectory-specific display settings are not migrated. Then open **dsh-git-graph** from the right sidebar.
+For an existing installation, upgrade with the versioned archive URL `https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.7.0/dsh-git-graph-0.7.0.tgz` and restart the same DSH Web instance. Then open **dsh-git-graph** from the right sidebar.
 
 ## Facts
 
@@ -28,7 +30,7 @@ Restart the same DSH Web instance after updating to keep Host/Client contracts a
 - License: MIT.
 - UI languages: Chinese and English.
 - Compatible runtime: DSH 0.2.2-rc.1.
-- Data source: the current session workspace's local Git repository only.
+- Data source: the current session workspace's Git repository and its direct submodules.
 - Operations: read-only. The plugin never writes to the repository, the index, refs, or the remote.
 - Distribution: GitHub Releases (`*.tgz` with prebuilt `lib/`), checksummed with `SHA256SUMS.txt`. Not published to npm.
 
@@ -36,6 +38,7 @@ Restart the same DSH Web instance after updating to keep Host/Client contracts a
 
 - Renders commit topology with branch/tag/HEAD references; every reference is shown and wraps instead of collapsing into `+N`.
 - Read-only branch dropdown: search local/remote branches, focus one branch, and locate its tip without checkout.
+- Switch the graph, commit details and file diffs between the main repository and its direct submodules. Uninitialized submodules are listed but disabled. A tracked embedded repository with its own local Git worktree can also be selected without `.gitmodules`.
 - Inline commit details: author and committer dates, parents, references, signature status, copy actions.
 - File changes per commit with tree or list view, per-file unified diff, and a working-tree (uncommitted changes) view.
 - Two-commit comparison: pick a base commit, then open each changed file's unified diff.

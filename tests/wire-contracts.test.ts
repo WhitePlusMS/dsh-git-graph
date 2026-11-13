@@ -10,6 +10,7 @@ const change = { type: 'T', oldPath: 'file', newPath: 'file', additions: 1, dele
 const diff = { hash, path: 'file', oldPath: 'file', status: 'T', binary: false, additions: 1, deletions: 1, lines: [] }
 const snapshot = { path: '/repo', state: 'ready', branch: 'main', head: hash, remotes: [], branches: [{ name: 'main', kind: 'local', hash, isCurrent: true }], workingTree: { changed: true, summary: 'changed' }, commits: [], hasMore: false, searchTruncated: true }
 const cases: ReadonlyArray<{ method: string; request: unknown; result: unknown }> = [
+  { method: 'repositories', request: {}, result: { main: '/repo', submodules: [{ path: 'packages/子模块 lib', available: true }, { path: 'tools/simulator', available: false }] } },
   { method: 'read', request: { branches: ['main'], glob: ['ram[!a]'] }, result: snapshot },
   { method: 'avatars', request: { hashes: [hash], source: 'auto' }, result: { avatars: [{ email: 'a@example.com', provider: 'host', image: 'data:image/png;base64,AAAA' }] } },
   { method: 'readCommit', request: { hash }, result: { hash, parents: [], author: 'A', authorEmail: 'a@example.com', committer: 'A', committerEmail: 'a@example.com', timestamps: { authorDate: '', committerDate: '' }, signature: null, body: '', fileChanges: [change] } },
@@ -36,8 +37,15 @@ describe('Host / Client contract parity', () => {
         expect(invocation.cancellation).toEqual({ parameter: 'signal' })
         const request = invocation.parameters.find(parameter => parameter.wire === 'request')?.codec
         if (request?.mode !== 'strict' || invocation.result.mode !== 'strict') throw new Error('Strict codecs required')
-        expect(request.create().parse(sample.request)).toEqual(sample.request)
-        expect(() => request.create().parse({ ...sample.request as object, unsupported: true })).toThrow()
+        const repository = 'packages/子模块 lib'
+        const scoped = sample.method === 'readWorkingTree' || sample.method === 'metadata'
+        const payload = sample.method === 'repositories' ? sample.request : scoped ? { repository } : { repository, input: sample.request }
+        expect(request.create().parse(payload)).toEqual(payload)
+        expect(() => request.create().parse({ ...payload as object, unsupported: true })).toThrow()
+        if (sample.method !== 'repositories') expect(() => request.create().parse(sample.request)).toThrow()
+        if (sample.method !== 'repositories' && !scoped) {
+          expect(() => request.create().parse({ repository, input: { ...sample.request as object, unsupported: true } })).toThrow()
+        }
         expect(invocation.result.encode?.(sample.result, () => null)).toEqual(sample.result)
         expect(invocation.result.decode?.(sample.result)).toEqual(sample.result)
         expect(() => invocation.result.mode === 'strict' && invocation.result.encode?.({ ...sample.result as object, unsupported: true }, () => null)).toThrow()
@@ -51,7 +59,8 @@ describe('Host / Client contract parity', () => {
       const read = descriptor(list, 'read')
       const codec = read.parameters.find(parameter => parameter.wire === 'request')?.codec
       if (codec?.mode !== 'strict' || read.result.mode !== 'strict') throw new Error('Strict codecs required')
-      for (const key of ['glob', 'branches']) expect(() => codec.create().parse({ [key]: Array(MAX_BRANCH_FILTER + 1).fill('main') })).toThrow()
+      for (const key of ['glob', 'branches']) expect(() => codec.create().parse({ repository: null, input: { [key]: Array(MAX_BRANCH_FILTER + 1).fill('main') } })).toThrow()
+      expect(() => codec.create().parse({ repository: null, input: { path: '/other' } })).toThrow()
       for (const key of ['branches', 'searchTruncated']) {
         const incomplete: Record<string, unknown> = { ...snapshot }
         delete incomplete[key]

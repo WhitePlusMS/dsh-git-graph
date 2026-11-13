@@ -1,11 +1,11 @@
 import { spawn, spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, realpathSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { MAX_SEARCH_COMMITS } from '../src/domain.ts'
-import { loadCommitDetails, loadCompare, loadGitGraph, loadTags, loadWorkingTreeChanges, parseWorkingTreeStatus } from '../src/git.ts'
+import { loadCommitDetails, loadCompare, loadFileDiff, loadGitGraph, loadRepositories, loadTags, loadWorkingTreeChanges, parseWorkingTreeStatus, resolveSubmodule } from '../src/git.ts'
 import { gitGraphSnapshotSchema } from '../src/typert.shared.ts'
 
 /** Real Git fixtures keep platform/path and native wildcard semantics honest. */
@@ -168,4 +168,66 @@ describe('Git acquisition regressions', () => {
     await expect(query).rejects.toThrow('已取消')
     expect(count).toBe(1)
   })
+})
+
+describe('session repository and direct submodules', () => {
+  it('lists initialized and uninitialized modules without reading nested or stale declarations', async () => {
+    const root = join(workspace, 'parent')
+    const source = join(workspace, 'module')
+    const clone = join(workspace, 'local')
+    const modulePath = 'packages/子模块 lib'
+    const missing = 'tools/simulator'
+    for (const [dir, label] of [[root, 'parent'], [source, 'child']] as const) {
+      mkdirSync(dir)
+      git(dir, ['init', '-qb', 'main'])
+      writeFileSync(join(dir, 'shared.txt'), `${label} original\n`)
+      git(dir, ['add', 'shared.txt'])
+      commit(dir, `${label} initial`)
+      writeFileSync(join(dir, 'shared.txt'), `${label} updated\n`)
+      git(dir, ['add', 'shared.txt'])
+      commit(dir, `${label} update`)
+    }
+    git(source, ['-c', 'protocol.file.allow=always', 'submodule', 'add', history, 'nested/history'])
+    commit(source, 'child added nested module')
+    for (const path of [modulePath, missing]) git(root, ['-c', 'protocol.file.allow=always', 'submodule', 'add', source, path])
+    git(root, ['config', '-f', '.gitmodules', 'submodule.stale.path', 'ordinary'])
+    git(root, ['add', '.gitmodules'])
+    commit(root, 'parent registered modules')
+    git(workspace, ['clone', '-q', '--no-recurse-submodules', root, clone])
+    git(clone, ['-c', 'protocol.file.allow=always', 'submodule', 'update', '--init', '--recursive', '--', modulePath])
+    mkdirSync(join(clone, 'ordinary'))
+    git(join(clone, 'ordinary'), ['init', '-q'])
+
+    expect(await loadRepositories(ctx, workspace, signal)).toEqual({ main: null, submodules: [] })
+    expect(await loadRepositories(ctx, join(clone, 'packages'), signal)).toEqual({
+      main: realpathSync(clone),
+      submodules: [{ path: modulePath, available: true }, { path: missing, available: false }],
+    })
+    const target = await resolveSubmodule(ctx, clone, modulePath, signal)
+    const graph = await loadGitGraph(ctx, { path: target }, { signal })
+    expect(graph.branch).toBeNull()
+    const child = graph.commits.find(entry => entry.subject === 'child update')
+    expect(child).toBeDefined()
+    expect(graph.commits.some(entry => entry.subject === 'parent update')).toBe(false)
+    if (child === undefined) throw new Error('Child commit is missing')
+    expect((await loadCommitDetails(ctx, target, child.hash, signal)).fileChanges[0]?.newPath).toBe('shared.txt')
+    const diff = await loadFileDiff(ctx, target, { hash: child.hash, path: 'shared.txt' }, signal)
+    expect(diff.lines.map(line => line.content)).toEqual(['child original', 'child updated'])
+
+    for (const path of [missing, 'ordinary', `${modulePath}/nested/history`, '../module', source]) {
+      await expect(resolveSubmodule(ctx, clone, path, signal)).rejects.toThrow('所选子模块不可用')
+    }
+    git(clone, ['submodule', 'deinit', '-f', '--', modulePath])
+    await expect(resolveSubmodule(ctx, clone, modulePath, signal)).rejects.toThrow('所选子模块不可用')
+    // A manually embedded repo can already have a gitlink without a .gitmodules entry.
+    git(clone, ['config', '-f', '.gitmodules', '--remove-section', `submodule.${modulePath}`])
+    expect((await loadRepositories(ctx, clone, signal)).submodules).toEqual([{ path: missing, available: false }])
+    git(clone, ['-c', 'protocol.file.allow=always', 'clone', '-q', source, modulePath])
+    expect((await loadRepositories(ctx, clone, signal)).submodules).toEqual([
+      { path: modulePath, available: true }, { path: missing, available: false },
+    ])
+    await expect(resolveSubmodule(ctx, clone, modulePath, signal)).resolves.toBe(target)
+    unlinkSync(join(clone, '.gitmodules'))
+    expect((await loadRepositories(ctx, clone, signal)).submodules).toEqual([{ path: modulePath, available: true }])
+  }, 20000)
 })

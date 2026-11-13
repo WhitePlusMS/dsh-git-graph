@@ -1,7 +1,7 @@
 {
   "name": "dsh-git-graph",
-  "version": "0.6.2",
-  "description": "Read-only native Git Graph sidebar for DeepSeek Harness",
+  "version": "0.7.0",
+  "description": "Read-only Git Graph sidebar for DeepSeek Harness, with direct submodule switching and file diffs",
   "icon": "./icon.svg",
   "type": "module",
   "main": "./lib/index.js",

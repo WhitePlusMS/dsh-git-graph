@@ -3,6 +3,7 @@ import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { GitGraphAvatar, GitGraphAvatarRequest, GitGraphAvatarResult } from '../domain.ts'
+import type { GitGraphRepositories } from '../domain.ts'
 import type { GitGraphBranch, GitGraphCommit, GitGraphCommitDetails, GitGraphCompareRequest, GitGraphCompareResult, GitGraphFileChange, GitGraphFileContent, GitGraphFileDiff, GitGraphFileDiffRequest, GitGraphFileRequest, GitGraphQuery, GitGraphMetadata, GitGraphRef, GitGraphSnapshot, GitGraphWorkingTreeChanges, GitGraphWorkingTreeFileRequest } from '../domain.ts'
 import { MAX_SEARCH_COMMITS } from '../domain.ts'
 import { layoutGraph, type GraphLayout } from './graph-layout.ts'
@@ -14,7 +15,7 @@ import { RichMessage } from './RichMessage.tsx'
 import { css } from './styles.ts'
 import { NS, type GitGraphTranslate } from './locales.ts'
 
-export interface GitGraphViewInjected {
+interface GitGraphReaders {
   readonly avatars: (request: GitGraphAvatarRequest, signal: AbortSignal) => Promise<RemoteResult<GitGraphAvatarResult>>
   readonly read: (request: GitGraphQuery, signal: AbortSignal) => Promise<RemoteResult<GitGraphSnapshot>>
   readonly readCommit: (request: { hash: string }, signal: AbortSignal) => Promise<RemoteResult<GitGraphCommitDetails>>
@@ -26,10 +27,15 @@ export interface GitGraphViewInjected {
   readonly metadata: (signal: AbortSignal) => Promise<RemoteResult<GitGraphMetadata>>
 }
 
+export interface GitGraphViewInjected {
+  readonly repositories: (signal: AbortSignal) => Promise<RemoteResult<GitGraphRepositories>>
+  readonly forRepository: (repository: string | null) => GitGraphReaders
+}
+
 type Props = PropsRuntime<'sidebar.right.pane.tab'> & PropsLocale<typeof NS> & GitGraphViewInjected
 type RefFilter = 'all' | GitGraphRef['kind']
 /** The secondary surfaces that cover the graph instead of stacking above it. */
-type SheetKind = 'branch' | 'filter' | 'settings'
+type SheetKind = 'repository' | 'branch' | 'filter' | 'settings'
 
 const MAX_COMMITS = 500
 const PAGE_SIZE = 100
@@ -556,7 +562,7 @@ function FileChangesView({ changes, view, onOpenFile }: {
 
 function CommitDetails({ commit, readCommit, compareActive, onCompare, onOpenFile, currentBranch, remotes, display, avatar, readRevision }: {
   readonly commit: GitGraphCommit | undefined
-  readonly readCommit: GitGraphViewInjected['readCommit']
+  readonly readCommit: GitGraphReaders['readCommit']
   readonly compareActive: boolean
   readonly onCompare: () => void
   readonly onOpenFile: (hash: string, change: GitGraphFileChange) => void
@@ -684,7 +690,7 @@ function DiffBody({ diff }: { readonly diff: GitGraphFileDiff }) {
 function FileSource({ hash, path, readFile }: {
   readonly hash: string
   readonly path: string
-  readonly readFile: GitGraphViewInjected['readFile']
+  readonly readFile: GitGraphReaders['readFile']
 }) {
   const t = useText()
   const [content, setContent] = useState<GitGraphFileContent>()
@@ -740,8 +746,8 @@ function FileViewer({ hash, baseHash, change, readFileDiff, readFile, onClose }:
   readonly hash: string
   readonly baseHash: string | undefined
   readonly change: GitGraphFileChange
-  readonly readFileDiff: GitGraphViewInjected['readFileDiff']
-  readonly readFile: GitGraphViewInjected['readFile']
+  readonly readFileDiff: GitGraphReaders['readFileDiff']
+  readonly readFile: GitGraphReaders['readFile']
   readonly onClose: () => void
 }) {
   const t = useText()
@@ -847,7 +853,7 @@ function WorkingTreeChangesPanel({ changes, error, onClose, onOpenFile, onRetry 
 
 function WorkingTreeFileViewer({ path, readWorkingTreeFile, onClose }: {
   readonly path: string
-  readonly readWorkingTreeFile: GitGraphViewInjected['readWorkingTreeFile']
+  readonly readWorkingTreeFile: GitGraphReaders['readWorkingTreeFile']
   readonly onClose: () => void
 }) {
   const t = useText()
@@ -902,9 +908,9 @@ function WorkingTreeFileViewer({ path, readWorkingTreeFile, onClose }: {
 function ComparePanel({ targetHash, commits, compare, readFileDiff, readFile, onClose, readRevision }: {
   readonly targetHash: string
   readonly commits: readonly GitGraphCommit[]
-  readonly compare: GitGraphViewInjected['compare']
-  readonly readFileDiff: GitGraphViewInjected['readFileDiff']
-  readonly readFile: GitGraphViewInjected['readFile']
+  readonly compare: GitGraphReaders['compare']
+  readonly readFileDiff: GitGraphReaders['readFileDiff']
+  readonly readFile: GitGraphReaders['readFile']
   readonly onClose: () => void
   readonly readRevision: number
 }) {
@@ -996,7 +1002,7 @@ function Avatar({ email, name, avatar }: { readonly email: string; readonly name
   </span>
 }
 
-function MetadataStrip({ readMetadata, readRevision }: { readonly readMetadata: GitGraphViewInjected['metadata']; readonly readRevision: number }) {
+function MetadataStrip({ readMetadata, readRevision }: { readonly readMetadata: GitGraphReaders['metadata']; readonly readRevision: number }) {
   const t = useText()
   const [open, setOpen] = useState(false)
   const [metadata, setMetadata] = useState<GitGraphMetadata>()
@@ -1274,16 +1280,67 @@ function SlidersGlyph() {
  * settings form is a live preview — the list behind it is what the options act
  * on. `tall` only raises the height limit for the form.
  */
-function Dropdown({ label, tall = false, children }: {
+function Dropdown({ label, tall = false, repository = false, children }: {
   readonly label: string
   readonly tall?: boolean
   readonly children: ReactNode
+  readonly repository?: boolean
 }) {
   return (
-    <div className={tall ? `${css.dropdown} ${css.dropdownTall}` : css.dropdown} role="dialog" aria-label={label} data-git-graph-dropdown>
+    <div className={`${css.dropdown}${tall ? ` ${css.dropdownTall}` : ''}${repository ? ` ${css.repositoryDropdown}` : ''}`} role="dialog" aria-label={label} data-git-graph-dropdown>
       {children}
     </div>
   )
+}
+
+function RepositoryGlyph({ submodule }: { readonly submodule: boolean }) {
+  return <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d={submodule ? 'M2 5h4l1.2 1.3H14v6.1H2zM8 8v3m-1.5-1.5h3' : 'M3 3.3h10v9.5H3a1 1 0 0 1-1-1V4.3a1 1 0 0 1 1-1ZM2 10.5h11M5 5.9h4'} />
+  </svg>
+}
+
+function repositoryName(path: string): string {
+  return path.split(/[/\\]/u).filter(Boolean).at(-1) ?? path
+}
+
+function RepositoryMenu({ repositories, current, onSelect }: {
+  readonly repositories: GitGraphRepositories
+  readonly current: string | null
+  readonly onSelect: (repository: string | null) => void
+}) {
+  const t = useText()
+  const list = useRef<HTMLUListElement>(null)
+  useLayoutEffect(() => { list.current?.querySelector<HTMLButtonElement>('[aria-current="true"]')?.focus() }, [])
+  const row = (path: string | null, label: string, available: boolean) => {
+    const selected = path === current
+    return <li key={path}>
+      <button type="button" className={`${css.branchRow} ${css.repositoryRow}${selected ? ` ${css.branchRowActive}` : ''}`}
+        aria-current={selected ? 'true' : undefined} disabled={!available} title={path ?? repositories.main ?? label}
+        onClick={() => onSelect(path)}>
+        <RepositoryGlyph submodule={path !== null} />
+        <span className={css.branchRowName}>{label}</span>
+        {selected && <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" className={css.repositoryCheck} aria-hidden="true"><path d="m3.5 8 2.8 2.8 6.2-6.2" /></svg>}
+        {!available && <span className={css.repositoryUnavailable}>{t('repository.uninitialized')}</span>}
+      </button>
+    </li>
+  }
+  return <Dropdown label={t('repository.switch')} repository>
+    <ul className={css.branchList} ref={list} onKeyDown={event => {
+      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+      const options = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'))
+      if (options.length === 0) return
+      event.preventDefault()
+      event.stopPropagation()
+      const index = options.findIndex(option => option === document.activeElement)
+      const step = event.key === 'ArrowDown' ? 1 : -1
+      options[(index + step + options.length) % options.length]?.focus()
+    }}>
+      <li className={css.sheetGroupTitle}>{t('repository.main')}</li>
+      {repositories.main !== null && row(null, repositoryName(repositories.main), true)}
+      <li className={css.sheetGroupTitle}>{t('repository.submodules')}</li>
+      {repositories.submodules.map(module => row(module.path, module.path, module.available))}
+    </ul>
+  </Dropdown>
 }
 
 /**
@@ -1424,10 +1481,54 @@ function FindBar({ count, index, onPrev, onNext, onClear }: {
 }
 
 export function GitGraphView(props: Props) {
-  return <TextContext.Provider value={props.t}><GitGraphContent {...props} /></TextContext.Provider>
+  return <TextContext.Provider value={props.t}>
+    <GitGraphRepositoriesView key={props.sessionId} repositories={props.repositories} forRepository={props.forRepository} />
+  </TextContext.Provider>
 }
 
-function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorkingTree, readWorkingTreeFile, compare, metadata, avatars: readAvatars }: Props) {
+function GitGraphRepositoriesView({ repositories, forRepository }: GitGraphViewInjected) {
+  const [listing, setListing] = useState<GitGraphRepositories>()
+  const [repository, setRepository] = useState<string | null>(null)
+  const [revision, setRevision] = useState(0)
+  const [listingError, setListingError] = useState<string>()
+  const focusOnSwitch = useRef(false)
+  const readers = useMemo(() => forRepository(repository), [forRepository, repository])
+  const refreshRepositories = useCallback(() => setRevision(value => value + 1), [])
+  useEffect(() => {
+    const controller = new AbortController()
+    setListingError(undefined)
+    void (async () => {
+      try {
+        const result = await repositories(controller.signal)
+        if (controller.signal.aborted) return
+        if (!result.ok) throw new Error(result.error.message)
+        setListing(result.value)
+        setRepository(current => current === null || result.value.submodules.some(module => module.path === current && module.available) ? current : null)
+      } catch (cause: unknown) {
+        if (!controller.signal.aborted) setListingError(cause instanceof Error ? cause.message : String(cause))
+      }
+    })()
+    return () => controller.abort()
+  }, [repositories, revision])
+
+  // Remount on repository change so every child cleans up in-flight reads and
+  // local selections before any results from the new repository can render.
+  return <GitGraphContent key={repository ?? ''} {...readers} repository={repository} repositories={listing}
+    listingError={listingError} refreshRepositories={refreshRepositories} restoreRepositoryFocus={focusOnSwitch.current}
+    onRepository={next => { focusOnSwitch.current = true; setRepository(next) }} />
+}
+
+interface RepositoryControls {
+  readonly repository: string | null
+  readonly repositories: GitGraphRepositories | undefined
+  readonly listingError: string | undefined
+  readonly restoreRepositoryFocus: boolean
+  readonly refreshRepositories: () => void
+  readonly onRepository: (repository: string | null) => void
+}
+
+function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorkingTree, readWorkingTreeFile, compare, metadata, avatars: readAvatars,
+  repository, repositories, listingError, refreshRepositories, restoreRepositoryFocus, onRepository }: GitGraphReaders & RepositoryControls) {
   const t = useText()
   const [snapshot, setSnapshot] = useState<GitGraphSnapshot | undefined>()
   const [selectedHash, setSelectedHash] = useState<string>()
@@ -1461,6 +1562,7 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
   const [hoveredHash, setHoveredHash] = useState<string>()
   const [navigationHint, setNavigationHint] = useState<string>()
   const sectionRef = useRef<HTMLElement>(null)
+  const repositoryTrigger = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const [settingsRepo, setSettingsRepo] = useState<string>()
   // Rows are measured, not assumed to be one line tall: a commit with many
@@ -1522,6 +1624,11 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
     setReadRevision(current => current + 1)
     void load(buildRequest(maxCommits, search))
   }, [load, buildRequest, maxCommits, search])
+  const refreshAll = () => { refreshRepositories(); refresh() }
+
+  useLayoutEffect(() => {
+    if (restoreRepositoryFocus) repositoryTrigger.current?.focus()
+  }, [restoreRepositoryFocus])
 
   useEffect(() => {
     void load(buildRequest(maxCommits, search))
@@ -1784,6 +1891,7 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
         && target.closest('input, select, textarea, [contenteditable="true"], [role="separator"], [data-file-viewer]') !== null
       // Escape unwinds one layer at a time: sheet first, then find.
       if (event.key === 'Escape') {
+        if (sheet === 'repository') { event.preventDefault(); setSheet(undefined); repositoryTrigger.current?.focus(); return }
         if (sheet !== undefined) { event.preventDefault(); setSheet(undefined); return }
         if (findOpen) { event.preventDefault(); setFindOpen(false); return }
       }
@@ -1866,6 +1974,8 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
   </>
 
   const branches = snapshot?.branches
+  const canSwitchRepository = repositories?.main != null && repositories.submodules.length > 0
+  const repositoryLabel = canSwitchRepository ? repositoryName(repository ?? repositories.main ?? '') : ''
   const statusLabel = snapshot === undefined ? t('status.loadingWorkspace')
     : snapshot.state === 'not-git' ? t('status.notGit')
       : snapshot.workingTree.changed ? t('status.dirty') : t('status.clean')
@@ -1876,6 +1986,14 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
           we are, and the two actions that are not about narrowing the graph. */}
       <header className={css.header}>
         <div className={css.headerMain}>
+          {canSwitchRepository && (
+            <button type="button" ref={repositoryTrigger} className={`${css.branchButton} ${css.repositoryButton}`}
+              data-git-graph-dropdown-trigger onClick={() => setSheet(current => current === 'repository' ? undefined : 'repository')}
+              aria-expanded={sheet === 'repository'} aria-haspopup="dialog"
+              aria-label={t('repository.current', { name: repositoryLabel })} title={snapshot?.path ?? repositoryLabel}>
+              <RepositoryGlyph submodule={repository !== null} /><span className={css.branchName}>{repositoryLabel}</span><ChevronGlyph />
+            </button>
+          )}
           {snapshot !== undefined && snapshot.state !== 'not-git' && (
             <button type="button" className={css.branchButton} data-detached={snapshot.branch === null}
               data-git-graph-dropdown-trigger
@@ -1889,10 +2007,10 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
           {snapshot !== undefined && (
             <span className={snapshot.workingTree.changed ? css.dirty : css.clean} title={statusLabel} role="img" aria-label={statusLabel} />
           )}
-          <span className={css.path} title={snapshot?.path}>{snapshot?.path ?? t('status.loadingWorkspace')}</span>
+          {!canSwitchRepository && <span className={css.path} title={snapshot?.path}>{snapshot?.path ?? t('status.loadingWorkspace')}</span>}
         </div>
         <div className={css.toolbarActions}>
-          <button type="button" className={css.iconButton} data-loading={loading} onClick={() => void refresh()} disabled={loading} title={t('toolbar.refresh')} aria-label={t('toolbar.refresh')}><RefreshGlyph /></button>
+          <button type="button" className={css.iconButton} data-loading={loading} onClick={refreshAll} disabled={loading} title={t('toolbar.refresh')} aria-label={t('toolbar.refresh')}><RefreshGlyph /></button>
           <button type="button" className={css.iconButton} data-git-graph-dropdown-trigger
             onClick={() => setSheet(current => current === 'settings' ? undefined : 'settings')}
             aria-pressed={sheet === 'settings'} aria-expanded={sheet === 'settings'} aria-haspopup="dialog"
@@ -1901,6 +2019,13 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
         {/* Menus are absolutely positioned children of the bar, so they hang
             below it without disturbing its single-line layout, and the graph
             stays visible behind them. */}
+        {sheet === 'repository' && canSwitchRepository && (
+          <RepositoryMenu repositories={repositories} current={repository} onSelect={next => {
+            setSheet(undefined)
+            if (next === repository) repositoryTrigger.current?.focus()
+            else onRepository(next)
+          }} />
+        )}
         {sheet === 'branch' && branches !== undefined && (
           <BranchMenu branches={branches} focused={focusedBranch} onSelect={selectBranch} onShowAll={clearBranchFocus} />
         )}
@@ -1957,6 +2082,8 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
       {/* Everything below the chrome. Every secondary surface is anchored to
           the bar above, so nothing here takes the graph over. */}
       <div className={css.body}>
+        {listingError !== undefined && <div className={css.error} role="status">{t('repository.error', { message: listingError })}
+          <button type="button" className={css.secondaryButton} onClick={refreshRepositories}>{t('common.retry')}</button></div>}
         {error !== undefined && <div className={css.error} role="alert">{t('error.graph', { message: error })}<button type="button" className={css.secondaryButton} onClick={() => void refresh()} disabled={loading}>{t('common.retry')}</button></div>}
         {navigationHint !== undefined && <div className={css.hint} role="status">{navigationHint}<button type="button" className={css.linkButton} onClick={() => setNavigationHint(undefined)}>{t('common.close')}</button></div>}
         {display.showAvatars && authorAvatars.error !== undefined && <div className={css.hint} role="status">{t('avatar.error')}</div>}

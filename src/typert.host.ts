@@ -123,7 +123,6 @@ const hostWorkingTreeChangesSchema = z.object({
   changes: z.array(hostFileChangeSchema),
 }).strict()
 
-const hostWorkingTreeRequestSchema = z.object({}).strict()
 const hostWorkingTreeFileRequestSchema = z.object({ path: z.string() }).strict()
 
 const hostCompareRequestSchema = z.object({ baseHash: hashSchema, targetHash: hashSchema }).strict()
@@ -165,6 +164,13 @@ const hostMetadataSchema = z.object({
 }).strict()
 
 const hostEmptyInputSchema = z.object({}).strict()
+const repository = z.string().nullable()
+const hostRepositoryScopeSchema = z.object({ repository }).strict()
+const hostRepositoriesSchema = z.object({
+  main: z.string().nullable(),
+  submodules: z.array(z.object({ path: z.string(), available: z.boolean() }).strict()),
+}).strict()
+const repositoryRequestSchema = (input: z.ZodType) => z.object({ repository, input }).strict()
 
 const hostAvatarRequestSchema = z.object({ hashes: z.array(hashSchema).min(1).max(MAX_AVATAR_BATCH), source: z.enum(['auto', 'gravatar']) }).strict()
 const hostAvatarSchema = z.object({
@@ -176,56 +182,56 @@ const hostAvatarResultSchema = z.object({ avatars: z.array(hostAvatarSchema).max
 
 export const gitGraphHostDescriptors = [
   createGitGraphInvocation({
+    method: 'repositories', inputSymbol: 'GitGraphRepositoriesRequest', resultSymbol: 'GitGraphRepositories',
+    schemas: { input: hostEmptyInputSchema, result: hostRepositoriesSchema, sessionId: z.string() },
+  }),
+  createGitGraphInvocation({
     method: 'avatars', inputSymbol: 'GitGraphAvatarRequest', resultSymbol: 'GitGraphAvatarResult',
-    schemas: { input: hostAvatarRequestSchema, result: hostAvatarResultSchema, sessionId: z.string() },
+    schemas: { input: repositoryRequestSchema(hostAvatarRequestSchema), result: hostAvatarResultSchema, sessionId: z.string() },
   }),
   createGitGraphInvocation({
     method: 'read',
     inputSymbol: 'GitGraphQuery',
     resultSymbol: 'GitGraphSnapshot',
-    schemas: { input: hostQuerySchema, result: hostSnapshotSchema, sessionId: z.string() },
+    schemas: { input: repositoryRequestSchema(hostQuerySchema), result: hostSnapshotSchema, sessionId: z.string() },
   }),
   createGitGraphInvocation({
     method: 'readCommit',
     inputSymbol: 'GitGraphCommitRequest',
     resultSymbol: 'GitGraphCommitDetails',
-    schemas: { input: hostCommitRequestSchema, result: hostCommitDetailsSchema, sessionId: z.string() },
+    schemas: { input: repositoryRequestSchema(hostCommitRequestSchema), result: hostCommitDetailsSchema, sessionId: z.string() },
   }),
   createGitGraphInvocation({
     method: 'readFile',
     inputSymbol: 'GitGraphFileRequest',
     resultSymbol: 'GitGraphFileContent',
-    schemas: { input: hostFileRequestSchema, result: hostFileContentSchema, sessionId: z.string() },
+    schemas: { input: repositoryRequestSchema(hostFileRequestSchema), result: hostFileContentSchema, sessionId: z.string() },
   }),
   createGitGraphInvocation({
     method: 'readFileDiff',
     inputSymbol: 'GitGraphFileDiffRequest',
     resultSymbol: 'GitGraphFileDiff',
-    schemas: { input: hostFileDiffRequestSchema, result: hostFileDiffSchema, sessionId: z.string() },
+    schemas: { input: repositoryRequestSchema(hostFileDiffRequestSchema), result: hostFileDiffSchema, sessionId: z.string() },
   }),
   createGitGraphInvocation({
-    method: 'readWorkingTree',
-    inputSymbol: 'GitGraphWorkingTreeRequest',
-    resultSymbol: 'GitGraphWorkingTreeChanges',
-    schemas: { input: hostWorkingTreeRequestSchema, result: hostWorkingTreeChangesSchema, sessionId: z.string() },
+    method: 'readWorkingTree', inputSymbol: 'GitGraphRepositoryScope', resultSymbol: 'GitGraphWorkingTreeChanges',
+    schemas: { input: hostRepositoryScopeSchema, result: hostWorkingTreeChangesSchema, sessionId: z.string() },
   }),
   createGitGraphInvocation({
     method: 'readWorkingTreeFile',
     inputSymbol: 'GitGraphWorkingTreeFileRequest',
     resultSymbol: 'GitGraphFileDiff',
-    schemas: { input: hostWorkingTreeFileRequestSchema, result: hostFileDiffSchema, sessionId: z.string() },
+    schemas: { input: repositoryRequestSchema(hostWorkingTreeFileRequestSchema), result: hostFileDiffSchema, sessionId: z.string() },
   }),
   createGitGraphInvocation({
     method: 'compare',
     inputSymbol: 'GitGraphCompareRequest',
     resultSymbol: 'GitGraphCompareResult',
-    schemas: { input: hostCompareRequestSchema, result: hostCompareResultSchema, sessionId: z.string() },
+    schemas: { input: repositoryRequestSchema(hostCompareRequestSchema), result: hostCompareResultSchema, sessionId: z.string() },
   }),
   createGitGraphInvocation({
-    method: 'metadata',
-    inputSymbol: 'GitGraphMetadataRequest',
-    resultSymbol: 'GitGraphMetadata',
-    schemas: { input: hostEmptyInputSchema, result: hostMetadataSchema, sessionId: z.string() },
+    method: 'metadata', inputSymbol: 'GitGraphRepositoryScope', resultSymbol: 'GitGraphMetadata',
+    schemas: { input: hostRepositoryScopeSchema, result: hostMetadataSchema, sessionId: z.string() },
   }),
 ] as const
 

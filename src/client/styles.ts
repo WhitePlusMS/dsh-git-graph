@@ -148,6 +148,11 @@ export const css = {
   pending: 'dsh-git-graph-pending',
   headerMain: 'dsh-git-graph-header-main',
   branchButton: 'dsh-git-graph-branch-button',
+  repositoryButton: 'dsh-git-graph-repository-button',
+  repositoryDropdown: 'dsh-git-graph-repository-dropdown',
+  repositoryRow: 'dsh-git-graph-repository-row',
+  repositoryCheck: 'dsh-git-graph-repository-check',
+  repositoryUnavailable: 'dsh-git-graph-repository-unavailable',
   branchLabel: 'dsh-git-graph-branch-label',
   branchName: 'dsh-git-graph-branch-name',
   iconButton: 'dsh-git-graph-icon-button',
@@ -272,6 +277,15 @@ const CSS = `
 .dsh-git-graph-branch-button:hover { background: var(--git-graph-hover); }
 .dsh-git-graph-branch-button > svg { flex: none; color: var(--git-graph-secondary); }
 .dsh-git-graph-branch-button[data-detached='true'] { color: var(--dsw-alias-state-warn-label); }
+.dsh-git-graph-repository-button { max-width: min(57%, 270px); }
+.dsh-git-graph-repository-button[aria-expanded='true'] { border-color: var(--dsw-alias-link); }
+.dsh-git-graph-repository-dropdown { right: auto; width: min(365px, calc(100% - 16px)); }
+.dsh-git-graph-repository-dropdown .dsh-git-graph-repository-row { min-height: 34px; }
+.dsh-git-graph-repository-row > svg { flex: none; color: var(--git-graph-secondary); }
+.dsh-git-graph-repository-dropdown .dsh-git-graph-repository-row:disabled { color: var(--git-graph-tertiary); background: transparent; cursor: not-allowed; }
+.dsh-git-graph-repository-row:disabled > svg { color: inherit; }
+.dsh-git-graph-repository-row > .dsh-git-graph-repository-check { color: var(--dsw-alias-link); stroke-width: 1.35; stroke-linecap: round; stroke-linejoin: round; }
+.dsh-git-graph-repository-unavailable { flex: none; font-size: 11px; }
 /* Same identity as the button, but not interactive: used when the Host cannot
    list branches, so the current branch stays readable without a dead control. */
 .dsh-git-graph-branch-label {

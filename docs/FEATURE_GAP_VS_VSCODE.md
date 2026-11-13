@@ -1,7 +1,53 @@
 # dsh-git-graph 与 vscode-git-graph 的功能差距报告
 
-> 调研对象：`vscode-git-graph`（作者 mhutchie）与本项目 `E:\项目demo\dsh-git-graph`。
-> 本报告只记录**读到代码/文档确认**的内容；无法验证的说法集中在第 5 章并标注「未经核实」。
+> v0.7.0 已实现直接子模块自动发现和侧栏切换，并通过真实 DSH 0.2.2-rc.1 验证。下面保留 v0.6.2 的对比基线和 v0.5.3 的历史快照。
+
+## 2026-11-13 复核：子模块与 v0.6.2 功能差距
+
+对比对象为 [VS Code Git Graph `mhutchie.git-graph` v1.30.0](https://github.com/mhutchie/vscode-git-graph/releases/tag/v1.30.0) 和本项目 v0.6.2（提交 `2c1d30f`）。结论来自两侧源码、官方文档和本地 Git 夹具。旧报告把仓库切换标为「不适用」。在同一 DSH 会话中切换侧栏读取的仓库即可支持子模块，原有工作区绑定允许承载这项功能。
+
+### 子模块支持：可做，难度中等
+
+VS Code Git Graph 从 v1.15.0 起读取 `.gitmodules` 自动添加子模块。v1.30.0 源码逐个解析已检出模块的 Git 根目录并递归注册，用户在 `Repo` 下拉中切换查看。普通嵌套仓库还可以手动添加，是另一条入口。[v1.15.0 发布说明](https://github.com/mhutchie/vscode-git-graph/releases/tag/v1.15.0) · [上游发现逻辑](https://github.com/mhutchie/vscode-git-graph/blob/881a9e613045bacbbadf8940f6b6c5b8bd699335/src/repoManager.ts#L508-L528) · [上游切换逻辑](https://github.com/mhutchie/vscode-git-graph/blob/881a9e613045bacbbadf8940f6b6c5b8bd699335/web/main.ts#L169-L221)
+
+本项目的 `src/git.ts` 已可按 `cwd` 读取目标 Git 仓库，`src/client/graph-layout.ts` 只需要提交拓扑。缺口在于 `src/remote-service.ts` 和 `src/client/index.ts` 将侧栏请求绑定到会话目录，`src/domain.ts` 的侧栏查询也刻意省略了模型工具可用的 `path`。要切换的是侧栏选中的仓库。每次读取都应在 Host 解析目标，再调用原有读取器。
+
+| 改动 | 建议实现 |
+| --- | --- |
+| 自动发现 | 在会话所在 Git 根目录读取 `.gitmodules` 的 `submodule.*.path`，使用 Git 配置解析和 NUL 分隔输出。可一次读取索引，用 `160000` 条目确认这些目录确实是子模块。首次打开和手动刷新时重新发现，递归场景只沿已初始化的子模块继续发现。 |
+| 仓库选择 | 复用顶栏下拉。在有子模块时显示主仓库和子模块，用相对路径区分同名项。未初始化项可标为不可选。会话若本来就在已初始化的子模块内，首版以它为发现起点，向上查找父仓库可单独加入。 |
+| 请求归属 | 侧栏请求携带 Host 发出的仓库标识，由 Host 在当前会话发现的集合内解析。校验目录位于允许的根下，Git 返回的规范化仓库根应与候选目录一致。提交图、详情、原文、Diff、未提交文件、两提交比较、Tag/Stash、头像都绑定同一个标识。同步更新 Host 与浏览器的 Typert 契约。 |
+| 切换状态 | 切换时取消上一仓库的请求，关闭详情、比较和工作区面板，重置分支筛选、搜索和分页。按已存在的仓库根路径机制载入显示设置。目标失效时显示不可用，重新选择主仓库后再读。 |
+
+首版建议覆盖直接子模块的发现、切换和现有只读能力，预计 **2–3 个工作日**，含 Host、前端、协议和真实 DSH 回归。要达到上游的嵌套发现体验，预计再加 **0.5–1 个工作日**，主要验证递归、刷新和已失效目录。估时是基于当前结构的工程预估。主仓库和子模块各自保有独立历史。普通嵌套仓库管理、主仓库对子模块提交指针的专用比较可单独评估。[Git 子模块说明](https://git-scm.com/docs/gitsubmodules) · [git-config](https://git-scm.com/docs/git-config) · [git-ls-files](https://git-scm.com/docs/git-ls-files) · [git-rev-parse](https://git-scm.com/docs/git-rev-parse)
+
+**已验证的行为**（Git for Windows 2.48.1，Node 24.22.1，临时本地仓库，直接调用现有读取器）：
+
+- 路径包含中文和空格时，Git 能读出 `.gitmodules` 路径。给现有读取器传入已初始化的子模块目录，可得到其独立历史、提交详情、文件 Diff、未提交文件与子模块专属 Tag。子模块处在 detached HEAD 时也有自己的 HEAD。
+- 普通 clone 产生的未初始化子模块目录虽然存在，现有读取器仍会向上找到主仓库，返回主仓库的提交。这是发现时必须核对 Git 根目录的原因。
+- 主仓库记录的子模块条目是 `160000` 模式的 Git 提交指针。现有 Diff 在夹具中显示两行 `Subproject commit` 指针变化，历史原文读取会报错。若后续要点开指针并查看两个子模块版本之间的文件差异，需要独立处理 gitlink。上游普通 Diff 走文件内容提供器，另有此诉求的开放议题。[上游 Diff 内容提供器](https://github.com/mhutchie/vscode-git-graph/blob/881a9e613045bacbbadf8940f6b6c5b8bd699335/src/diffDocProvider.ts) · [上游议题 #944](https://github.com/mhutchie/vscode-git-graph/issues/944)
+
+本轮验证范围是读取器。以后验收侧栏功能时，需要在真实 DSH 中跑主仓库 → 子模块 → 主仓库，覆盖快速连续切换、两个仓库存在同路径文件、无子模块的单仓库、未初始化模块、失效模块和 detached HEAD。递归实现后加入已初始化和未初始化的多层模块。
+
+### 其他功能差距
+
+以下比较以 v0.6.2 已有功能为基础。当前版本已经提供可搜索的本地和远端分支面板、筛选与排序、两提交逐文件 Diff、完整历史原文和按仓库保存显示设置。差距集中在以下具体能力。上游配置和行为见 [扩展功能与命令](https://marketplace.visualstudio.com/items?itemName=mhutchie.git-graph) · [官方设置](https://github.com/mhutchie/vscode-git-graph/wiki/Extension-Settings) · [v1.30.0 视图源码](https://github.com/mhutchie/vscode-git-graph/blob/881a9e613045bacbbadf8940f6b6c5b8bd699335/web/main.ts)。
+
+| 能力 | 本项目当前差距 | 补齐难度 |
+| --- | --- | --- |
+| 仓库管理 | 没有自动发现子模块、仓库切换、手动添加或移除普通嵌套仓库。 | 中。先做子模块。 |
+| 分支筛选和默认视图 | 已有单分支聚焦和手输 glob。缺界面多选、命名 glob 预设、隐藏远端分支、按仓库记住分支筛选和排序、指定打开时的分支。 | 低至中。多选可复用 Host 的 `branches` 数组。 |
+| 提交图导航 | 父提交只可复制 Hash，缺点击跳转、沿父子关系的快捷键、节点悬停显示哪些分支/Tag/Stash 包含该提交、弱化不属于 HEAD 历史的提交。 | 父提交点击跳转低，图关系和可达性中。 |
+| 工作区比较 | 已有两提交比较，未提交变更只能和 HEAD 或空树比较。缺和任意历史提交比较。 | 中。需定义已跟踪、未跟踪文件的显示范围。 |
+| Tag 和 Stash | 已有底部列表。缺 annotated Tag 的完整详情、Stash 图节点、快捷跳转、Stash 详情和文件 Diff。上游源码还有 Stash 的未跟踪文件处理。 | Tag 详情低，Stash 中。 |
+| 分页和历史来源 | 目前手动加载，每次增加 100 条，最多加载 500 条。缺滚动自动加载、可配初始量和步长、可选纳入 reflog 引用的提交、独立显示选项控制 Stash 或仅由 Tag 引用的提交。 | 设置低至中。提高读取上限需单独验证性能。 |
+| Diff 与文件查看 | 已有单列 hunk Diff 和完整原文。缺 VS Code 原生 Diff 提供的并排、语法高亮体验，以及扩展提供的工作区文件对比入口、绝对路径复制、历史文件编码选择。 | 复制路径低，并排、高亮和多编码中至高。 |
+| 审阅进度 | 缺本地记录每个提交或比较中哪些文件已审阅、上次看了哪个文件，以及跨会话恢复。 | 中。 |
+| 正文、查找和显示 | 缺 emoji 短码、自定义 Issue 自动链接、正文中的提交 Hash 跳转、底部固定详情面板、更多可配置快捷键。现有查找已联动选中并打开详情，面板内仍缺按日期匹配。 | 低至中。 |
+
+可优先做 **子模块发现与切换 → 父提交跳转和 Tag 详情 → 任意提交与工作区比较、Stash Diff**。父提交和 Tag 数据已经在 Host 返回，增加入口即可。上游另有分支切换、合并、Rebase、Cherry-pick、Reset、Fetch/Pull/Push、Tag 和 Stash 写操作、远端配置管理，以及预填 PR 链接、导出归档和仓库配置。状态栏、命令面板、源码管理入口、集成终端和外部目录 Diff 则依赖 VS Code 宿主或本地工具。这些能力可按项目的只读定位和 DSH 使用场景单独判断。[上游功能与命令](https://marketplace.visualstudio.com/items?itemName=mhutchie.git-graph)
+
+---
 
 ## 0. 证据与方法（先说明可信度）
 
@@ -70,7 +116,7 @@ vscode-git-graph 是「右键菜单 + Ctrl/Cmd 点选」驱动的**可写 Git �
 | 排序 | **列头右键菜单**三选一（Commit Timestamp / Author Timestamp / Topological），**每仓库持久化**，全局默认 `git-graph.repository.commits.order` | 工具栏下拉三选一，会话内有效，**不持久化**（`buildRequest`）。**〔WIP〕** 下拉已移入 `FilterSheet`（「筛选」按钮 + 生效项计数徽章） | 已有（缺持久化，`可只读补齐`） |
 | 显示远端分支开关 | `showRemoteBranches`（全局默认 + 下拉中每仓库复选框） | 无开关，远端引用始终作为 ref 显示 | 可只读补齐（低价值） |
 | 加载更多 | `Load More Commits` 按钮 **或**滚到底自动加载（`loadMoreCommitsAutomatically`，`web/main.ts:2008-2013`），初始/步长可配 | 「加载更多」按钮，每页 100，上限 500（`MAX_COMMITS`），**无自动加载** | 已有（缺自动加载与可配步长） |
-| 仓库切换 | 仓库下拉 + `Add Git Repository...`/`Remove Git Repository...` 命令 + `maxDepthOfRepoSearch` 子仓库发现 | 绑定当前 DSH 会话工作区，单仓库，无切换 | 不适用（DSH 会话 = 单工作区） |
+| 仓库切换 | 仓库下拉，`.gitmodules` 自动发现子模块，普通嵌套仓库可手动添加 | 绑定当前 DSH 会话工作区，单仓库，无切换 | 可只读补齐，见 2026-11-13 复核 |
 | 仓库级初始分支 | `onLoad.showCheckedOutBranch`、`onLoad.showSpecificBranches`、`onLoad.scrollToHead` | 无（固定 `--all` 或 HEAD） | 可只读补齐（低价值） |
 | 状态栏 / 命令面板入口 | `ShowStatusBarItem`、`git-graph.view` 等 10 个命令、SCM 标题按钮 | DSH 原生右侧栏插件页签 | 不适用 |
 
@@ -127,7 +173,7 @@ vscode-git-graph 是「右键菜单 + Ctrl/Cmd 点选」驱动的**可写 Git �
 | --- | --- | --- | --- |
 | Tag 在图上显示 | 有（图上 ref 标签，右键有菜单） | 有（`refs` 含 `tag`，支持「标签右置」布局） | 已有 |
 | Tag 详情 | 「View Details」对话框：tag 名、tagger 名/邮箱/日期、消息、签名 | **数据已读到但没用起来**：`GitGraphTagDetails`（objectHash/tagger/taggerEmail/taggerDate/message/signature）只出现在 `title` 提示里 | 可只读补齐（数据已在手，缺一个详情面板） |
-| Tag 签名验证 | 显示签名（tag 侧同样给 icon/tooltip） | 只把 `%(contents:signature)` 存在性记为 `E`（无法校验），代码注释明确「Until verify-tag is explicitly run…」 | 可只读补齐（`git verify-tag --raw`） |
+| Tag 签名验证 | 2026-11-13 复核：上游有提交签名状态，annotated Tag 详情的读取未执行独立的 Tag 签名校验 | 只把 `%(contents:signature)` 存在性记为 `E`（无法校验） | 属于独立增强项 |
 | Tag 操作 | Delete、Push、Create Archive；可配签名 `repository.sign.tags` | 无 | 需写操作（本项目只读，不做） |
 | Tag 列表 | 无独立列表（散在图与下拉里） | **有**可折叠的 Metadata 条：Tag 列表（annotated 带 ⚑）+ 复制 | 已有（本项目独有） |
 | Stash 在图上 | 作为图上的**节点/行**参与布局：`git log` 的 rev 列表里显式加入每个 stash 的 `baseHash`，stash 自身信息来自 `git reflog --format=… refs/stash`（`src/dataSource.ts:1523-1525,1614`），支持 `Ctrl/Cmd+S` 上/下一个 stash 跳转 | 仅底部 Metadata 条列出 `stash@{n}`，不入图、不可跳转 | 可只读补齐（`loadStashes` 已带回 baseHash/untrackedFilesHash） |
