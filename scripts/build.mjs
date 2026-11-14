@@ -58,6 +58,7 @@ function transpile(source, file, moduleKind) {
       jsx: ts.JsxEmit.ReactJSX,
       esModuleInterop: true,
       isolatedModules: true,
+      newLine: ts.NewLineKind.LineFeed,
     },
   }).outputText
   return output.replace(/(['"])(\.[^'"\n]+?)\.(?:ts|tsx)\1/g, '$1$2.js$1')
@@ -83,7 +84,7 @@ function emitProject(configName, declarationsOnly, filter) {
 
 function indent(text, spaces) {
   const pad = ' '.repeat(spaces)
-  return text.split('\n').map(line => line.length === 0 ? line : pad + line).join('\n')
+  return text.split(/\r?\n/u).map(line => line.trim().length === 0 ? '' : pad + line).join('\n')
 }
 
 function buildClient() {
