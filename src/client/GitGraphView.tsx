@@ -42,7 +42,7 @@ const PAGE_SIZE = 100
 const NO_COMMITS: readonly GitGraphCommit[] = []
 
 /** Share the slot-owned translator with the nested detail and diff panels. */
-const TextContext = createContext<GitGraphTranslate | undefined>(undefined)
+export const TextContext = createContext<GitGraphTranslate | undefined>(undefined)
 
 function useText(): GitGraphTranslate {
   const t = useContext(TextContext)
@@ -668,7 +668,7 @@ function DiffBody({ diff }: { readonly diff: GitGraphFileDiff }) {
 }
 
 /** Read the whole Git blob on demand; switching versions discards late replies. */
-function FileSource({ hash, path, readFile }: {
+export function FileSource({ hash, path, readFile }: {
   readonly hash: string
   readonly path: string
   readonly readFile: GitGraphReaders['readFile']
@@ -985,7 +985,7 @@ function Avatar({ email, name, avatar }: { readonly email: string; readonly name
   </span>
 }
 
-function MetadataStrip({ readMetadata, readRevision }: { readonly readMetadata: GitGraphReaders['metadata']; readonly readRevision: number }) {
+export function MetadataStrip({ readMetadata, readRevision }: { readonly readMetadata: GitGraphReaders['metadata']; readonly readRevision: number }) {
   const t = useText()
   const [open, setOpen] = useState(false)
   const [metadata, setMetadata] = useState<GitGraphMetadata>()
