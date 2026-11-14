@@ -28,6 +28,12 @@ out/
 /UPDATE_LOG.md
 /DSH_PLUGIN_GUIDE.md
 
+# 本地内容产出与素材，不纳入版本控制
+# docs/competition：申报材料；docs/research：调研笔记；output：导出的图片、PDF 与打包素材
+/docs/competition/
+/docs/research/
+/output/
+
 # 本地缓存、临时文件和日志
 .cache/
 .tmp/
