@@ -11,6 +11,7 @@ export const AVATAR_MAX_BYTES = 64 * 1024
 const CACHE_SIZE = 128
 const SUCCESS_TTL = 24 * 60 * 60 * 1000
 const FAILURE_TTL = 15 * 60 * 1000
+const MAX_CONCURRENT = 4
 
 export function githubRepository(remote: string | null): string | null {
   if (remote === null) return null
@@ -48,6 +49,7 @@ export function gitHostOrigin(remote: string | null): string | null {
   const address = ssh !== null ? `https://${ssh[1]}` : remote
   try {
     const url = new URL(address)
+    if (url.protocol === 'ssh:' && url.password === '' && url.hostname !== '') return `https://${url.hostname}`
     if (!['https:', 'http:'].includes(url.protocol)) return null
     if (url.username !== '' || url.password !== '') return null
     return url.origin
@@ -114,6 +116,9 @@ function rasterType(body: Buffer): string | null {
 /** Fiber-owned, bounded memory cache. No Git files, credentials or disk writes. */
 export class AvatarStore {
   private readonly cache = new Map<string, { avatar: GitGraphAvatar; expires: number }>()
+  private readonly pending = new Map<string, { task: Promise<GitGraphAvatar>; controller: AbortController; users: number }>()
+  private readonly queue: Array<() => void> = []
+  private active = 0
   private githubRetryAt = 0
 
   constructor(private readonly fetcher: typeof fetch = fetch, private readonly now: () => number = Date.now) {}
@@ -145,7 +150,11 @@ export class AvatarStore {
 
   private async image(url: string, signal: AbortSignal, hostOrigin: string | null = null): Promise<string | null> {
     const response = await this.request(url, signal, 'image/png,image/jpeg,image/webp,image/gif', hostOrigin)
-    if (!response.ok) { await response.body?.cancel(); return null }
+    if (!response.ok) {
+      await response.body?.cancel()
+      if (response.status === 404 || response.status === 410) return null
+      throw new Error(`Avatar provider returned ${response.status}`)
+    }
     const body = await boundedBody(response, AVATAR_MAX_BYTES)
     const type = rasterType(body)
     return type === null ? null : `data:image/${type};base64,${body.toString('base64')}`
@@ -167,13 +176,17 @@ export class AvatarStore {
   }
 
   private async githubImage(repo: string, author: AvatarAuthor, signal: AbortSignal): Promise<string | null> {
-    if (this.githubRetryAt > this.now()) return null
+    if (this.githubRetryAt > this.now()) throw new Error('GitHub avatar lookup is rate-limited')
     const url = new URL(`https://api.github.com/repos/${repo}/commits`)
     url.searchParams.set('author', author.sourceEmail)
     url.searchParams.set('per_page', '1')
     const response = await this.request(url.href, signal, 'application/vnd.github+json')
     if (response.status === 429 || (response.status === 403 && response.headers.get('x-ratelimit-remaining') === '0')) this.githubRetryAt = this.now() + FAILURE_TTL
-    if (!response.ok) { await response.body?.cancel(); return null }
+    if (!response.ok) {
+      await response.body?.cancel()
+      if (response.status === 404 || response.status === 410) return null
+      throw new Error(`GitHub avatar lookup returned ${response.status}`)
+    }
     const parsed: unknown = JSON.parse((await boundedBody(response, 256 * 1024)).toString('utf8'))
     const entry = Array.isArray(parsed) ? object(parsed[0]) : undefined
     const commitAuthor = object(object(entry?.commit)?.author)
@@ -186,38 +199,41 @@ export class AvatarStore {
     return this.image(imageUrl.href, signal)
   }
 
-  private async author(author: AvatarAuthor, repo: string | null, host: string | null, source: GitGraphAvatarRequest['source'], signal: AbortSignal): Promise<GitGraphAvatar> {
+  private async resolveAuthor(author: AvatarAuthor, repo: string | null, host: string | null, source: GitGraphAvatarRequest['source'], key: string, signal: AbortSignal): Promise<GitGraphAvatar> {
     const email = author.email.trim().toLowerCase()
-    const key = `${source}:${repo ?? host ?? ''}:${email}`
-    const cached = this.cache.get(key)
-    if (cached !== undefined && cached.expires > this.now()) return cached.avatar
     let image: string | null = null
     let provider: GitGraphAvatar['provider'] = null
+    let failed = false
+    const lookup = async (read: () => Promise<string | null>) => {
+      try { return await read() } catch { signal.throwIfAborted(); failed = true; return null }
+    }
     if (/^[^\s@<>]+@[^\s@<>]+$/u.test(email)) {
       // A GitHub noreply address identifies the account on its own, so it works
       // even when the repository has no GitHub remote to search.
       const noreply = source === 'auto' ? githubNoreplyAvatarUrl(email) : null
       if (noreply !== null) {
-        try { image = await this.image(noreply, signal) } catch { signal.throwIfAborted() }
+        image = await lookup(() => this.image(noreply, signal))
         if (image !== null) provider = 'github'
       }
       if (image === null && source === 'auto' && repo !== null) {
-        try { image = await this.githubImage(repo, author, signal) } catch { signal.throwIfAborted() }
+        image = await lookup(() => this.githubImage(repo, author, signal))
         if (image !== null) provider = 'github'
       }
       // The repository's own Git service knows its members, so ask it before the
       // public Gravatar directory. GitHub remotes are already covered above.
       if (image === null && source === 'auto' && repo === null && host !== null) {
-        try { image = await this.hostImage(host, email, signal) } catch { signal.throwIfAborted() }
+        image = await lookup(() => this.hostImage(host, email, signal))
         if (image !== null) provider = 'host'
       }
       if (image === null) {
-        try { image = await this.image(gravatarUrl(email), signal) } catch { signal.throwIfAborted() }
+        image = await lookup(() => this.image(gravatarUrl(email), signal))
         if (image !== null) provider = 'gravatar'
       }
     }
     signal.throwIfAborted()
-    const avatar: GitGraphAvatar = { email, image, provider }
+    const unavailable = image === null && failed
+    const avatar: GitGraphAvatar = { email, image, provider, unavailable }
+    if (unavailable) return avatar
     this.cache.delete(key)
     this.cache.set(key, { avatar, expires: this.now() + (image === null ? FAILURE_TTL : SUCCESS_TTL) })
     if (this.cache.size > CACHE_SIZE) {
@@ -225,6 +241,52 @@ export class AvatarStore {
       if (oldest !== undefined) this.cache.delete(oldest)
     }
     return avatar
+  }
+
+  private async schedule(read: () => Promise<GitGraphAvatar>): Promise<GitGraphAvatar> {
+    if (this.active < MAX_CONCURRENT) this.active += 1
+    else await new Promise<void>(resume => { this.queue.push(resume) })
+    try { return await read() } finally {
+      const next = this.queue.shift()
+      if (next === undefined) this.active -= 1
+      else next()
+    }
+  }
+
+  private async author(author: AvatarAuthor, repo: string | null, host: string | null, source: GitGraphAvatarRequest['source'], signal: AbortSignal): Promise<GitGraphAvatar> {
+    signal.throwIfAborted()
+    const identity = source === 'auto' && repo !== null ? author.sourceEmail.trim().toLowerCase() : ''
+    const key = JSON.stringify([source, repo ?? host, author.email.trim().toLowerCase(), identity])
+    const cached = this.cache.get(key)
+    if (cached !== undefined && cached.expires > this.now()) return cached.avatar
+    let work = this.pending.get(key)
+    if (work === undefined) {
+      const controller = new AbortController()
+      const task = this.schedule(() => {
+        controller.signal.throwIfAborted()
+        return this.resolveAuthor(author, repo, host, source, key, controller.signal)
+      }).finally(() => {
+        if (this.pending.get(key)?.controller === controller) this.pending.delete(key)
+      })
+      work = { task, controller, users: 0 }
+      this.pending.set(key, work)
+    }
+    work.users += 1
+    let abort: (() => void) | undefined
+    try {
+      const cancelled = new Promise<never>((_, reject) => {
+        abort = () => reject(signal.reason)
+        signal.addEventListener('abort', abort, { once: true })
+      })
+      return await Promise.race([work.task, cancelled])
+    } finally {
+      if (abort !== undefined) signal.removeEventListener('abort', abort)
+      work.users -= 1
+      if (work.users === 0 && this.pending.get(key) === work) {
+        this.pending.delete(key)
+        work.controller.abort()
+      }
+    }
   }
 
   async read(authors: readonly AvatarAuthor[], remote: string | null, source: GitGraphAvatarRequest['source'], signal: AbortSignal): Promise<GitGraphAvatar[]> {

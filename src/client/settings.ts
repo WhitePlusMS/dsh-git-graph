@@ -1,8 +1,5 @@
 /**
- * Client-only display settings, persisted per repository. Storage keys are
- * derived from a stable hash of the normalized repository path so settings never
- * use the raw (case/separator-sensitive) path as the unique key and never leak
- * between repositories.
+ * Client-only display settings keyed by the canonical Git working-tree path.
  */
 
 export type GraphDateFormat = 'short' | 'full' | 'local'
@@ -63,19 +60,8 @@ export const DEFAULT_DISPLAY_SETTINGS: GitGraphDisplaySettings = {
 
 const STORAGE_PREFIX = 'dsh-git-graph:s:'
 
-/** Stable non-negative integer id derived from a normalized repo path. */
-export function stableRepoId(path: string): number {
-  const normalized = path.replace(/[/\\]+$/u, '').toLocaleLowerCase()
-  let hash = 2166136261
-  for (let i = 0; i < normalized.length; i += 1) {
-    hash ^= normalized.charCodeAt(i)
-    hash = Math.imul(hash, 16777619)
-  }
-  return hash >>> 0
-}
-
 function storageKey(path: string): string {
-  return `${STORAGE_PREFIX}${stableRepoId(path).toString(36)}`
+  return `${STORAGE_PREFIX}${path}`
 }
 
 function isPartial(value: unknown): value is Partial<GitGraphDisplaySettings> {
@@ -84,9 +70,7 @@ function isPartial(value: unknown): value is Partial<GitGraphDisplaySettings> {
 
 /** Load settings for a repository path, falling back to defaults on error. */
 export function loadDisplaySettings(path: string): GitGraphDisplaySettings {
-  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
-    return DEFAULT_DISPLAY_SETTINGS
-  }
+  if (typeof window === 'undefined') return DEFAULT_DISPLAY_SETTINGS
   try {
     const raw = window.localStorage.getItem(storageKey(path))
     if (raw === null) return DEFAULT_DISPLAY_SETTINGS
@@ -130,7 +114,7 @@ export function loadDisplaySettings(path: string): GitGraphDisplaySettings {
 
 /** Persist settings for a repository path. Never throws. */
 export function saveDisplaySettings(path: string, settings: GitGraphDisplaySettings): void {
-  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') return
+  if (typeof window === 'undefined') return
   try {
     window.localStorage.setItem(storageKey(path), JSON.stringify(settings))
   } catch {

@@ -86,8 +86,8 @@ export interface GitGraphInput {
   /** Branch-name glob filters (OR). Normalized by the Host. */
   readonly glob?: string[]
   /**
-   * Exact short branch names to restrict history to (OR). Unlike `glob` this is
-   * an equality match, so focusing `main` never drags in `main-old`.
+   * Exact full branch refs to restrict history to (OR). Local and remote refs
+   * can share the same display name.
    */
   readonly branches?: string[]
   /** Free-text search applied to hash, subject, author, email, ref name and date. */
@@ -208,21 +208,6 @@ export interface GitGraphStash {
   readonly message: string
 }
 
-/** Read-only repository and user configuration (vscode-git-graph config surface). */
-export interface GitGraphRepoConfig {
-  /** Per-branch upstream/pushremote (from local config). */
-  readonly branches: Record<string, { readonly remote: string | null; readonly pushRemote: string | null }>
-  readonly diffTool: string | null
-  readonly guiDiffTool: string | null
-  readonly pushDefault: string | null
-  /** Remote name -> url / pushUrl from local config. */
-  readonly remotes: Array<{ readonly name: string; readonly url: string | null; readonly pushUrl: string | null }>
-  readonly user: {
-    readonly name: { readonly local: string | null; readonly global: string | null }
-    readonly email: { readonly local: string | null; readonly global: string | null }
-  }
-}
-
 /** Inventory of working-tree changes (deleted + untracked + modified counts). */
 export interface GitGraphWorkingTree {
   readonly changed: boolean
@@ -237,6 +222,11 @@ export const MAX_COMMITS = 500
 export const MAX_SEARCH_COMMITS = MAX_COMMITS * 4
 /** Upper bound on exact branch names accepted in one query. */
 export const MAX_BRANCH_FILTER = 64
+export const COMMIT_HASH_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/iu
+
+export function branchRef(branch: Pick<GitGraphBranch, 'kind' | 'name'>): string {
+  return `refs/${branch.kind === 'local' ? 'heads' : 'remotes'}/${branch.name}`
+}
 
 /* ------------------------------------------------------------------ *
  * On-demand detail protocol DTOs (readCommit / readFile / compare).
@@ -279,6 +269,11 @@ export interface GitGraphDiffLine {
   readonly newLine: number | null
 }
 
+export interface GitGraphDiffHunk {
+  readonly header: string
+  readonly lines: GitGraphDiffLine[]
+}
+
 /**
  * Per-file change between a base and target commit. A request without an
  * explicit base compares the target with its first parent (empty tree for a
@@ -293,8 +288,7 @@ export interface GitGraphFileDiff {
   readonly binary: boolean
   readonly additions: number
   readonly deletions: number
-  /** A context line where the file is entirely added/deleted has no head. */
-  readonly lines: GitGraphDiffLine[]
+  readonly hunks: GitGraphDiffHunk[]
 }
 
 /** Request body for `gitGraph/readFileDiff`. */
@@ -346,6 +340,8 @@ export interface GitGraphAvatar {
   readonly image: string | null
   /** `host` is the repository's own Git service (Gitea/Gogs avatar endpoint). */
   readonly provider: 'github' | 'gravatar' | 'host' | null
+  /** At least one provider was temporarily unavailable and no fallback succeeded. */
+  readonly unavailable: boolean
 }
 export interface GitGraphAvatarResult {
   readonly avatars: GitGraphAvatar[]

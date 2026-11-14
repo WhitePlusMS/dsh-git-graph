@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { loadFile, loadFileDiff, loadWorkingTreeFile } from '../src/git.ts'
 import type { Context } from '@deepseek-ai/cordis'
+import type { SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 
 /**
  * Regression coverage for a repository whose Git root sits ABOVE the session
@@ -35,15 +36,17 @@ function git(cwd: string, argv: readonly string[]): Promise<{ code: number | nul
 /** The narrow ctx.subprocess seam the loaders consume. */
 const ctx = {
   subprocess: {
-    spawn(spec: { argv: readonly string[]; cwd: string }) {
-      const child = spawn(spec.argv[0] as string, spec.argv.slice(1), { cwd: spec.cwd, stdio: ['ignore', 'pipe', 'pipe'] })
+    spawn(spec: SubprocessSpawnSpec) {
+      const child = spawn(spec.argv[0] as string, spec.argv.slice(1), { cwd: spec.cwd, env: { ...process.env, ...spec.env }, stdio: ['ignore', 'pipe', 'pipe'] })
       let out = ''
       let err = ''
-      child.stdout.setEncoding('utf8').on('data', (chunk: string) => { out += chunk })
+      if (spec.stdio.stdout !== 'pipe') child.stdout.setEncoding('utf8').on('data', (chunk: string) => { out += chunk })
       child.stderr.setEncoding('utf8').on('data', (chunk: string) => { err += chunk })
       const done = new Promise(resolveDone => child.on('close', (exitCode, signal) => resolveDone({ exitCode, signal })))
       return {
         done,
+        stdout: child.stdout,
+        terminate: () => child.kill(),
         collected: {
           stdout: { readFrom: () => ({ text: out, lossy: false }) },
           stderr: { readFrom: () => ({ text: err, lossy: false }) },
@@ -85,25 +88,25 @@ describe('file diff paths from a subdirectory working directory', () => {
     const diff = await loadWorkingTreeFile(ctx, sub, { path: FILE }, signal)
     expect(diff.additions).toBe(14)
     expect(diff.deletions).toBe(2)
-    expect(diff.lines.filter(line => line.type === 'added')).toHaveLength(14)
-    expect(diff.lines.filter(line => line.type === 'removed')).toHaveLength(2)
+    expect(diff.hunks.flatMap(hunk => hunk.lines).filter(line => line.type === 'added')).toHaveLength(14)
+    expect(diff.hunks.flatMap(hunk => hunk.lines).filter(line => line.type === 'removed')).toHaveLength(2)
   })
 
   it('renders the same lines from the repository root', async () => {
     const fromRoot = await loadWorkingTreeFile(ctx, repo, { path: FILE }, signal)
     const fromSub = await loadWorkingTreeFile(ctx, sub, { path: FILE }, signal)
-    expect(fromRoot.lines).toEqual(fromSub.lines)
+    expect(fromRoot.hunks).toEqual(fromSub.hunks)
   })
 
   it('reads an untracked file from a subdirectory working directory', async () => {
     const diff = await loadWorkingTreeFile(ctx, sub, { path: UNTRACKED }, signal)
-    expect(diff.lines.filter(line => line.type === 'added')).toHaveLength(2)
+    expect(diff.hunks.flatMap(hunk => hunk.lines).filter(line => line.type === 'added')).toHaveLength(2)
   })
 
   it('renders a commit file diff from a subdirectory working directory', async () => {
     const diff = await loadFileDiff(ctx, sub, { hash: firstCommit, path: FILE }, signal)
     expect(diff.status).toBe('A')
-    expect(diff.lines.filter(line => line.type === 'added')).toHaveLength(BODY.length)
+    expect(diff.hunks.flatMap(hunk => hunk.lines).filter(line => line.type === 'added')).toHaveLength(BODY.length)
   })
 
   it('still reads a version file from a subdirectory working directory', async () => {

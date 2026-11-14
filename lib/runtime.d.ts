@@ -1,5 +1,6 @@
 /** Host half of the DSH Git Graph plugin. */
 import type { Context } from '@deepseek-ai/cordis';
+import type { GitGraphSnapshot } from './domain.js';
 export declare const GRAPH_OUTPUT_SCHEMA: {
     readonly type: "object";
     readonly additionalProperties: false;
@@ -152,5 +153,6 @@ export declare const GRAPH_OUTPUT_SCHEMA: {
         };
     };
 };
+export declare function summaryText(value: GitGraphSnapshot): string;
 /** Register the single read-only Git graph tool. */
 export declare function apply(ctx: Context): void;

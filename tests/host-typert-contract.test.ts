@@ -104,7 +104,7 @@ afterAll(() => {
 describe('gitGraph/read boundary contract', () => {
   it('accepts an exact branch focus in the request', () => {
     const { request } = readBoundary()
-    expect(() => request.parse({ repository: null, input: { maxCommits: 50, sort: 'date', branches: ['feature'] } })).not.toThrow()
+    expect(() => request.parse({ repository: null, input: { maxCommits: 50, sort: 'date', branches: ['refs/heads/feature'] } })).not.toThrow()
     expect(() => request.parse({ repository: 'packages/module', input: { branches: [] } })).not.toThrow()
   })
 
@@ -128,7 +128,7 @@ describe('gitGraph/read boundary contract', () => {
   })
 
   it('narrows history to the focused branch without hiding the branch list', async () => {
-    const snapshot = await loadGitGraph(ctx, { path: repo, maxCommits: 20, branches: ['feature'] }, { signal })
+    const snapshot = await loadGitGraph(ctx, { path: repo, maxCommits: 20, branches: ['refs/heads/feature'] }, { signal })
     expect(snapshot.commits.map(entry => entry.hash)).toContain(featureCommit)
     expect(snapshot.commits.map(entry => entry.hash)).not.toContain(mainCommit)
     expect(snapshot.branches?.map(branch => branch.name).sort()).toEqual(['feature', 'main'])

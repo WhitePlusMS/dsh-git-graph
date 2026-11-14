@@ -7,21 +7,24 @@ export function avatarEmail(email: string): string { return email.trim().toLower
 
 /** Keep photos while refreshing; the Host decides cache expiry and re-fetching. */
 export function useAvatars(commits: readonly GitGraphCommit[], repo: string | undefined, source: AvatarSource, enabled: boolean,
-  read: (request: GitGraphAvatarRequest, signal: AbortSignal) => Promise<RemoteResult<GitGraphAvatarResult>>) {
-  const cache = useRef({ key: '', images: new Map<string, GitGraphAvatar>() })
+  read: (request: GitGraphAvatarRequest, signal: AbortSignal) => Promise<RemoteResult<GitGraphAvatarResult>>, revision: number) {
+  const cache = useRef({ key: '', revision, images: new Map<string, GitGraphAvatar>() })
   const [images, setImages] = useState<ReadonlyMap<string, GitGraphAvatar>>(cache.current.images)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>()
   useEffect(() => {
     const key = `${repo ?? ''}:${source}`
     if (cache.current.key !== key) {
-      cache.current = { key, images: new Map() }
+      cache.current = { key, revision, images: new Map() }
       setImages(cache.current.images)
     }
     setError(undefined)
     setLoading(false)
     if (!enabled || repo === undefined) return
+    const refresh = cache.current.revision !== revision
+    cache.current.revision = revision
     const authors = [...new Map(commits.map(commit => [avatarEmail(commit.email), commit])).values()]
+      .filter(commit => refresh || cache.current.images.get(avatarEmail(commit.email))?.unavailable !== false)
     if (authors.length === 0) return
     let cancelled = false
     const controller = new AbortController()
@@ -34,6 +37,7 @@ export function useAvatars(commits: readonly GitGraphCommit[], repo: string | un
           if (!result.ok) throw new Error(result.error.message)
           const next = new Map(cache.current.images)
           for (const avatar of result.value.avatars) next.set(avatarEmail(avatar.email), avatar)
+          if (result.value.avatars.some(avatar => avatar.unavailable)) setError('Avatar provider unavailable')
           while (next.size > 512) {
             const oldest = next.keys().next().value
             if (oldest === undefined) break
@@ -47,6 +51,6 @@ export function useAvatars(commits: readonly GitGraphCommit[], repo: string | un
       } finally { if (!cancelled) setLoading(false) }
     })()
     return () => { cancelled = true; controller.abort() }
-  }, [commits, repo, source, enabled, read])
+  }, [commits, repo, source, enabled, read, revision])
   return { images, loading, error }
 }

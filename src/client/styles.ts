@@ -790,7 +790,7 @@ const CSS = `
 }
 .dsh-git-graph-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
 .dsh-git-graph-graph-refs { grid-column: 1; grid-row: 2; position: relative; pointer-events: none; }
-.dsh-git-graph-graph-ref-row { position: absolute; width: var(--git-graph-ref-width, 160px); display: flex; align-items: center; pointer-events: auto; overflow: hidden; }
+.dsh-git-graph-graph-ref-row { position: absolute; width: var(--git-graph-ref-width, 160px); display: flex; align-items: center; pointer-events: auto; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
 .dsh-git-graph-graph-ref-row .dsh-git-graph-refs { flex: 0 0 auto; max-width: none; }
 .dsh-git-graph-graph-ref-row .dsh-git-graph-ref { flex: 0 0 auto; }
 .dsh-git-graph-graph-ref-row .dsh-git-graph-current-branch { display: none; }

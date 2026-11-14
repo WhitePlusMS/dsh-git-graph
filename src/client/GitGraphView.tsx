@@ -5,10 +5,10 @@ import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { GitGraphAvatar, GitGraphAvatarRequest, GitGraphAvatarResult } from '../domain.ts'
 import type { GitGraphRepositories } from '../domain.ts'
 import type { GitGraphBranch, GitGraphCommit, GitGraphCommitDetails, GitGraphCompareRequest, GitGraphCompareResult, GitGraphFileChange, GitGraphFileContent, GitGraphFileDiff, GitGraphFileDiffRequest, GitGraphFileRequest, GitGraphQuery, GitGraphMetadata, GitGraphRef, GitGraphSnapshot, GitGraphWorkingTreeChanges, GitGraphWorkingTreeFileRequest } from '../domain.ts'
-import { MAX_SEARCH_COMMITS } from '../domain.ts'
+import { branchRef, MAX_SEARCH_COMMITS } from '../domain.ts'
 import { layoutGraph, type GraphLayout } from './graph-layout.ts'
 import { loadDisplaySettings, saveDisplaySettings, DEFAULT_DISPLAY_SETTINGS, COLUMN_LIMITS, clampColumnWidth, type CommitColumn, type GitGraphDisplaySettings, type GraphDateFormat, type GraphLineStyle, type GraphPalette } from './settings.ts'
-import { commitDate, displayHunks, graphDisplayWidth, graphRowHeight, referenceLabels, visibleColumns } from './presentation.ts'
+import { commitDate, graphDisplayWidth, graphRowHeight, referenceLabels, visibleColumns } from './presentation.ts'
 import { avatarEmail, useAvatars } from './avatars.ts'
 import { BUILD_ID } from './build-info.ts'
 import { RichMessage } from './RichMessage.tsx'
@@ -213,7 +213,7 @@ function GraphSvg({ layout, workingTreeChanged, selectedHash, metrics, onSelect,
     const x1 = pointX(edge.fromLane)
     const x2 = pointX(edge.toLane)
     const y1 = pointY(edge.row)
-    const y2 = pointY(edge.row + 1)
+    const y2 = edge.row + 1 === layout.nodes.length ? metrics.total : pointY(edge.row + 1)
     if (x1 === x2) return `M ${x1} ${y1} L ${x2} ${y2}`
     if (lineStyle === 'straight') return `M ${x1} ${y1} L ${x2} ${y2}`
     const from = rowBox(metrics, edge.row, rowHeight)
@@ -259,20 +259,12 @@ function GraphSvg({ layout, workingTreeChanged, selectedHash, metrics, onSelect,
           <g
             key={node.commit.hash}
             className={selected ? css.graphNodeSelected : css.graphNode}
-            role="button"
-            tabIndex={0}
             aria-current={node.commit.isHead}
             data-hovered={node.commit.hash === hoveredHash}
             onMouseEnter={() => onHover(node.commit.hash)}
             onMouseLeave={() => onHover(undefined)}
             aria-label={t('graph.selectCommit', { hash: shortHash(node.commit.hash), subject: node.commit.subject })}
             onClick={() => onSelect(node.commit.hash)}
-            onKeyDown={event => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault()
-                onSelect(node.commit.hash)
-              }
-            }}
           >
             <title>{`${shortHash(node.commit.hash)} ${node.commit.subject}`}</title>
             <circle className={css.graphHitArea} cx={x} cy={y} r={9} />
@@ -285,21 +277,9 @@ function GraphSvg({ layout, workingTreeChanged, selectedHash, metrics, onSelect,
   )
 }
 
-function commitMatchesFind(commit: GitGraphCommit, text: string, caseSensitive: boolean, regex: boolean): boolean {
-  if (text.length === 0) return false
-  try {
-    if (regex) {
-      const flags = caseSensitive ? '' : 'i'
-      return new RegExp(text, flags).test([commit.subject, commit.author, commit.email, commit.hash, ...commit.refs.map(ref => ref.name)].join(' '))
-    }
-  } catch {
-    return false
-  }
-  const needle = caseSensitive ? text : text.toLocaleLowerCase()
-  const haystack = caseSensitive
-    ? [commit.subject, commit.author, commit.email, commit.hash, ...commit.refs.map(ref => ref.name)].join(' ')
-    : [commit.subject, commit.author, commit.email, commit.hash, ...commit.refs.map(ref => ref.name)].join(' ').toLocaleLowerCase()
-  return haystack.includes(needle)
+function commitMatchesFind(commit: GitGraphCommit, text: string, caseSensitive: boolean, pattern?: RegExp): boolean {
+  const haystack = [commit.subject, commit.author, commit.email, commit.hash, ...commit.refs.map(ref => ref.name)].join(' ')
+  return pattern?.test(haystack) ?? (caseSensitive ? haystack.includes(text) : haystack.toLocaleLowerCase().includes(text.toLocaleLowerCase()))
 }
 
 /**
@@ -334,9 +314,10 @@ function GraphReferenceLabels({ layout, metrics, remotes, currentBranch, combine
   </div>
 }
 
-function CommitRow({ commit, selected, display, findActive, onSelect, currentBranch, hovered, onHover, remotes, avatar }: {
+function CommitRow({ commit, selected, tabbable, display, findActive, onSelect, currentBranch, hovered, onHover, remotes, avatar }: {
   readonly commit: GitGraphCommit
   readonly selected: boolean
+  readonly tabbable: boolean
   readonly display: GitGraphDisplaySettings
   readonly findActive: boolean
   readonly onSelect: () => void
@@ -348,7 +329,7 @@ function CommitRow({ commit, selected, display, findActive, onSelect, currentBra
 }) {
   const t = useText()
   return (
-    <div role="button" tabIndex={0} data-commit-hash={commit.hash} data-hovered={hovered} className={selected ? `${css.commit} ${css.commitSelected}` : css.commit} aria-pressed={selected} onClick={onSelect}
+    <div role="button" tabIndex={tabbable ? 0 : -1} data-commit-hash={commit.hash} data-hovered={hovered} className={selected ? `${css.commit} ${css.commitSelected}` : css.commit} aria-pressed={selected} onClick={onSelect}
       onMouseEnter={() => onHover(commit.hash)} onMouseLeave={() => onHover(undefined)}
       onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onSelect() } }}>
       <span className={css.commitDescription}>
@@ -670,7 +651,7 @@ function DiffBody({ diff }: { readonly diff: GitGraphFileDiff }) {
         <span>{t('diff.content')}</span>
       </div>
       <div className={css.diffBody}>
-        {displayHunks(diff.lines).map((hunk, hunkIndex) => <Fragment key={hunkIndex}>
+        {diff.hunks.map((hunk, hunkIndex) => <Fragment key={hunkIndex}>
           <div className={css.hunkHeader}>{hunk.header}</div>
           {hunk.lines.map((line, index) => (
           <div key={index} className={`${css.diffLine} ${line.type === 'added' ? css.diffAdded : line.type === 'removed' ? css.diffRemoved : css.diffContext}`} data-diff-type={line.type}>
@@ -773,7 +754,7 @@ function FileViewer({ hash, baseHash, change, readFileDiff, readFile, onClose }:
     return () => { cancelled = true; controller.abort() }
   }, [hash, baseHash, path, readFileDiff, revision])
 
-  const hasChange = diff !== undefined && diff.lines.some(line => line.type !== 'context')
+  const hasChange = diff !== undefined && (diff.additions > 0 || diff.deletions > 0)
   const binaryLike = diff?.binary === true
   const baseExists = baseHash !== undefined && change.type !== 'A'
   const targetExists = change.type !== 'D'
@@ -876,7 +857,7 @@ function WorkingTreeFileViewer({ path, readWorkingTreeFile, onClose }: {
     return () => { cancelled = true; controller.abort() }
   }, [path, readWorkingTreeFile, revision])
 
-  const hasChange = diff !== undefined && diff.lines.some(line => line.type !== 'context')
+  const hasChange = diff !== undefined && (diff.additions > 0 || diff.deletions > 0)
   const binaryLike = diff?.binary === true
 
   return (
@@ -915,7 +896,9 @@ function ComparePanel({ targetHash, commits, compare, readFileDiff, readFile, on
   readonly readRevision: number
 }) {
   const t = useText()
-  const [baseHash, setBaseHash] = useState<string>(commits.find(commit => commit.hash !== targetHash)?.hash ?? '')
+  const candidates = commits.filter(commit => commit.hash !== targetHash)
+  const [preferredBase, setPreferredBase] = useState(() => candidates[0]?.hash)
+  const baseHash = (candidates.some(commit => commit.hash === preferredBase) ? preferredBase : candidates[0]?.hash) ?? ''
   const [result, setResult] = useState<GitGraphCompareResult>()
   const [error, setError] = useState<string>()
   const [file, setFile] = useState<GitGraphFileChange>()
@@ -948,9 +931,10 @@ function ComparePanel({ targetHash, commits, compare, readFileDiff, readFile, on
           setFile(undefined)
           setResult(undefined)
           setError(undefined)
-          setBaseHash(event.target.value)
+          setPreferredBase(event.target.value)
         }} aria-label={t('compare.base')}>
-          {commits.map(commit => (
+          {baseHash.length === 0 && <option value="">{t('compare.selectDifferent')}</option>}
+          {candidates.map(commit => (
             <option key={commit.hash} value={commit.hash}>
               {shortHash(commit.hash)} · {commit.subject || t('common.noSubject')}
             </option>
@@ -959,7 +943,6 @@ function ComparePanel({ targetHash, commits, compare, readFileDiff, readFile, on
         <button type="button" className={css.secondaryButton} onClick={onClose}>{t('common.close')}</button>
       </div>
       {baseHash.length > 0 && baseHash !== targetHash && <div className={`${css.compareHint} ${css.mono}`} data-compare-range>{t('compare.range', { base: shortHash(baseHash), target: shortHash(targetHash) })}</div>}
-      {baseHash === targetHash && <div className={css.compareHint}>{t('compare.selectDifferent')}</div>}
       {baseHash.length > 0 && baseHash !== targetHash && result === undefined && error === undefined && <div className={css.pending}>{t('compare.loading')}</div>}
       {error !== undefined && <div className={css.error} role="alert">{t('compare.error', { message: error })}<button type="button" className={css.secondaryButton} onClick={() => setRevision(current => current + 1)}>{t('common.retry')}</button></div>}
       {result !== undefined && (
@@ -991,7 +974,7 @@ function Avatar({ email, name, avatar }: { readonly email: string; readonly name
   const image = !failed && avatar?.image ? avatar.image : undefined
   // "Not loaded yet" and "this email has no public avatar" look the same on
   // screen, so only the second one explains itself on hover.
-  const missing = image === undefined && avatar !== undefined && avatar.image === null
+  const missing = image === undefined && avatar !== undefined && avatar.image === null && !avatar.unavailable
   const provider = avatar?.provider === 'github' ? 'GitHub' : avatar?.provider === 'host' ? t('avatar.providerHost') : 'Gravatar'
   const title = image !== undefined
     ? t('avatar.source', { provider })
@@ -1366,7 +1349,7 @@ function BranchMenu({ branches, focused, onSelect, onShowAll }: {
         type="button"
         data-current={branch.isCurrent}
         title={t('branch.jump', { name: branch.name })}
-        className={branch.name === focused ? `${css.branchRow} ${css.branchRowActive}` : css.branchRow}
+        className={branchRef(branch) === focused ? `${css.branchRow} ${css.branchRowActive}` : css.branchRow}
         onClick={() => onSelect(branch)}
       >
         <span className={css.branchRowName}>{branch.name}</span>
@@ -1563,6 +1546,8 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
   const [navigationHint, setNavigationHint] = useState<string>()
   const sectionRef = useRef<HTMLElement>(null)
   const repositoryTrigger = useRef<HTMLButtonElement>(null)
+  const sheetTrigger = useRef<HTMLButtonElement>()
+  const pendingScroll = useRef<string>()
   const panelRef = useRef<HTMLDivElement>(null)
   const [settingsRepo, setSettingsRepo] = useState<string>()
   // Rows are measured, not assumed to be one line tall: a commit with many
@@ -1576,11 +1561,12 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
   const queryController = useRef<AbortController>()
   const loadedPath = useRef<string>()
   const authorAvatars = useAvatars(snapshot?.commits ?? NO_COMMITS, snapshot?.path, display.avatarSource,
-    display.showAvatars && settingsRepo === snapshot?.path, readAvatars)
-  const findError = useMemo(() => {
-    if (!findRegex || findText.length === 0) return undefined
-    try { new RegExp(findText); return undefined } catch { return t('find.invalidRegex') }
-  }, [findRegex, findText, t])
+    display.showAvatars && settingsRepo === snapshot?.path, readAvatars, readRevision)
+  const findPattern = useMemo(() => {
+    if (!findOpen || !findRegex || findText.length === 0) return undefined
+    try { return new RegExp(findText, findCase ? '' : 'i') } catch { return null }
+  }, [findOpen, findRegex, findText, findCase])
+  const findError = findPattern === null ? t('find.invalidRegex') : undefined
 
   const load = useCallback(async (request: GitGraphQuery) => {
     const sequence = ++querySequence.current
@@ -1620,10 +1606,7 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
     }
   }, [branchGlob, firstParent, focusedBranch, includeAll, sort])
 
-  const refresh = useCallback(() => {
-    setReadRevision(current => current + 1)
-    void load(buildRequest(maxCommits, search))
-  }, [load, buildRequest, maxCommits, search])
+  const refresh = useCallback(() => setReadRevision(current => current + 1), [])
   const refreshAll = () => { refreshRepositories(); refresh() }
 
   useLayoutEffect(() => {
@@ -1632,7 +1615,7 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
 
   useEffect(() => {
     void load(buildRequest(maxCommits, search))
-  }, [load, buildRequest, maxCommits, search])
+  }, [load, buildRequest, maxCommits, search, readRevision])
 
   useEffect(() => () => { querySequence.current += 1; queryController.current?.abort() }, [read])
 
@@ -1655,15 +1638,14 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
 
   // Debounce only text; sorting and branch filters preserve the emitted query.
   useEffect(() => {
+    const next = searchText.trim()
+    if (next === search) return undefined
     const timer = setTimeout(() => {
-      setSearch(searchText.trim())
+      setSearch(next)
       setMaxCommits(PAGE_SIZE)
     }, 350)
     return () => clearTimeout(timer)
-  }, [searchText])
-
-  // A new branch scope always starts from the first page again.
-  useEffect(() => { setMaxCommits(PAGE_SIZE) }, [branchGlob, focusedBranch])
+  }, [searchText, search])
 
   const visibleCommits = useMemo(() => {
     if (snapshot === undefined) return []
@@ -1698,8 +1680,9 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
   const selectBranch = (branch: GitGraphBranch) => {
     // Choosing the branch that is already focused changes no state, so nothing
     // would reload; treat the click as an explicit refresh instead of a no-op.
-    const alreadyFocused = branch.name === focusedBranch
-    setFocusedBranch(branch.name)
+    const ref = branchRef(branch)
+    const alreadyFocused = ref === focusedBranch
+    setFocusedBranch(ref)
     setBranchGlob('')
     setRefFilter('all')
     setSearchText('')
@@ -1708,9 +1691,10 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
     setViewingFile(undefined)
     setCompareTarget(undefined)
     setShowWorkingTree(false)
+    pendingScroll.current = branch.hash
     setSelectedHash(branch.hash)
     setSheet(undefined)
-    if (alreadyFocused) void refresh()
+    if (alreadyFocused && branchGlob === '' && search === '' && maxCommits === PAGE_SIZE) refresh()
   }
   const clearBranchFocus = () => {
     setFocusedBranch(undefined)
@@ -1826,8 +1810,7 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
     saveDisplaySettings(snapshot.path, display)
   }, [display, snapshot?.path, settingsRepo])
 
-  // Scroll only on a new selection, not on every query response or diff resize.
-  // Moving this panel alone avoids scrolling the surrounding DSH conversation.
+  // Keep a pending jump until the selected row is present in the returned page.
   useLayoutEffect(() => {
     if (selectedHash === undefined) return
     setShowWorkingTree(false)
@@ -1835,6 +1818,11 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
     setCompareTarget(undefined)
     setWorkingTreeFile(undefined)
     setNavigationHint(undefined)
+    pendingScroll.current = selectedHash
+  }, [selectedHash])
+
+  useLayoutEffect(() => {
+    if (selectedHash === undefined || pendingScroll.current !== selectedHash) return
     const panel = panelRef.current
     const row = panel?.querySelector<HTMLElement>(`[data-commit-hash="${selectedHash}"]`)
     if (panel === null || row === undefined || row === null) return
@@ -1843,16 +1831,14 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
     const top = bounds.top + 36
     if (target.top < top) panel.scrollTop += target.top - top
     else if (target.bottom > bounds.bottom) panel.scrollTop += target.bottom - bounds.bottom
-  }, [selectedHash])
+    pendingScroll.current = undefined
+  }, [selectedHash, visibleCommits])
 
   const findMatches = useMemo(() => {
-    if (findText.length === 0 || findRegex) {
-      return findText.length === 0
-        ? []
-        : visibleCommits.filter(commit => commitMatchesFind(commit, findText, findCase, true))
-    }
-    return visibleCommits.filter(commit => commitMatchesFind(commit, findText, findCase, false))
-  }, [findText, findCase, findRegex, visibleCommits])
+    if (!findOpen || findText.length === 0 || findPattern === null) return []
+    return visibleCommits.filter(commit => commitMatchesFind(commit, findText, findCase, findPattern))
+  }, [findOpen, findText, findCase, findPattern, visibleCommits])
+  const highlighted = useMemo(() => new Set(findMatches.map(commit => commit.hash)), [findMatches])
 
   // Keep the active find index in range and sync the selection to the match.
   useEffect(() => {
@@ -1866,8 +1852,8 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
 
   useEffect(() => {
     const target = findMatches[findIndex]
-    if (target !== undefined && target.hash !== selectedHash) setSelectedHash(target.hash)
-  }, [findMatches, findIndex, selectedHash])
+    if (target !== undefined) setSelectedHash(target.hash)
+  }, [findMatches, findIndex])
 
   const findStep = (delta: number) => {
     const count = findMatches.length
@@ -1882,17 +1868,19 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
         event.preventDefault()
-        if (event.shiftKey) setSheet(current => current === 'settings' ? undefined : 'settings')
+        if (event.shiftKey) {
+          sheetTrigger.current = section.querySelector<HTMLButtonElement>('[data-settings-trigger]') ?? undefined
+          setSheet(current => current === 'settings' ? undefined : 'settings')
+        }
         else { setFindOpen(true); setFindIndex(0) }
         return
       }
       const target = event.target
       const inField = target instanceof HTMLElement
-        && target.closest('input, select, textarea, [contenteditable="true"], [role="separator"], [data-file-viewer]') !== null
+        && target.closest('input, select, textarea, [contenteditable="true"], [role="separator"], [data-file-viewer], [data-working-tree-file-viewer]') !== null
       // Escape unwinds one layer at a time: sheet first, then find.
       if (event.key === 'Escape') {
-        if (sheet === 'repository') { event.preventDefault(); setSheet(undefined); repositoryTrigger.current?.focus(); return }
-        if (sheet !== undefined) { event.preventDefault(); setSheet(undefined); return }
+        if (sheet !== undefined) { event.preventDefault(); setSheet(undefined); sheetTrigger.current?.focus(); return }
         if (findOpen) { event.preventDefault(); setFindOpen(false); return }
       }
       // Direction keys inside a historical viewer scroll its content, rather
@@ -1900,7 +1888,7 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
       if (inField) return
       // An open sheet owns the panel, so graph navigation stays inert under it.
       if (sheet !== undefined) return
-      if (findOpen || findText.length > 0) return
+      if (findOpen) return
       if (event.key.toLowerCase() === 'h') {
         const head = visibleCommits.find(commit => commit.isHead)
         if (head !== undefined) setSelectedHash(head.hash)
@@ -1912,12 +1900,14 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()
         const nextIndex = event.key === 'ArrowDown' ? (index + 1) % visibleCommits.length : Math.max(0, index - 1)
-        setSelectedHash(visibleCommits[nextIndex]?.hash)
+        const next = visibleCommits[nextIndex]?.hash
+        setSelectedHash(next)
+        if (next !== undefined) panelRef.current?.querySelector<HTMLElement>(`[data-commit-hash="${next}"]`)?.focus({ preventScroll: true })
       }
     }
     section.addEventListener('keydown', onKeyDown)
     return () => section.removeEventListener('keydown', onKeyDown)
-  }, [visibleCommits, selectedHash, findOpen, findText, sheet, t])
+  }, [visibleCommits, selectedHash, findOpen, sheet, t])
 
   // A menu closes on a click anywhere else. The menu itself and any trigger are
   // exempt, so pressing a trigger toggles its menu instead of closing it on
@@ -1957,6 +1947,7 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
   }
 
   const selectedCommit = visibleCommits.find(commit => commit.hash === selectedHash)
+  const tabbableHash = selectedCommit?.hash ?? visibleCommits[0]?.hash
   const expansion = showWorkingTree ? <>
     <WorkingTreeChangesPanel changes={workingTreeChanges} error={workingTreeError} onRetry={refresh}
       onClose={() => setShowWorkingTree(false)} onOpenFile={path => setWorkingTreeFile(path)} />
@@ -1988,7 +1979,7 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
         <div className={css.headerMain}>
           {canSwitchRepository && (
             <button type="button" ref={repositoryTrigger} className={`${css.branchButton} ${css.repositoryButton}`}
-              data-git-graph-dropdown-trigger onClick={() => setSheet(current => current === 'repository' ? undefined : 'repository')}
+            data-git-graph-dropdown-trigger onClick={event => { sheetTrigger.current = event.currentTarget; setSheet(current => current === 'repository' ? undefined : 'repository') }}
               aria-expanded={sheet === 'repository'} aria-haspopup="dialog"
               aria-label={t('repository.current', { name: repositoryLabel })} title={snapshot?.path ?? repositoryLabel}>
               <RepositoryGlyph submodule={repository !== null} /><span className={css.branchName}>{repositoryLabel}</span><ChevronGlyph />
@@ -1997,7 +1988,7 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
           {snapshot !== undefined && snapshot.state !== 'not-git' && (
             <button type="button" className={css.branchButton} data-detached={snapshot.branch === null}
               data-git-graph-dropdown-trigger
-              onClick={() => setSheet(sheet === 'branch' ? undefined : 'branch')}
+              onClick={event => { sheetTrigger.current = event.currentTarget; setSheet(sheet === 'branch' ? undefined : 'branch') }}
               aria-expanded={sheet === 'branch'} aria-haspopup="dialog"
               title={t('branch.title')} aria-label={`${t('branch.aria')}: ${snapshot.branch ?? t('branch.detached')}`}>
               <BranchGlyph />
@@ -2011,8 +2002,8 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
         </div>
         <div className={css.toolbarActions}>
           <button type="button" className={css.iconButton} data-loading={loading} onClick={refreshAll} disabled={loading} title={t('toolbar.refresh')} aria-label={t('toolbar.refresh')}><RefreshGlyph /></button>
-          <button type="button" className={css.iconButton} data-git-graph-dropdown-trigger
-            onClick={() => setSheet(current => current === 'settings' ? undefined : 'settings')}
+          <button type="button" className={css.iconButton} data-git-graph-dropdown-trigger data-settings-trigger
+            onClick={event => { sheetTrigger.current = event.currentTarget; setSheet(current => current === 'settings' ? undefined : 'settings') }}
             aria-pressed={sheet === 'settings'} aria-expanded={sheet === 'settings'} aria-haspopup="dialog"
             title={t('toolbar.settings')} aria-label={t('toolbar.settings')}><SlidersGlyph /></button>
         </div>
@@ -2029,13 +2020,14 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
         {sheet === 'branch' && branches !== undefined && (
           <BranchMenu branches={branches} focused={focusedBranch} onSelect={selectBranch} onShowAll={clearBranchFocus} />
         )}
-        {/* Reference-type filtering uses the loaded page; refresh the Host
-            query as well so every filter action gives visible feedback. */}
         {sheet === 'filter' && (
           <FilterMenu refFilter={refFilter} sort={sort} includeAll={includeAll} firstParent={firstParent} branchGlob={branchGlob}
-            onRefFilter={value => { setRefFilter(value); void refresh() }}
-            onSort={setSort} onIncludeAll={setIncludeAll} onFirstParent={setFirstParent} onBranchGlob={setBranchGlob}
-            onReset={() => { setRefFilter('all'); setSort('date'); setIncludeAll(true); setFirstParent(false); setBranchGlob('') }}
+            onRefFilter={setRefFilter}
+            onSort={value => { setSort(value); setMaxCommits(PAGE_SIZE) }}
+            onIncludeAll={value => { setIncludeAll(value); setMaxCommits(PAGE_SIZE) }}
+            onFirstParent={value => { setFirstParent(value); setMaxCommits(PAGE_SIZE) }}
+            onBranchGlob={value => { setBranchGlob(value); setMaxCommits(PAGE_SIZE) }}
+            onReset={() => { setRefFilter('all'); setSort('date'); setIncludeAll(true); setFirstParent(false); setBranchGlob(''); setMaxCommits(PAGE_SIZE) }}
             onClose={() => setSheet(undefined)} />
         )}
         {sheet === 'settings' && (
@@ -2055,7 +2047,7 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
       <div className={css.toolbar} role="toolbar" aria-label={t('toolbar.aria')}>
         <input className={css.search} type="search" value={searchText} onChange={event => setSearchText(event.target.value)} placeholder={t('toolbar.searchPlaceholder')} aria-label={t('toolbar.search')} />
         <button type="button" className={css.iconButton} onClick={() => setFindOpen(current => !current)} aria-pressed={findOpen} title={t('toolbar.find')} aria-label={t('toolbar.find')}><SearchGlyph /></button>
-        <button type="button" className={css.filterButton} data-git-graph-dropdown-trigger onClick={() => setSheet(current => current === 'filter' ? undefined : 'filter')} aria-expanded={sheet === 'filter'} aria-haspopup="dialog" title={t('filter.title')}>
+        <button type="button" className={css.filterButton} data-git-graph-dropdown-trigger onClick={event => { sheetTrigger.current = event.currentTarget; setSheet(current => current === 'filter' ? undefined : 'filter') }} aria-expanded={sheet === 'filter'} aria-haspopup="dialog" title={t('filter.title')}>
           <FunnelGlyph />
           <span className={css.filterLabel}>{t('toolbar.filter')}</span>
           {activeFilterCount > 0 && <span className={css.filterBadge}>{activeFilterCount}</span>}
@@ -2064,7 +2056,7 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
 
       {focusedBranch !== undefined && (
         <div className={css.hint} role="status">
-          <span>{t('branch.focusActive', { name: focusedBranch })}</span>
+          <span>{t('branch.focusActive', { name: focusedBranch.replace(/^refs\/(heads|remotes)\//u, '') })}</span>
           <button type="button" className={css.linkButton} onClick={clearBranchFocus}>{t('branch.showAll')}</button>
         </div>
       )}
@@ -2127,7 +2119,7 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
                 )}
                 {visibleCommits.map(commit => (
                   <Fragment key={commit.hash}>
-                    <CommitRow commit={commit} selected={commit.hash === selectedHash} display={display} findActive={findMatches.length > 0 && findMatches.some(match => match.hash === commit.hash)} onSelect={() => selectCommit(commit.hash)} currentBranch={snapshot.branch} hovered={hoveredHash === commit.hash} onHover={setHoveredHash} remotes={snapshot.remotes} avatar={display.showAvatars ? authorAvatars.images.get(avatarEmail(commit.email)) : undefined} />
+                  <CommitRow commit={commit} tabbable={commit.hash === tabbableHash} selected={commit.hash === selectedHash} display={display} findActive={highlighted.has(commit.hash)} onSelect={() => selectCommit(commit.hash)} currentBranch={snapshot.branch} hovered={hoveredHash === commit.hash} onHover={setHoveredHash} remotes={snapshot.remotes} avatar={display.showAvatars ? authorAvatars.images.get(avatarEmail(commit.email)) : undefined} />
                     {commit.hash === selectedHash && (
                       <div className={css.inlineDetails} data-inline-details>
                         {expansion}
@@ -2137,10 +2129,10 @@ function GitGraphContent({ read, readCommit, readFile, readFileDiff, readWorking
                 ))}
               </div>
             </div>
-            {canLoadMore && <button type="button" className={css.loadMore} onClick={loadMore} disabled={loading}>{loading ? t('toolbar.loading') : t('toolbar.loadMore')}</button>}
-            <MetadataStrip readMetadata={metadata} readRevision={readRevision} />
           </>
         )}
+        {canLoadMore && <button type="button" className={css.loadMore} onClick={loadMore} disabled={loading}>{loading ? t('toolbar.loading') : t('toolbar.loadMore')}</button>}
+        {snapshot !== undefined && snapshot.state !== 'not-git' && <MetadataStrip readMetadata={metadata} readRevision={readRevision} />}
       </div>
     </section>
   )

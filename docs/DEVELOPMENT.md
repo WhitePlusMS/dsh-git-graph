@@ -38,7 +38,7 @@ dsh --profile my-web
 pnpm run dev
 ```
 
-`scripts/dev.mjs` 依次做三件事：构建、把 `lib/`、`locale/`、`cordis.patch.yml`、`package.json` **原子写入**（临时文件 + 重命名）已安装的 profile 副本、继续监听 `src/` 与 `locale/`。原子写入保证 HMR 轮询不会读到写了一半的 bundle 从而替换失败。构建失败时安装目录保持上一版，不写入半成品。
+`scripts/dev.mjs` 构建后将 `lib/`、`locale/`、`cordis.patch.yml` 和 `package.json` 逐文件原子同步到已安装的 profile 副本，并监听这些产物对应的源码与配置。`lib/client.js` 最后替换，文件占用导致替换失败时保留原入口并报错。侧栏界面字典来自 `src/client/locales.ts`。
 
 默认自动发现 `~/.dsh/profiles/*/node_modules/dsh-git-graph`；需要指定其他位置时用 `DSH_PLUGIN_DIR`：
 
@@ -49,7 +49,7 @@ pnpm run dev
 
 | 改了什么 | 生效方式 |
 | --- | --- |
-| `src/client/**`、`locale/**` | 约 500ms 内热替换，无需刷新页面 |
+| `src/client/**` | 构建同步后约 500ms 内热替换，无需刷新页面 |
 | `src/*.ts`（Host 半侧）、`cordis.patch.yml`、`package.json` | 重启 `dsh web` |
 
 热替换失败**不会回滚**旧 bundle。失败会显示在 **设置 → 插件 → 插件列表**，可在那里重试；刷新页面也会重新加载。恢复到发布版只需重新执行一次 `dsh plugin --profile web add <Release 包地址>`。
@@ -74,9 +74,11 @@ pnpm run build
 
 `.github/workflows/release.yml` 先执行类型检查和测试，通过后运行 `pnpm pack`，成功后以本次提交创建对应版本标签与 Release，附带含 `lib/` 的版本化 `.tgz`、供市场跟随最新版本的固定名 `dsh-git-graph.tgz` 和 `SHA256SUMS.txt`；发布说明取自 `CHANGELOG.md` 的当前版本。普通提交不会发布，已发布版本不会被覆盖。检查 Actions 成功且附件可下载后，再用 README 中的地址安装。该过程不发布到 npm，也不自动完成市场目录收录。
 
+同版本重建可以手动运行 `Package release` 并选择 `rebuild`，也可用 `rebuild:` 开头的提交触发。GitHub 预发布标签为 `v<版本>-build.<提交前 12 位>`，包内版本保持原值。按该发布页的明确地址安装并重启 DSH。市场的 `latest/download` 链接继续指向正式版本。
+
 ## Git 数据与路径处理
 
-Host 通过固定、不经过 shell 的 subprocess 参数读取 Git 数据，采用字面路径匹配并禁用可选索引更新。界面按需读取仓库状态、HEAD、有界历史、提交详情、文件 Diff、工作区变更和提交比较。历史文件查看器使用 `readFileDiff` 读取统一 Diff，使用 `readFile` 按需读取完整原文，两个接口沿用 domain DTO 与 `RemoteResult`。
+Host 通过固定、不经过 shell 的 subprocess 参数读取 Git 数据，采用字面路径匹配，禁用可选索引更新和对象惰性获取。部分克隆缺少对象时提示使用完整本地历史。界面按需读取仓库状态、HEAD、有界历史、提交详情、文件 Diff、工作区变更和提交比较。历史文件查看器使用 `readFileDiff` 读取带原始 hunk 的统一 Diff，使用 `readFile` 按需读取完整原文，两个接口沿用 domain DTO 与 `RemoteResult`。
 
 `readFileDiff` 接收 `hash`、仓库相对 `path` 及可选 `baseHash`。明确基准时比较两端树，不使用 merge-base；未指定时比较目标与首父提交，根提交比较空树。两端变更列表决定文件状态和重命名前后的路径，即使目标最后一次提交未修改该文件也能读取范围 Diff。`readFile` 只接收 `hash` / `path`，单文件上限为 1 MiB；新增、删除、重命名读取各自存在的一端，空文件、二进制和超限分别展示。
 

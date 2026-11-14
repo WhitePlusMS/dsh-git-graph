@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { MAX_AVATAR_BATCH, MAX_BRANCH_FILTER, MAX_COMMITS } from './domain.ts'
-import { createGitGraphInvocation, TYPERT_PACKAGE } from './typert.shared.ts'
+import { COMMIT_HASH_PATTERN, MAX_AVATAR_BATCH, MAX_BRANCH_FILTER, MAX_COMMITS } from './domain.ts'
+import { createGitGraphInvocation, TYPERT_PACKAGE, validFileText } from './typert.shared.ts'
 
 /** Host-only zod codecs required by dsh-typert-loader for RPC registration. */
 const hostRefSchema = z.object({
@@ -56,7 +56,7 @@ const hostSnapshotSchema = z.object({
   searchTruncated: z.boolean(),
 }).strict()
 
-const hashSchema = z.string().regex(/^[0-9a-f]{40}$/iu)
+const hashSchema = z.string().regex(COMMIT_HASH_PATTERN)
 const nullableIntSchema = z.number().int().min(0).nullable()
 
 const hostFileChangeSchema = z.object({
@@ -99,7 +99,7 @@ const hostFileContentSchema = z.object({
   text: z.string().nullable(),
   size: z.number().int().min(0),
   truncated: z.boolean(),
-}).strict()
+}).strict().refine(validFileText)
 
 const hostDiffLineSchema = z.object({
   type: z.enum(['context', 'added', 'removed']),
@@ -116,7 +116,7 @@ const hostFileDiffSchema = z.object({
   binary: z.boolean(),
   additions: z.number().int().min(0),
   deletions: z.number().int().min(0),
-  lines: z.array(hostDiffLineSchema),
+  hunks: z.array(z.object({ header: z.string(), lines: z.array(hostDiffLineSchema) }).strict()),
 }).strict()
 
 const hostWorkingTreeChangesSchema = z.object({
@@ -177,7 +177,8 @@ const hostAvatarSchema = z.object({
   email: z.string().max(320),
   image: z.string().max(100000).regex(/^data:image\/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+=*$/u).nullable(),
   provider: z.enum(['github', 'gravatar', 'host']).nullable(),
-}).strict().refine(value => (value.image === null) === (value.provider === null))
+  unavailable: z.boolean(),
+}).strict().refine(value => (value.image === null) === (value.provider === null) && (!value.unavailable || value.image === null))
 const hostAvatarResultSchema = z.object({ avatars: z.array(hostAvatarSchema).max(MAX_AVATAR_BATCH) }).strict()
 
 export const gitGraphHostDescriptors = [

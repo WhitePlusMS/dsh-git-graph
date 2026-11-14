@@ -1,11 +1,14 @@
 import { spawn, spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, realpathSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readdirSync, realpathSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
+import type { SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { MAX_SEARCH_COMMITS } from '../src/domain.ts'
-import { loadCommitDetails, loadCompare, loadFileDiff, loadGitGraph, loadRepositories, loadTags, loadWorkingTreeChanges, parseWorkingTreeStatus, resolveSubmodule } from '../src/git.ts'
+import { loadCommitDetails, loadCompare, loadFile, loadFileDiff, loadGitGraph, loadRepositories, loadTags, loadWorkingTreeChanges, loadWorkingTreeFile, parseFileDiff, parseWorkingTreeStatus, resolveSubmodule } from '../src/git.ts'
+import { summaryText } from '../src/runtime.ts'
 import { gitGraphSnapshotSchema } from '../src/typert.shared.ts'
 
 /** Real Git fixtures keep platform/path and native wildcard semantics honest. */
@@ -23,23 +26,23 @@ function git(cwd: string, args: string[], input?: string): string {
 
 const ctx = {
   subprocess: {
-    spawn(spec: { argv: readonly string[]; cwd: string; signal: AbortSignal }) {
+    spawn(spec: SubprocessSpawnSpec) {
       calls.push([...spec.argv])
-      const child = spawn(spec.argv[0]!, spec.argv.slice(1), { cwd: spec.cwd, stdio: ['ignore', 'pipe', 'pipe'] })
+      const child = spawn(spec.argv[0]!, spec.argv.slice(1), { cwd: spec.cwd, env: { ...process.env, ...spec.env }, stdio: ['ignore', 'pipe', 'pipe'] })
       let out = ''
       let err = ''
-      child.stdout.setEncoding('utf8').on('data', (chunk: string) => { out += chunk })
+      if (spec.stdio.stdout !== 'pipe') child.stdout.setEncoding('utf8').on('data', (chunk: string) => { out += chunk })
       child.stderr.setEncoding('utf8').on('data', (chunk: string) => { err += chunk })
       const abort = () => child.kill()
-      spec.signal.addEventListener('abort', abort, { once: true })
+      spec.signal?.addEventListener('abort', abort, { once: true })
       const done = new Promise((resolveDone, reject) => {
         child.once('error', reject)
         child.once('close', (exitCode, processSignal) => {
-          spec.signal.removeEventListener('abort', abort)
+          spec.signal?.removeEventListener('abort', abort)
           resolveDone({ exitCode, signal: processSignal })
         })
       })
-      return { done, collected: {
+      return { done, stdout: child.stdout, terminate: abort, collected: {
         stdout: { readFrom: () => ({ text: out, lossy: false }) },
         stderr: { readFrom: () => ({ text: err, lossy: false }) },
       } }
@@ -48,7 +51,7 @@ const ctx = {
 } as unknown as Context
 
 function commit(cwd: string, message: string): string {
-  git(cwd, ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', message])
+  git(cwd, ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-q', '--allow-empty', '-m', message])
   return git(cwd, ['rev-parse', 'HEAD'])
 }
 
@@ -123,6 +126,42 @@ describe('Git acquisition regressions', () => {
     expect(result).toMatchObject({ commits: [], searchTruncated: false })
   })
 
+  it('keeps branch namespaces and record separators distinct', async () => {
+    const root = join(workspace, 'read-identities')
+    mkdirSync(root)
+    git(root, ['init', '-qb', 'origin/topic'])
+    expect((await loadGitGraph(ctx, { path: root }, { signal })).branch).toBe('origin/topic')
+    const first = commit(root, 'base')
+    git(root, ['switch', '-qc', 'remote-source'])
+    const remote = commit(root, 'remote only')
+    git(root, ['update-ref', 'refs/remotes/origin/topic', remote])
+    git(root, ['switch', '-q', 'origin/topic'])
+    const local = commit(root, 'local\u001eonly\n\nbody\u001econtinued')
+    git(root, ['tag', 'searchable-tag'])
+    git(root, ['config', 'log.excludeDecoration', 'refs/tags/*'])
+    const focused = await loadGitGraph(ctx, { path: root, branches: ['refs/heads/origin/topic'] }, { signal })
+    expect(focused.commits.map(entry => entry.hash)).toEqual([local, first])
+    expect(focused.commits[0]?.subject).toBe('local\u001eonly')
+    expect((await loadCommitDetails(ctx, root, local, signal)).body).toContain('body\u001econtinued')
+    expect((await loadGitGraph(ctx, { path: root, search: 'searchable-tag' }, { signal })).commits[0]?.hash).toBe(local)
+    expect(summaryText(focused)).toContain(`(parents: ${first.slice(0, 12)})`)
+    expect(summaryText({ ...focused, searchTruncated: true, commits: [] })).toContain('searchTruncated=true')
+    expect(parseFileDiff('@@ -8,0 +9,2 @@\n+a\n+b\n')[0]?.header).toBe('@@ -8,0 +9,2 @@')
+  })
+
+  it('reads SHA-256 commits and the empty tree with their own object format', async () => {
+    const root = join(workspace, 'read-sha256')
+    mkdirSync(root)
+    git(root, ['init', '-qb', 'main', '--object-format=sha256'])
+    writeFileSync(join(root, 'a'), 'staged\n')
+    git(root, ['add', 'a'])
+    expect((await loadWorkingTreeChanges(ctx, root, signal)).changes).toMatchObject([{ type: 'A', newPath: 'a' }])
+    const hash = commit(root, 'first SHA-256')
+    expect(hash).toHaveLength(64)
+    expect((await loadCommitDetails(ctx, root, hash.toUpperCase(), signal)).hash).toBe(hash)
+    expect((await loadFileDiff(ctx, root, { hash, path: 'a' }, signal)).additions).toBe(1)
+  })
+
   it('includes type changes in commit, comparison and worktree inventories', async () => {
     const details = await loadCommitDetails(ctx, repo, typed, signal)
     expect(details.fileChanges).toContainEqual(expect.objectContaining({ type: 'T', newPath: 'sub/mode.txt' }))
@@ -133,7 +172,7 @@ describe('Git acquisition regressions', () => {
   })
 
   it('retains the destination in either porcelain rename status column', () => {
-    expect(parseWorkingTreeStatus('R  new.txt\0old.txt\0?? extra.txt\0')).toEqual({ changed: true, modified: ['new.txt'], deleted: [], untracked: ['extra.txt'] })
+    expect(parseWorkingTreeStatus('R  new.txt\0old.txt\0?? extra.txt\0')).toEqual({ changed: true, modified: ['new.txt'], deleted: [], untracked: ['extra.txt'], conflicts: [] })
     expect(parseWorkingTreeStatus(' R new.txt\0old.txt\0 D gone.txt\0').modified).toEqual(['new.txt'])
   })
 
@@ -167,6 +206,98 @@ describe('Git acquisition regressions', () => {
     controller.abort()
     await expect(query).rejects.toThrow('已取消')
     expect(count).toBe(1)
+  })
+})
+
+describe('local history and working tree reads', () => {
+  it('keeps a partial clone local and distinguishes shallow boundaries from roots', async () => {
+    const source = join(workspace, 'read-source')
+    const partial = join(workspace, 'read-partial')
+    const shallow = join(workspace, 'read-shallow')
+    mkdirSync(source)
+    git(source, ['init', '-qb', 'main'])
+    git(source, ['config', 'uploadpack.allowFilter', 'true'])
+    writeFileSync(join(source, 'a'), 'old\n')
+    git(source, ['add', '.'])
+    const first = commit(source, 'first')
+    writeFileSync(join(source, 'a'), 'new\n')
+    git(source, ['add', '.'])
+    const tip = commit(source, 'tip')
+    const url = pathToFileURL(source).href
+    git(workspace, ['clone', '-q', '--filter=blob:none', url, partial])
+    const packs = join(partial, '.git/objects/pack')
+    const initial = readdirSync(packs)
+    await expect(loadFile(ctx, partial, { hash: first, path: 'a' }, signal)).rejects.toThrow('本地缺少文件对象')
+    expect(readdirSync(packs)).toEqual(initial)
+    git(workspace, ['clone', '-q', '--depth=1', url, shallow])
+    await expect(loadCommitDetails(ctx, shallow, tip, signal)).rejects.toThrow('本地缺少父提交')
+    await expect(loadFileDiff(ctx, shallow, { hash: tip, path: 'a' }, signal)).rejects.toThrow('本地缺少父提交')
+  })
+
+  it('isolates the rename patch and preserves valid UTF-8 replacement characters', async () => {
+    const root = join(workspace, 'read-rename')
+    mkdirSync(root)
+    git(root, ['init', '-qb', 'main'])
+    writeFileSync(join(root, 'a'), 'text \uFFFD\n')
+    writeFileSync(join(root, 'binary'), Buffer.from([0xff, 0xfe]))
+    git(root, ['add', '.'])
+    const base = commit(root, 'base')
+    renameSync(join(root, 'a'), join(root, 'b'))
+    mkdirSync(join(root, 'a'))
+    writeFileSync(join(root, 'a/new.txt'), 'unrelated\n')
+    git(root, ['add', '-A'])
+    const tip = commit(root, 'rename and add')
+    expect(await loadFileDiff(ctx, root, { hash: tip, path: 'b' }, signal)).toMatchObject({ status: 'R', additions: 0, deletions: 0, hunks: [] })
+    expect(await loadFile(ctx, root, { hash: base, path: 'a' }, signal)).toMatchObject({ kind: 'text', text: 'text \uFFFD\n' })
+    expect(await loadFile(ctx, root, { hash: base, path: 'binary' }, signal)).toMatchObject({ kind: 'binary', text: null })
+    git(root, ['update-index', '--add', '--cacheinfo', `160000,${base},submodule`])
+    const link = commit(root, 'gitlink')
+    expect(await loadFile(ctx, root, { hash: link, path: 'submodule' }, signal)).toMatchObject({ text: `Subproject commit ${base}\n` })
+  })
+
+  it('shares root-relative working tree changes and detects a recreated file', async () => {
+    const root = join(workspace, 'read-worktree')
+    const nested = join(root, 'nested')
+    mkdirSync(nested, { recursive: true })
+    git(root, ['init', '-qb', 'main'])
+    writeFileSync(join(root, 'a'), 'old\n')
+    writeFileSync(join(nested, 'b'), 'before\n')
+    git(root, ['add', '.'])
+    commit(root, 'base')
+    git(root, ['rm', 'a'])
+    writeFileSync(join(root, 'a'), 'recreated\n')
+    writeFileSync(join(nested, 'b'), 'after\n')
+    git(root, ['config', 'diff.relative', 'true'])
+    const { changes } = await loadWorkingTreeChanges(ctx, nested, signal)
+    expect(changes.map(({ type, newPath }) => [type, newPath])).toEqual([['M', 'a'], ['M', 'nested/b']])
+    expect(await loadWorkingTreeFile(ctx, nested, { path: 'a' }, signal)).toMatchObject({ status: 'M', additions: 1, deletions: 1 })
+    git(root, ['add', '-A'])
+    commit(root, 'clean again')
+    git(root, ['config', 'status.showUntrackedFiles', 'no'])
+    writeFileSync(join(nested, 'untracked'), 'new\n')
+    expect((await loadGitGraph(ctx, { path: nested }, { signal })).workingTree.changed).toBe(true)
+  })
+
+  it('shows unmerged paths as conflicts in both the inventory and patch', async () => {
+    const root = join(workspace, 'read-conflict')
+    mkdirSync(root)
+    git(root, ['init', '-qb', 'main'])
+    writeFileSync(join(root, 'a'), 'common\n')
+    git(root, ['add', 'a'])
+    commit(root, 'base')
+    git(root, ['switch', '-qc', 'other'])
+    writeFileSync(join(root, 'a'), 'other\n')
+    git(root, ['add', 'a'])
+    commit(root, 'other change')
+    git(root, ['switch', '-q', 'main'])
+    writeFileSync(join(root, 'a'), 'main\n')
+    git(root, ['add', 'a'])
+    commit(root, 'main change')
+    const merge = spawnSync('git', ['merge', '--no-edit', 'other'], { cwd: root })
+    expect(merge.status).toBe(1)
+    expect(git(root, ['status', '--porcelain=v1'])).toBe('UU a')
+    expect((await loadWorkingTreeChanges(ctx, root, signal)).changes).toMatchObject([{ type: 'U', newPath: 'a' }])
+    expect(await loadWorkingTreeFile(ctx, root, { path: 'a' }, signal)).toMatchObject({ status: 'U' })
   })
 })
 
@@ -212,7 +343,7 @@ describe('session repository and direct submodules', () => {
     if (child === undefined) throw new Error('Child commit is missing')
     expect((await loadCommitDetails(ctx, target, child.hash, signal)).fileChanges[0]?.newPath).toBe('shared.txt')
     const diff = await loadFileDiff(ctx, target, { hash: child.hash, path: 'shared.txt' }, signal)
-    expect(diff.lines.map(line => line.content)).toEqual(['child original', 'child updated'])
+    expect(diff.hunks.flatMap(hunk => hunk.lines).map(line => line.content)).toEqual(['child original', 'child updated'])
 
     for (const path of [missing, 'ordinary', `${modulePath}/nested/history`, '../module', source]) {
       await expect(resolveSubmodule(ctx, clone, path, signal)).rejects.toThrow('所选子模块不可用')

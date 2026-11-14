@@ -7,12 +7,12 @@ import { MAX_BRANCH_FILTER } from '../src/domain.ts'
 const hash = 'a'.repeat(40)
 const other = 'b'.repeat(40)
 const change = { type: 'T', oldPath: 'file', newPath: 'file', additions: 1, deletions: 1 }
-const diff = { hash, path: 'file', oldPath: 'file', status: 'T', binary: false, additions: 1, deletions: 1, lines: [] }
+const diff = { hash, path: 'file', oldPath: 'file', status: 'T', binary: false, additions: 1, deletions: 1, hunks: [] }
 const snapshot = { path: '/repo', state: 'ready', branch: 'main', head: hash, remotes: [], branches: [{ name: 'main', kind: 'local', hash, isCurrent: true }], workingTree: { changed: true, summary: 'changed' }, commits: [], hasMore: false, searchTruncated: true }
 const cases: ReadonlyArray<{ method: string; request: unknown; result: unknown }> = [
   { method: 'repositories', request: {}, result: { main: '/repo', submodules: [{ path: 'packages/子模块 lib', available: true }, { path: 'tools/simulator', available: false }] } },
-  { method: 'read', request: { branches: ['main'], glob: ['ram[!a]'] }, result: snapshot },
-  { method: 'avatars', request: { hashes: [hash], source: 'auto' }, result: { avatars: [{ email: 'a@example.com', provider: 'host', image: 'data:image/png;base64,AAAA' }] } },
+  { method: 'read', request: { branches: ['refs/heads/main'], glob: ['ram[!a]'] }, result: snapshot },
+  { method: 'avatars', request: { hashes: [hash], source: 'auto' }, result: { avatars: [{ email: 'a@example.com', provider: 'host', image: 'data:image/png;base64,AAAA', unavailable: false }] } },
   { method: 'readCommit', request: { hash }, result: { hash, parents: [], author: 'A', authorEmail: 'a@example.com', committer: 'A', committerEmail: 'a@example.com', timestamps: { authorDate: '', committerDate: '' }, signature: null, body: '', fileChanges: [change] } },
   { method: 'readFile', request: { hash, path: 'file' }, result: { hash, path: 'file', kind: 'text', text: '中文\n', size: 7, truncated: false } },
   { method: 'readFileDiff', request: { hash, path: 'file', baseHash: other }, result: diff },

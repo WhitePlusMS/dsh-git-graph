@@ -2,7 +2,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-system-prompt'
-import type { GitGraphInput } from './domain.ts'
+import type { GitGraphInput, GitGraphSnapshot } from './domain.ts'
 import { MAX_COMMITS } from './domain.ts'
 import { loadGitGraph } from './git.ts'
 import { GitGraphRemoteService } from './remote-service.ts'
@@ -76,13 +76,17 @@ export const GRAPH_OUTPUT_SCHEMA = {
   },
 } as const
 
-function summaryText(value: { path: string; state: string; branch: string | null; head: string | null; workingTree: { summary: string }; commits: readonly { hash: string; subject: string; refs: readonly { name: string }[] }[] }): string {
+export function summaryText(value: GitGraphSnapshot): string {
   const branch = value.branch === null ? 'detached/unknown' : value.branch
   const head = value.head === null ? 'no commits' : value.head.slice(0, 12)
-  const lines = [`Git graph: ${value.path}`, `state=${value.state}, branch=${branch}, head=${head}, ${value.workingTree.summary}`, `commits=${value.commits.length}`]
-  for (const commit of value.commits.slice(0, 8)) {
+  const shown = value.commits.slice(0, 8)
+  const lines = [`Git graph: ${value.path}`, `state=${value.state}, branch=${branch}, head=${head}, ${value.workingTree.summary}`,
+    `commits=${value.commits.length}, shown=${shown.length}, omitted=${value.commits.length - shown.length}, hasMore=${value.hasMore}, searchTruncated=${value.searchTruncated}`]
+  if (value.searchTruncated) lines.push('Search stopped at the scan limit. This does not establish absence from the full history.')
+  for (const commit of shown) {
     const refs = commit.refs.length === 0 ? '' : ` [${commit.refs.map(ref => ref.name).join(', ')}]`
-    lines.push(`${commit.hash.slice(0, 8)} ${commit.subject}${refs}`)
+    const parents = commit.parents.slice(0, 8).map(parent => parent.slice(0, 12)).join(', ')
+    lines.push(`${commit.hash.slice(0, 12)} ${commit.subject.slice(0, 400)}${refs.slice(0, 400)} (parents: ${parents || 'none'}${commit.parents.length > 8 ? ', …' : ''})`)
   }
   return lines.join('\n')
 }

@@ -16,7 +16,6 @@ interface VertexState {
   readonly id: number
   readonly commit: GitGraphCommit
   readonly parents: number[]
-  readonly children: number[]
   readonly connections: Array<Connection | undefined>
   branch: number | undefined
   lane: number
@@ -27,7 +26,6 @@ interface VertexState {
 interface BranchState {
   readonly colour: number
   readonly edges: GraphEdge[]
-  end: number
 }
 
 export interface GraphEdge {
@@ -35,7 +33,6 @@ export interface GraphEdge {
   readonly toLane: number
   readonly row: number
   readonly colour: number
-  readonly lockedFirst: boolean
   /** The parent lies outside the loaded/filtered rows; draw a continuation. */
   readonly missingParent: boolean
 }
@@ -77,13 +74,12 @@ function reservePoint(vertex: VertexState, lane: number, target: number, branch:
   vertex.connections[lane] = { target, branch }
 }
 
-function addEdge(branch: BranchState, from: Point, to: Point, lockedFirst: boolean, missingParent = false): void {
+function addEdge(branch: BranchState, from: Point, to: Point, missingParent = false): void {
   branch.edges.push({
     fromLane: from.lane,
     toLane: to.lane,
     row: from.row,
     colour: branch.colour,
-    lockedFirst,
     missingParent,
   })
 }
@@ -125,7 +121,7 @@ function determinePath(startAt: number, vertices: VertexState[], branches: Branc
       const connectedPoint = connectPoint(current, parent, parentBranch)
       const currentPoint = connectedPoint ?? nextPointOf(current)
       foundParentPoint = connectedPoint !== undefined
-      addEdge(targetBranch, lastPoint, currentPoint, !foundParentPoint && current.id !== parent ? lastPoint.lane < currentPoint.lane : true)
+      addEdge(targetBranch, lastPoint, currentPoint)
       reservePoint(current, currentPoint.lane, parent, parentBranch)
       lastPoint = currentPoint
       if (foundParentPoint) {
@@ -137,18 +133,18 @@ function determinePath(startAt: number, vertices: VertexState[], branches: Branc
     return
   }
 
+  const branchIndex = branches.length
   const branch: BranchState = {
     colour: availableColour(startAt, branchEnds),
     edges: [],
-    end: row,
   }
   branches.push(branch)
 
   if (vertex.branch === undefined) {
-    vertex.branch = branch.colour
+    vertex.branch = branchIndex
     vertex.lane = lastPoint.lane
   }
-  reservePoint(vertex, lastPoint.lane, vertex.id, branch.colour)
+  reservePoint(vertex, lastPoint.lane, vertex.id, branchIndex)
 
   // A root is an endpoint, even when another unrelated history follows it.
   // Continuing its lane would suggest a parent relationship that does not exist.
@@ -163,15 +159,15 @@ function determinePath(startAt: number, vertices: VertexState[], branches: Branc
     const currentPoint = parent === current.id && current.branch !== undefined
       ? pointOf(current)
       : nextPointOf(current)
-    addEdge(branch, lastPoint, currentPoint, lastPoint.lane < currentPoint.lane, parent === NULL_VERTEX)
-    reservePoint(current, currentPoint.lane, parent ?? NULL_VERTEX, branch.colour)
+    addEdge(branch, lastPoint, currentPoint, parent === NULL_VERTEX)
+    reservePoint(current, currentPoint.lane, parent ?? NULL_VERTEX, branchIndex)
     lastPoint = currentPoint
 
     if (parent === current.id) {
       vertex.nextParent += 1
       const parentAlreadyOnBranch = current.branch !== undefined
       if (!parentAlreadyOnBranch) {
-        current.branch = branch.colour
+        current.branch = branchIndex
         current.lane = currentPoint.lane
       }
       vertex = current
@@ -182,8 +178,10 @@ function determinePath(startAt: number, vertices: VertexState[], branches: Branc
 
   // A missing parent is represented by the end of the visible graph. Mark it
   // processed so the outer pass cannot try to lay out the same branch again.
-  if (row === vertices.length && parent === NULL_VERTEX) vertex.nextParent += 1
-  branch.end = row
+  if (row === vertices.length && parent === NULL_VERTEX) {
+    addEdge(branch, lastPoint, { lane: lastPoint.lane, row }, true)
+    vertex.nextParent += 1
+  }
   branchEnds[branch.colour] = row
 }
 
@@ -193,8 +191,10 @@ function createVertices(commits: readonly GitGraphCommit[]): VertexState[] {
   return commits.map((commit, id) => ({
     id,
     commit,
-    parents: commit.parents.map(parent => lookup.get(parent) ?? NULL_VERTEX),
-    children: [],
+    parents: commit.parents.map(parent => {
+      const row = lookup.get(parent)
+      return row !== undefined && row > id ? row : NULL_VERTEX
+    }),
     connections: [],
     branch: undefined,
     lane: 0,
@@ -214,12 +214,6 @@ export function layoutGraph(commits: readonly GitGraphCommit[]): GraphLayout {
   const branches: BranchState[] = []
   const branchEnds: number[] = []
 
-  for (const vertex of vertices) {
-    for (const parent of vertex.parents) {
-      if (parent !== NULL_VERTEX) vertices[parent]?.children.push(vertex.id)
-    }
-  }
-
   let row = 0
   while (row < vertices.length) {
     const vertex = vertices[row]
@@ -234,7 +228,7 @@ export function layoutGraph(commits: readonly GitGraphCommit[]): GraphLayout {
     commit: vertex.commit,
     lane: vertex.lane,
     row: vertex.id,
-    colour: vertex.branch ?? 0,
+    colour: vertex.branch === undefined ? 0 : branches[vertex.branch]?.colour ?? 0,
   }))
   const edges = branches.flatMap(branch => branch.edges)
   const highestLane = Math.max(

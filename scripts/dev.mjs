@@ -32,9 +32,8 @@ function resolveTargets() {
   const explicit = process.env.DSH_PLUGIN_DIR
   if (explicit !== undefined && explicit.length > 0) {
     const dir = resolve(explicit)
-    if (!existsSync(join(dir, 'package.json'))) {
-      throw new Error(`DSH_PLUGIN_DIR 指向的目录没有 package.json：${dir}`)
-    }
+    const manifest = join(dir, 'package.json')
+    if (!existsSync(manifest) || JSON.parse(readFileSync(manifest, 'utf8')).name !== PACKAGE) throw new Error(`DSH_PLUGIN_DIR 不是 ${PACKAGE} 安装目录：${dir}`)
     return [{ label: 'DSH_PLUGIN_DIR', dir }]
   }
   const base = join(homedir(), '.dsh', 'profiles')
@@ -51,9 +50,8 @@ function resolveTargets() {
  * Replace one installed file.
  *
  * Temp file + rename keeps the HMR poll from ever reading a half-written
- * bundle, but Windows refuses the rename while the Host has the destination
- * open, so it is retried and finally downgraded to an in-place write. A sync
- * that cannot land is reported, never fatal: the watcher must outlive it.
+ * bundle. Windows can refuse the rename while the destination is open. Retry
+ * and keep the previous file if it still cannot be replaced.
  */
 function writeAtomic(target, source) {
   mkdirSync(dirname(target), { recursive: true })
@@ -65,7 +63,7 @@ function writeAtomic(target, source) {
     if (delay > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delay)
     try {
       renameSync(tmp, target)
-      return 'atomic'
+      return
     } catch (error) {
       if (error.code !== 'EPERM' && error.code !== 'EBUSY' && error.code !== 'EACCES') {
         rmSync(tmp, { force: true })
@@ -73,13 +71,8 @@ function writeAtomic(target, source) {
       }
     }
   }
-  // The Host holds the destination; write through it instead.
-  try {
-    writeFileSync(target, payload)
-    return 'in-place'
-  } finally {
-    rmSync(tmp, { force: true })
-  }
+  rmSync(tmp, { force: true })
+  throw new Error('目标文件仍被占用，已保留上一版')
 }
 
 function listFiles(dir) {
@@ -101,11 +94,11 @@ const MIRRORED_FILES = ['cordis.patch.yml', 'package.json']
 
 function sync(targetDir) {
   let copied = 0
-  let inPlace = 0
   const failed = []
+  const clientEntry = join(ROOT, 'lib', 'client.js')
   const write = (target, source) => {
     try {
-      if (writeAtomic(target, source) === 'in-place') inPlace += 1
+      writeAtomic(target, source)
       copied += 1
     } catch (error) {
       failed.push(`${relative(ROOT, source)}: ${error.code ?? error.message}`)
@@ -113,17 +106,18 @@ function sync(targetDir) {
   }
   for (const name of MIRRORED) {
     const source = join(ROOT, name)
-    for (const file of listFiles(source)) write(join(targetDir, relative(ROOT, file)), file)
+    for (const file of listFiles(source)) if (file !== clientEntry) write(join(targetDir, relative(ROOT, file)), file)
   }
   for (const name of MIRRORED_FILES) {
     const source = join(ROOT, name)
     if (existsSync(source)) write(join(targetDir, name), source)
   }
-  return { copied, inPlace, failed }
+  if (failed.length === 0) write(join(targetDir, relative(ROOT, clientEntry)), clientEntry)
+  return { copied, failed }
 }
 
 function build() {
-  execFileSync(process.execPath, [join(ROOT, 'scripts', 'build.mjs')], { cwd: ROOT, stdio: 'inherit' })
+  execFileSync(process.execPath, [join(ROOT, 'scripts', 'build.mjs')], { cwd: ROOT, stdio: 'inherit', env: { ...process.env, DSH_BUILD_ID: new Date().toISOString() } })
 }
 
 const targets = resolveTargets()
@@ -143,9 +137,8 @@ function pass(label) {
     return
   }
   for (const target of targets) {
-    const { copied, inPlace, failed } = sync(target.dir)
-    const suffix = inPlace > 0 ? `（其中 ${inPlace} 个因文件被占用改为原地写入）` : ''
-    console.log(`[dev] ${new Date().toLocaleTimeString()} ${label} → 已同步 ${copied} 个文件到 ${target.label}${suffix}`)
+    const { copied, failed } = sync(target.dir)
+    console.log(`[dev] ${new Date().toLocaleTimeString()} ${label} → 已同步 ${copied} 个文件到 ${target.label}`)
     for (const entry of failed) console.error(`[dev]   同步失败 ${entry}`)
   }
 }
@@ -160,8 +153,9 @@ const schedule = label => {
 const watchers = [
   watch(join(ROOT, 'src'), { recursive: true }, () => schedule('src 变更')),
   watch(join(ROOT, 'locale'), { recursive: true }, () => schedule('locale 变更')),
+  watch(ROOT, (_event, file) => { if (file !== null && MIRRORED_FILES.includes(file)) schedule(`${file} 变更`) }),
 ]
-console.log(`[dev] 监听中：src/、locale/。客户端改动约 ${500}ms 内热替换；Host 改动需重启。Ctrl+C 结束。`)
+console.log('[dev] 监听中：src/、locale/、package.json、cordis.patch.yml。Host 改动需重启。Ctrl+C 结束。')
 
 const shutdown = () => {
   for (const watcher of watchers) watcher.close()

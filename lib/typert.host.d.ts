@@ -1,14 +1,14 @@
-export declare const gitGraphHostDescriptors: readonly [any, any, any, any, any, any, any, any, any, any];
+export declare const gitGraphHostDescriptors: readonly [import("@deepseek-ai/dsh-typert-protocol").InvocationDescriptor, import("@deepseek-ai/dsh-typert-protocol").InvocationDescriptor, import("@deepseek-ai/dsh-typert-protocol").InvocationDescriptor, import("@deepseek-ai/dsh-typert-protocol").InvocationDescriptor, import("@deepseek-ai/dsh-typert-protocol").InvocationDescriptor, import("@deepseek-ai/dsh-typert-protocol").InvocationDescriptor, import("@deepseek-ai/dsh-typert-protocol").InvocationDescriptor, import("@deepseek-ai/dsh-typert-protocol").InvocationDescriptor, import("@deepseek-ai/dsh-typert-protocol").InvocationDescriptor, import("@deepseek-ai/dsh-typert-protocol").InvocationDescriptor];
 /** Host contract discovered automatically by dsh-typert-loader. */
 export declare const TYPERT: {
-    package: any;
+    package: string;
     face: string;
-    schemas: any[];
-    invocations: readonly [any, any, any, any, any, any, any, any, any, any];
+    schemas: never[];
+    invocations: readonly [import("@deepseek-ai/dsh-typert-protocol").InvocationDescriptor, import("@deepseek-ai/dsh-typert-protocol").InvocationDescriptor, import("@deepseek-ai/dsh-typert-protocol").InvocationDescriptor, import("@deepseek-ai/dsh-typert-protocol").InvocationDescriptor, import("@deepseek-ai/dsh-typert-protocol").InvocationDescriptor, import("@deepseek-ai/dsh-typert-protocol").InvocationDescriptor, import("@deepseek-ai/dsh-typert-protocol").InvocationDescriptor, import("@deepseek-ai/dsh-typert-protocol").InvocationDescriptor, import("@deepseek-ai/dsh-typert-protocol").InvocationDescriptor, import("@deepseek-ai/dsh-typert-protocol").InvocationDescriptor];
     model: {
-        services: any[];
-        events: any[];
-        objects: any[];
+        services: never[];
+        events: never[];
+        objects: never[];
     };
 };
 export default TYPERT;

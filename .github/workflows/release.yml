@@ -5,6 +5,11 @@ on:
     branches: [master]
   pull_request:
   workflow_dispatch:
+    inputs:
+      rebuild:
+        description: 'Publish a separate prerelease without changing package.json version'
+        type: boolean
+        default: false
 
 jobs:
   verify:
@@ -27,10 +32,18 @@ jobs:
         run: pnpm run typecheck
       - name: Test
         run: pnpm test
+      - name: Build and check package exports
+        run: |
+          pnpm pack --pack-destination .release
+          mkdir .release/extracted
+          tar -xzf .release/*.tgz -C .release/extracted
+          node scripts/verify-package.mjs .release/extracted/package
+          git diff --exit-code -- lib
+          test -z "$(git ls-files --others --exclude-standard -- lib)"
   package:
     needs: verify
     # 只有显式发布提交或手动运行才创建版本，普通开发提交不会发布。
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'release:')
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'release:') || startsWith(github.event.head_commit.message, 'rebuild:')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -49,11 +62,24 @@ jobs:
       - name: Pack and publish
         env:
           GH_TOKEN: ${{ github.token }}
+          REBUILD: ${{ inputs.rebuild || startsWith(github.event.head_commit.message, 'rebuild:') }}
         # prepack 使用现有构建脚本生成 lib；标签固定到本次已检查的提交。
         # 同版本已经发布时 gh 会明确失败，不移动旧标签或覆盖旧附件。
         run: |
           pnpm pack --pack-destination .release
           package_version="$(node --input-type=module -e 'import fs from "node:fs"; console.log(JSON.parse(fs.readFileSync("package.json", "utf8")).version)')"
+          if [ "$REBUILD" = "true" ]; then
+            build_id="${GITHUB_SHA:0:12}"
+            node --input-type=module -e 'import fs from "node:fs"; const { version } = JSON.parse(fs.readFileSync("package.json", "utf8")); const section = fs.readFileSync("CHANGELOG.md", "utf8").split(/^## /m).find(text => text.startsWith(`${version} rebuild —`)); if (section) fs.writeFileSync(".release/REBUILD_NOTES.md", `## ${section.trim()}\n`);'
+            cd .release
+            asset="dsh-git-graph-${package_version}-build.${build_id}.tgz"
+            mv "dsh-git-graph-${package_version}.tgz" "$asset"
+            sha256sum "$asset" > SHA256SUMS.txt
+            notes=(--generate-notes)
+            if [ -f REBUILD_NOTES.md ]; then notes=(--notes-file REBUILD_NOTES.md); fi
+            gh release create "v${package_version}-build.${build_id}" "$asset" SHA256SUMS.txt --target "$GITHUB_SHA" --title "v${package_version} · build ${build_id}" "${notes[@]}" --prerelease --latest=false --repo "$GITHUB_REPOSITORY"
+            exit 0
+          fi
           node --input-type=module -e 'import fs from "node:fs"; const { version } = JSON.parse(fs.readFileSync("package.json", "utf8")); const section = fs.readFileSync("CHANGELOG.md", "utf8").split(/^## /m).find(text => text.startsWith(`${version} —`)); if (!section) throw new Error("Missing version in CHANGELOG.md"); fs.writeFileSync(".release/RELEASE_NOTES.md", `## ${section.trim()}\n`);'
           cd .release
           # 固定文件名供市场使用 latest/download，版本化附件继续用于固定安装。

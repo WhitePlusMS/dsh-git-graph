@@ -4,6 +4,11 @@ export declare const TYPERT_PACKAGE = "dsh-git-graph";
 /** Strict wire schemas intentionally use only the Typert `.parse()` contract. */
 export declare const gitGraphQuerySchema: TypertSchema<GitGraphQuery>;
 export declare const gitGraphSnapshotSchema: TypertSchema<GitGraphSnapshot>;
+/**
+ * The Host validates UTF-8 from raw bytes. A valid replacement character is
+ * ordinary text. Enforce the same result contract on both Typert faces.
+ */
+export declare function validFileText(value: Pick<import('./domain.js').GitGraphFileContent, 'kind' | 'text' | 'truncated'>): boolean;
 export declare const gitGraphCommitRequestSchema: TypertSchema<import('./domain.js').GitGraphCommitRequest>;
 export declare const gitGraphCommitDetailsSchema: TypertSchema<import('./domain.js').GitGraphCommitDetails>;
 export declare const gitGraphFileRequestSchema: TypertSchema<import('./domain.js').GitGraphFileRequest>;

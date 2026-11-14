@@ -20,6 +20,9 @@ export declare class AvatarStore {
     private readonly fetcher;
     private readonly now;
     private readonly cache;
+    private readonly pending;
+    private readonly queue;
+    private active;
     private githubRetryAt;
     constructor(fetcher?: typeof fetch, now?: () => number);
     private request;
@@ -32,6 +35,8 @@ export declare class AvatarStore {
      */
     private hostImage;
     private githubImage;
+    private resolveAuthor;
+    private schedule;
     private author;
     read(authors: readonly AvatarAuthor[], remote: string | null, source: GitGraphAvatarRequest['source'], signal: AbortSignal): Promise<GitGraphAvatar[]>;
 }

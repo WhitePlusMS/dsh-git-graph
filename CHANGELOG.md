@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.7.0 rebuild — 2026-11-14
+
+- Git 读取保留本地对象库，缺失父提交或原文对象时提示；修复浅克隆、重命名 Diff、工作区状态与冲突，并支持 SHA-256 仓库。
+- 修复分支聚焦、分页、查找、比较基准、图谱和键盘导航。图谱引用可水平滚动，仓库设置按路径隔离。
+- 模型输出报告搜索截断与父级。头像跨请求复用并限制并发，临时故障可重试。
+- CI 校验实际安装包，GitHub 预发布使用提交专属标签，安装包仍为 `0.7.0`。
+
+### English
+
+- Keep Git reads local and report missing objects. Correct shallow history, rename and working-tree diffs, and support SHA-256 repositories.
+- Fix branch focus, pagination, find, comparison, graph rendering and keyboard navigation. Graph references can scroll horizontally, and preferences follow the working tree.
+- Report search truncation and parents in tool output. Share in-flight avatar requests and retry temporary provider failures.
+- Verify the package archive in CI. The GitHub prerelease uses a commit-specific tag and retains package version `0.7.0`.
+
 ## 0.7.0 — 2026-11-13
 
 - 在 DSH 右侧栏自动发现直接 Git 子模块，通过顶栏仓库菜单切换主仓库和子模块。提交图、详情、文件 Diff、历史原文和工作区状态随仓库切换。

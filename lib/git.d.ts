@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { Agent } from '@deepseek-ai/dsh-agent';
-import type { GitGraphBranch, GitGraphCommit, GitGraphCommitDetails, GitGraphCompareRequest, GitGraphCompareResult, GitGraphDiffLine, GitGraphFileChange, GitGraphFileContent, GitGraphFileDiff, GitGraphFileDiffRequest, GitGraphFileRequest, GitGraphInput, GitGraphMetadata, GitGraphRepositories, GitGraphRepoConfig, GitGraphSignature, GitGraphSnapshot, GitGraphStash, GitGraphTag, GitGraphWorkingTree, GitGraphWorkingTreeChanges, GitGraphWorkingTreeFileRequest } from './domain.js';
+import type { GitGraphBranch, GitGraphCommit, GitGraphCommitDetails, GitGraphCompareRequest, GitGraphCompareResult, GitGraphDiffHunk, GitGraphFileChange, GitGraphFileContent, GitGraphFileDiff, GitGraphFileDiffRequest, GitGraphFileRequest, GitGraphInput, GitGraphMetadata, GitGraphRepositories, GitGraphSignature, GitGraphSnapshot, GitGraphStash, GitGraphTag, GitGraphWorkingTree, GitGraphWorkingTreeChanges, GitGraphWorkingTreeFileRequest } from './domain.js';
 import type { AvatarAuthor } from './avatars.js';
 /** Minimal execution identity shared by the tool and the independent view. */
 export interface GitGraphExecutionContext {
@@ -11,7 +11,13 @@ export interface GitGraphExecutionContext {
 export declare class GitGraphError extends Error {
     constructor(message: string, options?: ErrorOptions);
 }
-/** Parse the NUL/record-separated log format independently of the process seam. */
+export declare class GitObjectMissingError extends GitGraphError {
+}
+export declare class GitSubmoduleUnavailableError extends GitGraphError {
+}
+export declare class GitOutputLimitError extends GitGraphError {
+}
+/** `git log -z --format` terminates fixed-width records with NUL. */
 export declare function parseGitLog(text: string): GitGraphCommit[];
 /** Parse `git status --porcelain=v1 -b` without interpreting file contents. */
 export declare function parseGitStatus(text: string): {
@@ -58,14 +64,10 @@ export declare function parseStashReflog(text: string): GitGraphStash[];
 export declare function loadStashes(ctx: Context, cwd: string, signal: AbortSignal): Promise<GitGraphStash[]>;
 /** Load all tags and their details in one bounded subprocess capture. */
 export declare function loadTags(ctx: Context, cwd: string, signal: AbortSignal): Promise<GitGraphTag[]>;
-/** Parse `git config --list -z --includes [--local|--global]` into key/value pairs. */
-export declare function parseConfigList(text: string): Map<string, string>;
-/** Load consolidated/local/global config lists and build the read-only repo config. */
-export declare function loadRepoConfig(ctx: Context, cwd: string, remotes: readonly string[], signal: AbortSignal): Promise<GitGraphRepoConfig>;
 /** Parse `git status -s --porcelain -z` into modified/deleted/untracked inventories. */
-export declare function parseWorkingTreeStatus(text: string): GitGraphWorkingTree;
-/** Load the working-tree change inventory. */
-export declare function loadWorkingTree(ctx: Context, cwd: string, includeUntracked: boolean, signal: AbortSignal): Promise<GitGraphWorkingTree>;
+export declare function parseWorkingTreeStatus(text: string): GitGraphWorkingTree & {
+    readonly conflicts: readonly string[];
+};
 /** Per-file content cap for `gitGraph/readFile`. */
 export declare const FILE_MAX_BYTES: number;
 /**
@@ -100,7 +102,7 @@ export declare function parseHunkHeader(line: string): {
  * line records. Old/new line numbers track the two heads so the renderer can
  * show line numbers exactly like vscode-git-graph.
  */
-export declare function parseFileDiff(text: string): GitGraphDiffLine[];
+export declare function parseFileDiff(text: string): GitGraphDiffHunk[];
 /**
  * Load one file's diff using the same range as its enclosing file list. An
  * explicit base compares both selected commits; otherwise use the target's
@@ -109,12 +111,6 @@ export declare function parseFileDiff(text: string): GitGraphDiffLine[];
 export declare function loadFileDiff(ctx: Context, cwd: string, request: GitGraphFileDiffRequest, signal: AbortSignal): Promise<GitGraphFileDiff>;
 /** The sentinel hash used for the non-committed working-tree side of a diff. */
 export declare const WORKTREE_HASH = "WORKTREE";
-/**
- * The set of files with uncommitted changes relative to HEAD (or to the empty
- * tree in a repository with no commits yet). Tracked modifications come from
- * `git diff HEAD`; untracked files are listed separately as additions. Binary
- * or truncated diffs keep `additions`/`deletions` as `null`.
- */
 export declare function loadWorkingTreeChanges(ctx: Context, cwd: string, signal: AbortSignal): Promise<GitGraphWorkingTreeChanges>;
 /**
  * Diff one file in the working tree against HEAD (or the empty tree for an

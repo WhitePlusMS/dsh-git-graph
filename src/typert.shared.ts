@@ -1,7 +1,7 @@
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { InvocationDescriptor, TypertSchema } from '@deepseek-ai/dsh-typert-protocol'
 import type { GitGraphBranch, GitGraphCommit, GitGraphDiffLine, GitGraphFileDiff, GitGraphQuery, GitGraphRef, GitGraphRepositories, GitGraphRepositoryRequest, GitGraphRepositoryScope, GitGraphRepoState, GitGraphSnapshot, GitGraphSort } from './domain.ts'
-import { MAX_AVATAR_BATCH, MAX_BRANCH_FILTER, MAX_COMMITS } from './domain.ts'
+import { COMMIT_HASH_PATTERN, MAX_AVATAR_BATCH, MAX_BRANCH_FILTER, MAX_COMMITS } from './domain.ts'
 
 export const TYPERT_PACKAGE = 'dsh-git-graph'
 const SESSION_ID_TYPE = '@deepseek-ai/dsh-session/types#SessionId'
@@ -153,24 +153,18 @@ const sessionIdSchema: TypertSchema<SessionId> = { parse: value => stringAt(valu
  * On-demand detail DTO schemas (strict, parse-only).
  * ------------------------------------------------------------------ */
 
-const HASH_RE = /^[0-9a-f]{40}$/iu
-
 function hashStringAt(value: unknown, path: string): string {
   const text = stringAt(value, path)
-  if (!HASH_RE.test(text)) fail(path, 'a full 40-char commit hash')
+  if (!COMMIT_HASH_PATTERN.test(text)) fail(path, 'a full 40- or 64-character commit hash')
   return text
 }
 
 /**
- * Detect whether decoded blob text is unsafe to render as text. The Host has
- * already classified the blob as text or binary via `isTextContent`
- * (any NUL/U+FFFD byte means binary); this client-side guard is only a
- * defense-in-depth echo of that decision. It must NOT reject ordinary UTF-8
- * text — e.g. Chinese comments — which is why only NUL and the replacement
- * character count as binary markers, not every non-ASCII code point.
+ * The Host validates UTF-8 from raw bytes. A valid replacement character is
+ * ordinary text. Enforce the same result contract on both Typert faces.
  */
-function isTextContentSafe(text: string): boolean {
-  return !text.includes('\u0000') && !text.includes('\uFFFD')
+export function validFileText(value: Pick<import('./domain.ts').GitGraphFileContent, 'kind' | 'text' | 'truncated'>): boolean {
+  return value.kind === 'text' ? value.text !== null && !value.text.includes('\u0000') && !value.truncated : value.text === null
 }
 
 function parseFileChange(value: unknown, path: string): import('./domain.ts').GitGraphFileChange {
@@ -265,14 +259,15 @@ function parseFileContent(value: unknown): import('./domain.ts').GitGraphFileCon
   const kind = stringAt(object.kind, '$.kind')
   if (kind !== 'text' && kind !== 'binary') fail('$.kind', 'text or binary')
   const text = object.text === null ? null : stringAt(object.text, '$.text')
-  if (kind === 'text' && text !== null && !isTextContentSafe(text)) fail('$.text', 'text content without binary control bytes')
+  const truncated = booleanAt(object.truncated, '$.truncated')
+  if (!validFileText({ kind, text, truncated })) fail('$.text', 'text content consistent with kind and truncation')
   return {
     hash: stringAt(object.hash, '$.hash'),
     path: stringAt(object.path, '$.path'),
     kind,
     text,
     size: integerAt(object.size, '$.size', 0, Number.MAX_SAFE_INTEGER),
-    truncated: booleanAt(object.truncated, '$.truncated'),
+    truncated,
   }
 }
 
@@ -291,7 +286,7 @@ function parseDiffLine(value: unknown, path: string): GitGraphDiffLine {
 
 function parseFileDiff(value: unknown): GitGraphFileDiff {
   const object = objectAt(value, '$')
-  rejectUnknown(object, ['hash', 'path', 'oldPath', 'status', 'binary', 'additions', 'deletions', 'lines'], '$')
+  rejectUnknown(object, ['hash', 'path', 'oldPath', 'status', 'binary', 'additions', 'deletions', 'hunks'], '$')
   const status = stringAt(object.status, '$.status')
   if (status !== 'A' && status !== 'M' && status !== 'D' && status !== 'R' && status !== 'T' && status !== 'U') fail('$.status', 'A, M, D, R, T, or U')
   return {
@@ -302,7 +297,13 @@ function parseFileDiff(value: unknown): GitGraphFileDiff {
     binary: booleanAt(object.binary, '$.binary'),
     additions: integerAt(object.additions, '$.additions', 0, Number.MAX_SAFE_INTEGER),
     deletions: integerAt(object.deletions, '$.deletions', 0, Number.MAX_SAFE_INTEGER),
-    lines: arrayAt(object.lines, '$.lines').map((entry, index) => parseDiffLine(entry, `$.lines[${index}]`)),
+    hunks: arrayAt(object.hunks, '$.hunks').map((entry, index) => {
+      const path = `$.hunks[${index}]`
+      const hunk = objectAt(entry, path)
+      rejectUnknown(hunk, ['header', 'lines'], path)
+      return { header: stringAt(hunk.header, `${path}.header`),
+        lines: arrayAt(hunk.lines, `${path}.lines`).map((line, lineIndex) => parseDiffLine(line, `${path}.lines[${lineIndex}]`)) }
+    }),
   }
 }
 
@@ -450,15 +451,16 @@ export const gitGraphAvatarResultSchema: TypertSchema<import('./domain.ts').GitG
   return { avatars: entries.map((entry, index) => {
     const path = `$.avatars[${index}]`
     const avatar = objectAt(entry, path)
-    rejectUnknown(avatar, ['email', 'image', 'provider'], path)
+    rejectUnknown(avatar, ['email', 'image', 'provider', 'unavailable'], path)
     const email = stringAt(avatar.email, `${path}.email`)
     const image = nullableStringAt(avatar.image, `${path}.image`)
     const provider = nullableStringAt(avatar.provider, `${path}.provider`)
     if (email.length > 320) fail(`${path}.email`, 'at most 320 characters')
     if (image !== null && (image.length > 100000 || !/^data:image\/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+=*$/u.test(image))) fail(`${path}.image`, 'a bounded raster data URL')
     if (provider !== null && provider !== 'github' && provider !== 'gravatar' && provider !== 'host') fail(`${path}.provider`, 'github, gravatar, host, or null')
-    if ((image === null) !== (provider === null)) fail(path, 'matching image and provider availability')
-    return { email, image, provider }
+    const unavailable = booleanAt(avatar.unavailable, `${path}.unavailable`)
+    if ((image === null) !== (provider === null) || (unavailable && image !== null)) fail(path, 'matching image and provider availability')
+    return { email, image, provider, unavailable }
   }) }
 } }
 

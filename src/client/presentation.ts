@@ -1,5 +1,5 @@
 /** Pure display geometry shared by the rows/SVG and exercised independently. */
-import type { GitGraphCommit, GitGraphDiffLine, GitGraphRef } from '../domain.ts'
+import type { GitGraphCommit, GitGraphRef } from '../domain.ts'
 import type { CommitColumn, GitGraphDisplaySettings } from './settings.ts'
 
 export function graphRowHeight(settings: GitGraphDisplaySettings): number {
@@ -37,29 +37,4 @@ export function referenceLabels(refs: readonly GitGraphRef[], remotes: readonly 
   }
   const rank = (ref: GitGraphRef) => ref.kind === 'head' && ref.name === currentBranch ? -1 : ref.kind === 'head' ? 0 : ref.kind === 'remote' ? 1 : 2
   return labels.sort((a, b) => rank(a.ref) - rank(b.ref) || a.ref.name.localeCompare(b.ref.name))
-}
-
-export interface DisplayHunk {
-  readonly header: string
-  readonly lines: readonly GitGraphDiffLine[]
-}
-
-/** Reconstruct hunk ranges from actual line numbers, without interpreting content. */
-export function displayHunks(lines: readonly GitGraphDiffLine[]): DisplayHunk[] {
-  const groups: GitGraphDiffLine[][] = []
-  let oldLast: number | undefined
-  let newLast: number | undefined
-  for (const line of lines) {
-    const separated = (line.oldLine !== null && oldLast !== undefined && line.oldLine !== oldLast + 1)
-      || (line.newLine !== null && newLast !== undefined && line.newLine !== newLast + 1)
-    if (groups.length === 0 || separated) { groups.push([]); oldLast = undefined; newLast = undefined }
-    groups[groups.length - 1]?.push(line)
-    if (line.oldLine !== null) oldLast = line.oldLine
-    if (line.newLine !== null) newLast = line.newLine
-  }
-  return groups.map(group => {
-    const oldLines = group.filter(line => line.oldLine !== null)
-    const newLines = group.filter(line => line.newLine !== null)
-    return { header: `@@ -${oldLines[0]?.oldLine ?? 0},${oldLines.length} +${newLines[0]?.newLine ?? 0},${newLines.length} @@`, lines: group }
-  })
 }

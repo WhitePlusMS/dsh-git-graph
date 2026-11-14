@@ -80,8 +80,8 @@ export interface GitGraphInput {
     /** Branch-name glob filters (OR). Normalized by the Host. */
     readonly glob?: string[];
     /**
-     * Exact short branch names to restrict history to (OR). Unlike `glob` this is
-     * an equality match, so focusing `main` never drags in `main-old`.
+     * Exact full branch refs to restrict history to (OR). Local and remote refs
+     * can share the same display name.
      */
     readonly branches?: string[];
     /** Free-text search applied to hash, subject, author, email, ref name and date. */
@@ -177,33 +177,6 @@ export interface GitGraphStash {
     readonly date: string;
     readonly message: string;
 }
-/** Read-only repository and user configuration (vscode-git-graph config surface). */
-export interface GitGraphRepoConfig {
-    /** Per-branch upstream/pushremote (from local config). */
-    readonly branches: Record<string, {
-        readonly remote: string | null;
-        readonly pushRemote: string | null;
-    }>;
-    readonly diffTool: string | null;
-    readonly guiDiffTool: string | null;
-    readonly pushDefault: string | null;
-    /** Remote name -> url / pushUrl from local config. */
-    readonly remotes: Array<{
-        readonly name: string;
-        readonly url: string | null;
-        readonly pushUrl: string | null;
-    }>;
-    readonly user: {
-        readonly name: {
-            readonly local: string | null;
-            readonly global: string | null;
-        };
-        readonly email: {
-            readonly local: string | null;
-            readonly global: string | null;
-        };
-    };
-}
 /** Inventory of working-tree changes (deleted + untracked + modified counts). */
 export interface GitGraphWorkingTree {
     readonly changed: boolean;
@@ -217,6 +190,8 @@ export declare const MAX_COMMITS = 500;
 export declare const MAX_SEARCH_COMMITS: number;
 /** Upper bound on exact branch names accepted in one query. */
 export declare const MAX_BRANCH_FILTER = 64;
+export declare const COMMIT_HASH_PATTERN: RegExp;
+export declare function branchRef(branch: Pick<GitGraphBranch, 'kind' | 'name'>): string;
 /** Request body for `gitGraph/readCommit`. */
 export interface GitGraphCommitRequest {
     readonly hash: string;
@@ -249,6 +224,10 @@ export interface GitGraphDiffLine {
     /** Line number in the new version (null for pure-removed lines). */
     readonly newLine: number | null;
 }
+export interface GitGraphDiffHunk {
+    readonly header: string;
+    readonly lines: GitGraphDiffLine[];
+}
 /**
  * Per-file change between a base and target commit. A request without an
  * explicit base compares the target with its first parent (empty tree for a
@@ -263,8 +242,7 @@ export interface GitGraphFileDiff {
     readonly binary: boolean;
     readonly additions: number;
     readonly deletions: number;
-    /** A context line where the file is entirely added/deleted has no head. */
-    readonly lines: GitGraphDiffLine[];
+    readonly hunks: GitGraphDiffHunk[];
 }
 /** Request body for `gitGraph/readFileDiff`. */
 export interface GitGraphFileDiffRequest {
@@ -309,6 +287,8 @@ export interface GitGraphAvatar {
     readonly image: string | null;
     /** `host` is the repository's own Git service (Gitea/Gogs avatar endpoint). */
     readonly provider: 'github' | 'gravatar' | 'host' | null;
+    /** At least one provider was temporarily unavailable and no fallback succeeded. */
+    readonly unavailable: boolean;
 }
 export interface GitGraphAvatarResult {
     readonly avatars: GitGraphAvatar[];
