@@ -84,5 +84,11 @@ jobs:
           cd .release
           # 固定文件名供市场使用 latest/download，版本化附件继续用于固定安装。
           cp "dsh-git-graph-${package_version}.tgz" dsh-git-graph.tgz
+          cmp "dsh-git-graph-${package_version}.tgz" dsh-git-graph.tgz
           sha256sum "dsh-git-graph-${package_version}.tgz" dsh-git-graph.tgz > SHA256SUMS.txt
           gh release create "v${package_version}" "dsh-git-graph-${package_version}.tgz" dsh-git-graph.tgz SHA256SUMS.txt --target "$GITHUB_SHA" --title "v${package_version} · dsh-git-graph" --notes-file RELEASE_NOTES.md --latest --repo "$GITHUB_REPOSITORY"
+          # 实际访问市场固定地址，确认 latest 指向本次正式版且下载内容与发布包一致。
+          latest_tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)"
+          test "$latest_tag" = "v${package_version}"
+          curl --fail --location --retry 5 --retry-delay 3 --retry-all-errors --output market-download.tgz "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/dsh-git-graph.tgz"
+          cmp dsh-git-graph.tgz market-download.tgz
