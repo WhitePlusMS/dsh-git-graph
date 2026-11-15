@@ -6,7 +6,7 @@
 
 - Repository: https://github.com/WhitePlusMS/dsh-git-graph
 - Latest release: https://github.com/WhitePlusMS/dsh-git-graph/releases/latest
-- Release 0.7.0 (2026-11-13): https://github.com/WhitePlusMS/dsh-git-graph/releases/tag/v0.7.0
+- Release 0.7.1 (2026-11-15): https://github.com/WhitePlusMS/dsh-git-graph/releases/tag/v0.7.1
 - Install archive: https://github.com/WhitePlusMS/dsh-git-graph/releases/latest/download/dsh-git-graph.tgz
 - Community catalog: https://awesome-dsh-plugin.com/ (search for WhitePlusMS/dsh-git-graph)
 - Changelog: https://github.com/WhitePlusMS/dsh-git-graph/blob/master/CHANGELOG.md
@@ -21,7 +21,7 @@ Requires DSH 0.2.2-rc.1, Node.js 24.9+, the `dsh` CLI, pnpm, and Git on the DSH 
 dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/latest/download/dsh-git-graph.tgz
 ```
 
-For an existing installation, upgrade with the versioned archive URL `https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.7.0/dsh-git-graph-0.7.0.tgz` and restart the same DSH Web instance. Then open **dsh-git-graph** from the right sidebar.
+For an existing installation, upgrade with the versioned archive URL `https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.7.1/dsh-git-graph-0.7.1.tgz` and restart the same DSH Web instance. Then open **dsh-git-graph** from the right sidebar.
 
 ## Facts
 

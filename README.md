@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/screenshots/readme-header.gif" width="100%" alt="dsh-git-graph — read-only Git Graph for DeepSeek Harness Web">
+  <img src="https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/readme-header.gif" width="100%" alt="dsh-git-graph — read-only Git Graph for DeepSeek Harness Web">
 </p>
 
 <p align="center">
@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="README.zh.md">中文说明</a> · <a href="docs/screenshots/readme-header.svg">Static title</a>
+  <a href="README.zh.md">中文说明</a> · <a href="https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/readme-header.svg">Static title</a>
 </p>
 
 # dsh-git-graph
@@ -33,26 +33,30 @@
   <a href="#install-or-update">Install</a> · <a href="#usage">Usage</a> · <a href="#keyboard-controls">Keyboard controls</a> · <a href="#faq">FAQ</a> · <a href="#scope">Scope</a> · <a href="#uninstall">Uninstall</a> · <a href="#documentation">Documentation</a>
 </p>
 
-![Native sidebar, commit graph, and filtering demo](docs/screenshots/demo.gif)
+![Native sidebar, commit graph, and filtering demo](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/demo.gif)
 
 The GIFs were recorded with 0.4.0; the comparison and full-source screenshots below are from 0.5.0. They show earlier versions. The new branch navigation, dropdown controls, and dynamic graph alignment in 0.6.0 were checked in real DSH; see the [fix and validation record](docs/ARCHITECTURE_FIX_REPORT_20261022.md).
 
 <details>
 <summary>More screenshots: commit comparison, full source, English, and narrow screens</summary>
 
-![Real author avatars and inline commit details](docs/screenshots/display-avatar.png)
+![Real author avatars and inline commit details](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/display-avatar.png)
 
-![Two-commit file diff](docs/screenshots/compare-diff-0.5.0.png)
+![Two-commit file diff](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/compare-diff-0.5.0.png)
 
-![Full historical file text](docs/screenshots/source-0.5.0.png)
+![Full historical file text](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/source-0.5.0.png)
 
-![Full source at 360px](docs/screenshots/source-360-0.5.0.png)
+![Full source at 360px](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/source-360-0.5.0.png)
 
-![English light theme](docs/screenshots/display-light-en.png)
+![English light theme](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/display-light-en.png)
 
-![360px sidebar](docs/screenshots/display-360.png)
+![360px sidebar](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/display-360.png)
 
 </details>
+
+## What's new in 0.7.1
+
+- The prebuilt archive excludes demonstration images to reduce download size; screenshots remain available online.
 
 ## What's new in 0.7.0
 
@@ -91,17 +95,17 @@ See the [0.6.0 release notes](CHANGELOG.md#060--2026-10-22) for fixes and upgrad
 
 **Commit details and file diffs**
 
-![Commit details and per-file diff demo](docs/screenshots/diff.gif)
+![Commit details and per-file diff demo](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/diff.gif)
 
 **Commit comparison and uncommitted changes**
 
-![Changed-file comparison and working-tree diff demo](docs/screenshots/compare.gif)
+![Changed-file comparison and working-tree diff demo](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/compare.gif)
 
 ## Install or update
 
 Requires DSH **0.2.2-rc.1**, Node.js **24.9+**, the `dsh` CLI, pnpm for plugin installation, and Git installed on the DSH Host.
 
-Install the latest prebuilt Release package through DSH's plugin page, the CLI, or [Awesome DSH Plugin](https://awesome-dsh-plugin.com/). In the catalog, search for **WhitePlusMS/dsh-git-graph** and use its Release archive install option. For a fixed version, use the versioned asset on the [v0.7.0 release page](https://github.com/WhitePlusMS/dsh-git-graph/releases/tag/v0.7.0).
+Install the latest prebuilt Release package through DSH's plugin page, the CLI, or [Awesome DSH Plugin](https://awesome-dsh-plugin.com/). The catalog lists **WhitePlusMS/dsh-git-graph**; use the Release archive URL below if its CLI menu offers a GitHub source install. For a fixed version, use the versioned asset on the [v0.7.1 release page](https://github.com/WhitePlusMS/dsh-git-graph/releases/tag/v0.7.1).
 
 In DSH, open **Plugins → Add plugin**, paste this URL, install it, and choose **Enable now**:
 
@@ -131,7 +135,7 @@ dsh plugin --profile web list dsh-git-graph
 Start DSH Web with `dsh web`. If you already have an older version, use the versioned URL to upgrade, then restart the same DSH instance.
 
 ```powershell
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.7.0/dsh-git-graph-0.7.0.tgz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.7.1/dsh-git-graph-0.7.1.tgz
 ```
 
 Use the same profile name for installation, startup, and removal.

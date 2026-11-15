@@ -95,9 +95,9 @@ node --import tsx/esm apps/cli/src/bin.ts --profile git-graph-e2e --patch apps/w
 
 ## 截图与覆盖边界
 
-- [原生侧栏 / 浅色](screenshots/dsh-0.2.0-light.jpg)。
-- [提交详情 / Diff](screenshots/dsh-0.2.0-diff.jpg)。
-- [英文 / 暗色](screenshots/dsh-0.2.0-dark.jpg)。
-- [640px 视口](screenshots/dsh-0.2.0-small.jpg)。
+- [原生侧栏 / 浅色](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/dsh-0.2.0-light.jpg)。
+- [提交详情 / Diff](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/dsh-0.2.0-diff.jpg)。
+- [英文 / 暗色](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/dsh-0.2.0-dark.jpg)。
+- [640px 视口](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/dsh-0.2.0-small.jpg)。
 
 本次覆盖 Windows 上的 DSH 0.2.0-rc.2 Web 和现有只读功能；其他 DSH 版本、操作系统或生产部署不属于已验收范围。搜索扫描上限 2000 条，图谱显示上限 500 条。模型工具的协议与 loader 有自动测试，浏览器验收没有发起实际模型对话。

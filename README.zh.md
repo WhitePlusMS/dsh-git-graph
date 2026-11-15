@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/screenshots/readme-header.gif" width="100%" alt="dsh-git-graph — 为 DeepSeek Harness Web 提供只读 Git Graph">
+  <img src="https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/readme-header.gif" width="100%" alt="dsh-git-graph — 为 DeepSeek Harness Web 提供只读 Git Graph">
 </p>
 
 <p align="center">
@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="README.md">English</a> · <a href="docs/screenshots/readme-header.svg">静态标题</a>
+  <a href="README.md">English</a> · <a href="https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/readme-header.svg">静态标题</a>
 </p>
 
 # dsh-git-graph
@@ -33,26 +33,30 @@
   <a href="#安装与更新">安装</a> · <a href="#使用">使用</a> · <a href="#快捷键">快捷键</a> · <a href="#常见问题">常见问题</a> · <a href="#使用范围">使用范围</a> · <a href="#卸载">卸载</a> · <a href="#更多文档">更多文档</a>
 </p>
 
-![原生侧栏、提交图与筛选演示](docs/screenshots/demo.gif)
+![原生侧栏、提交图与筛选演示](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/demo.gif)
 
 GIF 录制于 0.4.0，下方两提交 Diff 与完整原文截图来自 0.5.0，均保留历史版本标注。0.6.0 新增的分支导航、下拉控件和详情展开时的图形对齐已在真实 DSH 中检查，见[修复与验证记录](docs/ARCHITECTURE_FIX_REPORT_20261022.md)。
 
 <details>
 <summary>更多截图：两提交比较、完整原文、英文及窄屏</summary>
 
-![真实作者头像与行内提交详情](docs/screenshots/display-avatar.png)
+![真实作者头像与行内提交详情](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/display-avatar.png)
 
-![两提交逐文件 Diff](docs/screenshots/compare-diff-0.5.0.png)
+![两提交逐文件 Diff](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/compare-diff-0.5.0.png)
 
-![完整历史原文](docs/screenshots/source-0.5.0.png)
+![完整历史原文](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/source-0.5.0.png)
 
-![360px 完整原文](docs/screenshots/source-360-0.5.0.png)
+![360px 完整原文](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/source-360-0.5.0.png)
 
-![英文浅色主题](docs/screenshots/display-light-en.png)
+![英文浅色主题](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/display-light-en.png)
 
-![360px 窄侧栏](docs/screenshots/display-360.png)
+![360px 窄侧栏](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/display-360.png)
 
 </details>
+
+## 0.7.1 更新
+
+- 成品包不再包含演示截图，减少下载体积；文档中的截图仍可在线查看。
 
 ## 0.7.0 更新
 
@@ -91,17 +95,17 @@ GIF 录制于 0.4.0，下方两提交 Diff 与完整原文截图来自 0.5.0，�
 
 **提交详情与逐文件 Diff**
 
-![提交详情与逐文件 Diff 演示](docs/screenshots/diff.gif)
+![提交详情与逐文件 Diff 演示](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/diff.gif)
 
 **提交比较与未提交变更**
 
-![两提交变更清单与工作区 Diff 演示](docs/screenshots/compare.gif)
+![两提交变更清单与工作区 Diff 演示](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/compare.gif)
 
 ## 安装与更新
 
 需要 **DSH 0.2.2-rc.1**、**Node.js 24.9 或更高版本**、可用的 `dsh` CLI、用于安装插件的 pnpm，以及 DSH Host 上已安装的 Git。
 
-可以通过 DSH 插件页、命令行或 [Awesome DSH Plugin 社区目录](https://awesome-dsh-plugin.com/)安装。使用社区目录时，搜索 **WhitePlusMS/dsh-git-graph** 并选择 Release 成品包安装。需要固定版本时，从 [v0.7.0 发布页](https://github.com/WhitePlusMS/dsh-git-graph/releases/tag/v0.7.0)选用带版本号的附件。
+可以通过 DSH 插件页、命令行或 [Awesome DSH Plugin 社区目录](https://awesome-dsh-plugin.com/)安装。社区目录中可搜索 **WhitePlusMS/dsh-git-graph**；如果其命令行菜单显示源码安装命令，可使用下方的 Release 成品包地址。需要固定版本时，从 [v0.7.1 发布页](https://github.com/WhitePlusMS/dsh-git-graph/releases/tag/v0.7.1)选用带版本号的附件。
 
 在 DSH 中打开 **插件 → 添加插件**，粘贴下面的地址，安装后选择**立即启用**：
 
@@ -131,7 +135,7 @@ dsh plugin --profile web list dsh-git-graph
 使用 `dsh web` 启动 DSH Web。如果已经装了旧版，用带版本号的地址升级，再重启原来的 DSH 实例。
 
 ```powershell
-dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.7.0/dsh-git-graph-0.7.0.tgz
+dsh plugin --profile web add https://github.com/WhitePlusMS/dsh-git-graph/releases/download/v0.7.1/dsh-git-graph-0.7.1.tgz
 ```
 
 安装、启动和卸载使用同一个 profile。

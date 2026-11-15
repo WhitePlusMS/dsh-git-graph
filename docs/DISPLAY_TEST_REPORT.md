@@ -69,19 +69,19 @@
 
 真实照片与唯一行内详情：
 
-![真实作者照片](screenshots/display-avatar.png)
+![真实作者照片](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/display-avatar.png)
 
 正文格式与两种日期：
 
-![正文与日期](screenshots/display-inline.png)
+![正文与日期](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/display-inline.png)
 
 360px 靠图引用布局：
 
-![360px](screenshots/display-360.png)
+![360px](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/display-360.png)
 
 浅色英文界面：
 
-![English / Light](screenshots/display-light-en.png)
+![English / Light](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/display-light-en.png)
 
 ## 核对结果与边界
 

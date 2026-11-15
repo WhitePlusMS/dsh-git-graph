@@ -39,12 +39,12 @@
 
 两提交逐文件 Diff：
 
-![两提交 Diff](screenshots/compare-diff-0.5.0.png)
+![两提交 Diff](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/compare-diff-0.5.0.png)
 
 完整历史原文：
 
-![完整历史原文](screenshots/source-0.5.0.png)
+![完整历史原文](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/source-0.5.0.png)
 
 360px 窄屏：
 
-![360px 原文](screenshots/source-360-0.5.0.png)
+![360px 原文](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/source-360-0.5.0.png)

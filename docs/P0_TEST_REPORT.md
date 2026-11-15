@@ -118,19 +118,19 @@
 
 相同仓库与视口的改动前基线：
 
-![P0 改动前](screenshots/p0-before.png)
+![P0 改动前](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/p0-before.png)
 
 相同仓库与视口的改动后：
 
-![P0 改动后](screenshots/p0-after.png)
+![P0 改动后](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/p0-after.png)
 
 360px 下可操作的详情与文件 Diff：
 
-![P0 窄侧栏](screenshots/p0-360.png)
+![P0 窄侧栏](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/p0-360.png)
 
 英文浅色界面：
 
-![P0 英文浅色](screenshots/p0-light-en.png)
+![P0 英文浅色](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/p0-light-en.png)
 
 ## 复现与本地安装
 

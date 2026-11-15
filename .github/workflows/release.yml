@@ -35,6 +35,8 @@ jobs:
       - name: Build and check package exports
         run: |
           pnpm pack --pack-destination .release
+          # 发布包只包含运行和文档文件，避免演示素材使慢网络安装超时。
+          test "$(stat -c %s .release/*.tgz)" -le 1048576
           mkdir .release/extracted
           tar -xzf .release/*.tgz -C .release/extracted
           node scripts/verify-package.mjs .release/extracted/package

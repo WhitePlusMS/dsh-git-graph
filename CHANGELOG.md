@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.1 — 2026-11-15
+
+- 安装包移除演示图片，保留插件运行文件与文档；文档图片改为在线地址，降低慢网络下下载超时的风险。
+- 保留固定的 Release 安装地址；发布流程检查包体大小、固定名附件和实际下载内容。
+- 包含 0.7.0 重建版的 Git 读取、图谱和交互修复。
+
+### English
+
+- Exclude demonstration images from the install archive while retaining runtime files and online documentation images, reducing download size.
+- Keep the stable Release URL and verify archive size and the published fixed-name download in CI.
+- Include the Git reading, graph, and interaction fixes from the 0.7.0 rebuild.
+
 ## 0.7.0 rebuild — 2026-11-14
 
 - Git 读取保留本地对象库，缺失父提交或原文对象时提示；修复浅克隆、重命名 Diff、工作区状态与冲突，并支持 SHA-256 仓库。
@@ -91,7 +103,7 @@ Validation: three TypeScript programs and **31 tests** passed; **23 real-DSH lay
 
 适配 DSH **0.2.0-rc.2**，设置项本身与按仓库保存的语义均未改动。
 
-验证：三个 TypeScript 程序类型检查通过，`lib/` 已重新构建；组件级渲染在 872 / 560 / 360 px 三种宽度下截图核对（三个宽度见[872](docs/screenshots/settings-panel-872-0.5.3.png)、[560](docs/screenshots/settings-panel-560-0.5.3.png)、[360](docs/screenshots/settings-panel-360-0.5.3.png)），面板与图形区无重叠，窄宽度时底部按钮固定可见；本次未触及的提交行图形对齐复测 6 行顶点偏差仍为 0。未在真实 DSH 中做点击验收，上述截图来自组件级 demo，仅以 DSH 深色主题变量近似配色。
+验证：三个 TypeScript 程序类型检查通过，`lib/` 已重新构建；组件级渲染在 872 / 560 / 360 px 三种宽度下截图核对（三个宽度见[872](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/settings-panel-872-0.5.3.png)、[560](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/settings-panel-560-0.5.3.png)、[360](https://raw.githubusercontent.com/WhitePlusMS/dsh-git-graph/5ba0965e68f8d80f4f1b3f2cf06076f77278e5d5/docs/screenshots/settings-panel-360-0.5.3.png)），面板与图形区无重叠，窄宽度时底部按钮固定可见；本次未触及的提交行图形对齐复测 6 行顶点偏差仍为 0。未在真实 DSH 中做点击验收，上述截图来自组件级 demo，仅以 DSH 深色主题变量近似配色。
 
 ### English
 
